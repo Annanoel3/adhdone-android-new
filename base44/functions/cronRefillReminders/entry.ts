@@ -1648,6 +1648,42 @@ Deno.serve(async (req) => {
       console.log(`🧹 [REFILL] Cancelled ${extra.length} second push(es) for "${task.title}" (${group[0].user_email}) at ${group[0].send_at}`);
     }
     if (secondPushes) console.log(`🧹 [REFILL] Second pushes cancelled: ${secondPushes}`);
+
+    // A push still ahead for a task that is finished or gone. Completing a
+    // task cancels the pushes it lists at that moment; a booking that lands
+    // a moment later (a rename's re-booking, a date edit's) is written onto
+    // the finished task and rings anyway. Nov 5 2026: a title corrected at
+    // 7:17:34 PM re-booked the 10 PM reminder, Done was tapped at 7:17:36,
+    // the new push landed at 7:17:38 and would have rung at 10 PM for a task
+    // done three hours earlier. The web app now guards its own bookings
+    // (notificationOwnership.commitNotificationIds, saveTaskTitle); this is
+    // the net under it, hourly. Only task pushes (a scheduled text's ledger
+    // row carries the text's id, not a task's), only when every active task
+    // is in hand (never a one-account run), and the task is read again before
+    // anything is cancelled: one made since this run started is active.
+    if (!onlyEmail) {
+      const TASK_PUSH_KINDS = new Set(['task_reminder', 'event_reminder', 'event_heads_up', 'task_checkin', 'birthday_reminder', 'birthday_text_reminder']);
+      const activeIds = new Set(allTasks.map((t: any) => t.id));
+      const byTask: Record<string, string[]> = {};
+      for (const e of ahead || []) {
+        if (!e?.task_id || !e?.notification_id || !TASK_PUSH_KINDS.has(String(e.kind || ''))) continue;
+        if (activeIds.has(e.task_id)) continue;
+        (byTask[e.task_id] ||= []).push(String(e.notification_id));
+      }
+      let ghostPushes = 0;
+      for (const [taskId, ids] of Object.entries(byTask)) {
+        const fresh = await base44.asServiceRole.entities.Task.get(taskId).catch(() => null);
+        if (fresh && fresh.status === 'active') continue;
+        const unique = [...new Set(ids)];
+        await cancelJustBooked(base44, unique);
+        ghostPushes += unique.length;
+        if (fresh && (fresh.onesignal_notification_ids || []).length) {
+          await base44.asServiceRole.entities.Task.update(taskId, { onesignal_notification_ids: [] }).catch(() => {});
+        }
+        console.log(`🧹 [REFILL] Cancelled ${unique.length} push(es) still ahead for ${fresh ? `finished task "${fresh.title}"` : `deleted task ${taskId}`} (${fresh?.notification_recipient_email || fresh?.created_by || 'unknown'})`);
+      }
+      if (ghostPushes) console.log(`🧹 [REFILL] Pushes for finished or deleted tasks cancelled: ${ghostPushes}`);
+    }
   } catch (e) {
     console.error('[REFILL] Second-push check failed:', e);
   }
