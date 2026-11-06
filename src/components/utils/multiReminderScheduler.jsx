@@ -6,7 +6,7 @@
 
 import { scheduleReminder, resolveSendTime, cancelScheduledReminder, isInQuietHours, bookedIdsForTask } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
-import { commitNotificationIds, noteTaskTimeChanged, taskTimeChangedSince } from './notificationOwnership';
+import { commitNotificationIds, dropBookingIfMoved, noteTaskTimeChanged, taskTimeChangedSince } from './notificationOwnership';
 import { base44 } from '@/api/base44Client';
 
 // ── localStorage cache (24h TTL) ─────────────────────────────────────────────
