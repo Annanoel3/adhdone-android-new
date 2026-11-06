@@ -362,7 +362,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
       const appId = String(Deno.env.get('ONESIGNAL_APP_ID') || '').trim();
       const restKey = String(Deno.env.get('ONESIGNAL_REST_API_KEY') || '').trim();
       if (appId && restKey && state.subscription_id) {
-        const res = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(email)}`, {
+        const res = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(String(me.email))}`, {
           headers: { Authorization: `Basic ${restKey}` },
         });
         const os: any = res.ok ? await res.json().catch(() => null) : null;
