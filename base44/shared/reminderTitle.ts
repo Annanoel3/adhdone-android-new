@@ -41,7 +41,11 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
     const isEvent = task?.classification === 'event';
     const facts = [
       `The ${isEvent ? 'event' : 'task'}: "${title.slice(0, 200)}"`,
-      said && said.toLowerCase() !== title.toLowerCase() ? `Their words when they added it: "${said.slice(0, 400)}"` : '',
+      // The task's name is what they have since corrected it to; their first
+      // words can carry a name misheard or mistyped (Nov 5 2026: a name fixed
+      // in the title at 7:17 PM, and the re-booked push still used the old one
+      // from these words).
+      said && said.toLowerCase() !== title.toLowerCase() ? `Their words when they added it (for what it is about and the tone; where these and the name above disagree on a name, spelling or detail, the name above is their correction and wins): "${said.slice(0, 400)}"` : '',
       notes ? `Notes: ${notes.slice(0, 300)}` : '',
       `The time they set for it: ${when}${repeats ? ` (it repeats ${repeats})` : ''}`,
       task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
