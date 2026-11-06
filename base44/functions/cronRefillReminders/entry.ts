@@ -2461,6 +2461,50 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     });
   }
 
+  // 14. A repeating task checked off whose next copy never got made. Only
+  //     the app makes the copy, as the person (RULES §8: a server-made task
+  //     is one their app never shows), and it makes it right after the
+  //     completion — so when that request dies (the app closed, a passing
+  //     failure), the chain simply ends, and for someone who only ever opens
+  //     the app from that task's alarm nothing ever brings it back. Nov 6
+  //     2026, 8:08 AM: an 8 AM daily medication checked off from its alarm
+  //     got no copy for the next day. The app now tries again and repairs
+  //     this on its next open (taskRecurrence.repairMissingRepeats); this
+  //     tells Anna when a person's chain is broken and they haven't been
+  //     back, so she can reach them. Told once per task (mark nocopy:<id>);
+  //     repeats finished in the last 26 hours; not birthdays.
+  try {
+    const recentDone = await filterAll(base44.asServiceRole.entities.Task, {
+      status: 'completed', updated_date: { $gte: new Date(nowMs - 26 * H_HOUR).toISOString() },
+    });
+    for (const t of recentDone || []) {
+      if (!t?.id || t.parent_task_id || !t.recurrence_pattern || t.recurrence_pattern === 'none') continue;
+      if (t.classification === 'birthday' || t.birthday_person || t.next_occurrence_id) continue;
+      const email = String(t.created_by || '').toLowerCase();
+      if (!email || !realUser(email)) continue;
+      const doneMs = msOf(t.completed_at) || msOf(t.updated_date);
+      // Given a few minutes: the copy follows the completion by a second or two.
+      if (!Number.isFinite(doneMs) || nowMs - doneMs < 10 * 60 * 1000) continue;
+      // A copy made without the record (older app builds): same person,
+      // same title and repeat, still open, for a later moment.
+      const laterCopy = allTasks.some((o: any) => o.id !== t.id && o.status === 'active' && !o.parent_task_id
+        && String(o.created_by || '').toLowerCase() === email && o.title === t.title && o.recurrence_pattern === t.recurrence_pattern
+        && (msOf(o.next_reminder) > doneMs || msOf(o.due_date) > doneMs));
+      if (laterCopy) continue;
+      const key = `nocopy:${t.id}`;
+      if (marks[key]) continue;
+      const u = userByEmail[t.created_by] || userByEmail[email];
+      problems.push({
+        title: `⚠️ ADHDone: a repeating task has no next copy`,
+        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. The app makes it on their next open; until then nothing will ring for it. ${email}`,
+        sinceMs: doneMs,
+        mark: { key, value: new Date(doneMs).toISOString() },
+      });
+    }
+  } catch (e) {
+    console.error('[HEALTH] missing-next-copy check failed:', e);
+  }
+
   // A look at what would go out, sending nothing ({ previewHealth: true }).
   if (ctx.dryRun) {
     const out: any[] = [];
