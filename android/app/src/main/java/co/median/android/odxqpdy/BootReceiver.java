@@ -28,6 +28,14 @@ public class BootReceiver extends BroadcastReceiver {
         // Alarms are booked with AlarmManager, which forgets everything on reboot.
         AlarmScheduler.rearmAll(context);
 
+        // The push sign-up is checked (and switched back on when Android allows the
+        // app's notifications) right away, with the app never opened: a Play Store
+        // update reaches people whose pushes went dead and who only ever open the app
+        // from its alarms (PushHealthWorker, Nov 6 2026). Then every 12 hours.
+        PushHealthWorker.runSoon(context,
+                Intent.ACTION_MY_PACKAGE_REPLACED.equals(action) ? "updated" : "boot");
+        PushHealthWorker.schedulePeriodic(context);
+
         if (QuickCapture.isEnabled(context)) {
             Log.d(TAG, "BootReceiver: restoring quick-capture notification after " + action);
             QuickCapture.post(context);
