@@ -295,8 +295,8 @@ Deno.serve(async (req) => {
                             lastActive: b?.properties?.last_active ? new Date(b.properties.last_active * 1000).toISOString() : null,
                             firstActive: b?.properties?.first_active ? new Date(b.properties.first_active * 1000).toISOString() : null,
                             // hasToken: whether OneSignal still holds a push token for the
-                            // phone (never the token itself). An empty one means the phone
-                            // itself reported it had none.
+                            // phone (never the token itself). OneSignal blanks it when it
+                            // marks the phone not subscribed (-10). id = the subscription id.
                             subs: subs.map((s: any) => ({ id: s.id ?? null, type: s.type, enabled: s.enabled, code: s.notification_types, hasToken: !!(s.token && String(s.token).length), build: s.app_version ?? null, device: s.device_model ?? null, os: s.device_os ?? null, sdk: s.sdk ?? null, sessions: s.session_count ?? null })),
                             rows: [],
                         };
