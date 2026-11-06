@@ -2498,7 +2498,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // title, so one generic title would hide a second person's case.
       problems.push({
         title: `⚠️ ADHDone: ${u ? nameOf(u) : email}'s repeating task has no next copy`,
-        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. The app makes it on their next open; until then nothing will ring for it. ${email}`,
+        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. Nothing will ring for it, and only opening the app brings it back (the app makes the copy on open) — if they only ever open from this alarm, nothing will, so reach out and ask them to open ADHDone once. ${email}`,
         sinceMs: doneMs,
         mark: { key, value: new Date(doneMs).toISOString() },
       });
