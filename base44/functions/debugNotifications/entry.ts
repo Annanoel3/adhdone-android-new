@@ -260,6 +260,82 @@ Deno.serve(async (req) => {
             }
             return Response.json({ success: true, results });
         }
+        if (reqBody?.mode === 'push_history') {
+            // Owner-only: for several people at once, OneSignal's own record of
+            // their phone (each push subscription: on/off, code, app build,
+            // device, sessions) and every push to them in a window with what
+            // OneSignal did with it. Read only. Pages through OneSignal's list
+            // newest first; pass back nextOffset to continue. Nov 6 2026 (Anna:
+            // "how many of these people just have broken notifications?"): an
+            // uninstall is only found after 2+ pushes bounce (OneSignal's FCM
+            // expired-token FAQ), so a phone whose FIRST push after its last
+            // session already reached nobody was reported by the phone itself.
+            // { mode: 'push_history', emails: [...], since, until, offset, maxPages }
+            if (user.role !== 'admin') {
+                return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            }
+            const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+            const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+            const emails = (Array.isArray(reqBody.emails) ? reqBody.emails : []).map((e: any) => String(e || '').trim().toLowerCase()).filter(Boolean).slice(0, 25);
+            if (!emails.length) return Response.json({ success: false, error: 'emails required' }, { status: 400 });
+            const sinceSec = Math.floor((Date.parse(reqBody.since || '') || (Date.now() - 7 * 24 * 3600 * 1000)) / 1000);
+            const untilSec = Math.floor((Date.parse(reqBody.until || '') || Date.now()) / 1000);
+            const maxPages = Math.min(Number(reqBody.maxPages) || 25, 60);
+            const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+            const people: Record<string, any> = {};
+            if (!reqBody.offset) {
+                for (const em of emails) {
+                    try {
+                        const r = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(em)}`, { headers: { Authorization: `Basic ${key}` } });
+                        if (r.status === 404) { people[em] = { known: false, rows: [] }; continue; }
+                        const b: any = await r.json().catch(() => ({}));
+                        const subs = (Array.isArray(b?.subscriptions) ? b.subscriptions : []).filter((s: any) => typeof s?.type === 'string' && s.type.endsWith('Push'));
+                        people[em] = {
+                            known: true,
+                            lastActive: b?.properties?.last_active ? new Date(b.properties.last_active * 1000).toISOString() : null,
+                            firstActive: b?.properties?.first_active ? new Date(b.properties.first_active * 1000).toISOString() : null,
+                            subs: subs.map((s: any) => ({ type: s.type, enabled: s.enabled, code: s.notification_types, build: s.app_version ?? null, device: s.device_model ?? null, os: s.device_os ?? null, sdk: s.sdk ?? null, sessions: s.session_count ?? null })),
+                            rows: [],
+                        };
+                    } catch (e) {
+                        people[em] = { known: null, error: String((e as any)?.message || e), rows: [] };
+                    }
+                    await sleep(150);
+                }
+            } else {
+                for (const em of emails) people[em] = { rows: [] };
+            }
+            let offset = Number(reqBody.offset) || 0, pages = 0, done = false, rateLimited = 0;
+            for (let p = 0; p < maxPages; p++) {
+                const res = await fetch(`https://onesignal.com/api/v1/notifications?app_id=${appId}&limit=50&offset=${offset}`, { headers: { Authorization: `Basic ${key}` } });
+                if (res.status === 429) { rateLimited++; if (rateLimited > 5) break; await sleep(5000); continue; }
+                if (!res.ok) break;
+                const json = await res.json();
+                const batch = json.notifications || [];
+                pages++;
+                let oldestSec = Infinity;
+                for (const n of batch) {
+                    const at = Number(n.send_after || n.queued_at || 0);
+                    if (at && at < oldestSec) oldestSec = at;
+                    if (at && (at < sinceSec || at > untilSec)) continue;
+                    const targets = [...(n.include_external_user_ids || []), ...(n.include_aliases?.external_id || [])].map((x: string) => String(x).toLowerCase());
+                    for (const em of targets) {
+                        if (!people[em]) continue;
+                        people[em].rows.push({
+                            at: at ? new Date(at * 1000).toISOString() : null,
+                            type: n.data?.type || (n.headings?.en ? 'visible' : 'silent'),
+                            outcome: n.canceled ? 'cancelled' : (n.completed_at ? (n.successful > 0 ? 'sent' : (n.failed > 0 ? 'FAILED-unsubscribed' : (n.errored > 0 ? 'errored' : 'none'))) : 'queued'),
+                        });
+                    }
+                }
+                offset += 50;
+                if (!batch.length || (json.total_count != null && offset >= json.total_count)) { done = true; break; }
+                if (Number.isFinite(oldestSec) && oldestSec < sinceSec) { done = true; break; }
+                await sleep(500);
+            }
+            for (const em of Object.keys(people)) people[em].rows.sort((a: any, b: any) => String(a.at || '').localeCompare(String(b.at || '')));
+            return Response.json({ success: true, since: new Date(sinceSec * 1000).toISOString(), pages, nextOffset: offset, done, people });
+        }
         if (reqBody?.mode === 'sent_to') {
             // Owner-only: what OneSignal really did with one person's pushes in
             // a window — sent (how many phones got it), cancelled before it
