@@ -2409,13 +2409,25 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const goneMs = msOf(u.push_unreachable_at);
     if (gone(u)) {
       // Once per departure, remembered on the owner record (the ledger forgets).
-      const toldFor = String(marks[`gone:${String(u.email).toLowerCase()}`] || '');
+      // A phone whose app checked in (stillInstalled) is told about separately,
+      // once too: pushes broken with the app still installed is its own news,
+      // even after a "stopped taking" alert for the same departure.
+      const installed = stillInstalled(u);
+      const markKey = `${installed ? 'broken' : 'gone'}:${String(u.email).toLowerCase()}`;
+      const toldFor = String(marks[markKey] || '');
       const alreadyTold = toldFor && msOf(toldFor) === lastMs;
-      if (!alreadyTold && Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push({
-        title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
-        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes: the app was uninstalled, or its notifications were turned off. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+      const ps = u.phone_push_state || {};
+      const yn = (v: any) => (v === true ? 'yes' : v === false ? 'no' : '?');
+      if (!alreadyTold && Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push(installed ? {
+        title: `📵 ADHDone: ${nameOf(u)}'s pushes are broken (app still installed)`,
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes, but the app on that phone checked in from the background ${theirClock(u, msOf(u.phone_seen_at))}, so it is still installed. The phone's own check (build ${ps.build || '?'}): notifications allowed ${yn(ps.allowed)}, signed up again ${yn(ps.nudged)}, push token ${yn(ps.has_token_after)}, OneSignal after that ${ps.server_code ?? '?'}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
-        mark: { key: `gone:${String(u.email).toLowerCase()}`, value: new Date(lastMs).toISOString() },
+        mark: { key: markKey, value: new Date(lastMs).toISOString() },
+      } : {
+        title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. The app hasn't checked in from that phone since, so it may be uninstalled, or its push sign-up broke (only Android builds after 47 check in). Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        sinceMs: lastMs,
+        mark: { key: markKey, value: new Date(lastMs).toISOString() },
       });
       continue;
     }
