@@ -260,6 +260,62 @@ Deno.serve(async (req) => {
             }
             return Response.json({ success: true, results });
         }
+        if (reqBody?.mode === 'sent_to') {
+            // Owner-only: what OneSignal really did with one person's pushes in
+            // a window — sent (how many phones got it), cancelled before it
+            // went, or still queued — read from OneSignal's own list, newest
+            // first. The send ledger can't answer this: a push cancelled by
+            // setFocusMode leaves its ledger row behind, and ledgerPrune then
+            // files that row as "sent" (Nov 6 2026, Liz's hourly Focus Mode
+            // check-ins). { mode: 'sent_to', email, since, until, maxPages }
+            if (user.role !== 'admin') {
+                return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            }
+            const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+            const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+            const who = String(reqBody.email || '').trim().toLowerCase();
+            const sinceSec = Math.floor((Date.parse(reqBody.since || '') || (Date.now() - 3 * 24 * 3600 * 1000)) / 1000);
+            const untilSec = Math.floor((Date.parse(reqBody.until || '') || Date.now()) / 1000);
+            const maxPages = Math.min(Number(reqBody.maxPages) || 20, 60);
+            if (!who) return Response.json({ success: false, error: 'email required' }, { status: 400 });
+            const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+            const rows: any[] = [];
+            let offset = 0, scanned = 0, pages = 0, stoppedEarly = false, rateLimited = 0;
+            for (let p = 0; p < maxPages; p++) {
+                const res = await fetch(`https://onesignal.com/api/v1/notifications?app_id=${appId}&limit=50&offset=${offset}`, { headers: { Authorization: `Basic ${key}` } });
+                if (res.status === 429) { rateLimited++; if (rateLimited > 5) break; await sleep(5000); continue; }
+                if (!res.ok) break;
+                const json = await res.json();
+                const batch = json.notifications || [];
+                pages++;
+                scanned += batch.length;
+                let oldestSec = Infinity;
+                for (const n of batch) {
+                    const at = Number(n.send_after || n.queued_at || 0);
+                    if (at && at < oldestSec) oldestSec = at;
+                    const targets = [...(n.include_external_user_ids || []), ...(n.include_aliases?.external_id || [])].map((x: string) => String(x).toLowerCase());
+                    if (!targets.includes(who)) continue;
+                    if (at && (at < sinceSec || at > untilSec)) continue;
+                    rows.push({
+                        id: n.id,
+                        send_at: at ? new Date(at * 1000).toISOString() : null,
+                        title: String(n.headings?.en || '').slice(0, 80),
+                        type: n.data?.type || null,
+                        taskId: n.data?.taskId || null,
+                        outcome: n.canceled ? 'cancelled' : (n.completed_at ? (n.successful > 0 ? `sent (${n.successful} phone${n.successful === 1 ? '' : 's'})` : `tried, reached nobody (failed ${n.failed || 0}, errored ${n.errored || 0})`) : 'still queued'),
+                        received: n.received || 0,
+                        converted: n.converted || 0,
+                    });
+                }
+                offset += 50;
+                if (!batch.length || (json.total_count != null && offset >= json.total_count)) break;
+                // OneSignal lists newest first: past the window, stop.
+                if (Number.isFinite(oldestSec) && oldestSec < sinceSec - 24 * 3600) { stoppedEarly = true; break; }
+                await sleep(600);
+            }
+            rows.sort((a, b) => String(a.send_at || '').localeCompare(String(b.send_at || '')));
+            return Response.json({ success: true, email: who, since: new Date(sinceSec * 1000).toISOString(), until: new Date(untilSec * 1000).toISOString(), pages, scanned, stoppedEarly, rows });
+        }
         if (reqBody?.mode === 'reword_pending') {
             if (user.role !== 'admin') {
                 return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
