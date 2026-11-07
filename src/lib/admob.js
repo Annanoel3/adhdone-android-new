@@ -16,7 +16,34 @@ const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
 // ios/App/App/Info.plist. Resolves to the status afterwards
 // ('authorized' | 'denied' | 'notDetermined' | 'restricted'), 'n/a' off
 // iPhone, 'error' when the plugin couldn't answer.
+// Nov 6 2026 (Anna: "the 'ask app not to track' one just appears out of
+// nowhere"): it is now asked right after the "Your privacy comes first"
+// popup, which says it's coming (AiConsentDialog calls
+// askTrackingPermissionNow). The wait below is only for a phone that never
+// gets that popup (an account that already gave its consent).
 let attAsk = null;
+let releaseNow = null;
+const nowSignal = new Promise((resolve) => { releaseNow = resolve; });
+
+// True when this iPhone hasn't answered Apple's tracking question yet, so a
+// line saying "your iPhone will ask next" is true. False anywhere else.
+export async function trackingQuestionPending() {
+  if (Capacitor.getPlatform() !== 'ios') return false;
+  try {
+    const st = await registerPlugin('AdMob').trackingAuthorizationStatus();
+    return st?.status === 'notDetermined';
+  } catch (e) {
+    return false;
+  }
+}
+
+// Ask now, without waiting for the rest of first run (the privacy popup's
+// button). Same single question as askTrackingPermission: never twice.
+export function askTrackingPermissionNow() {
+  try { releaseNow?.(); } catch (e) { /* asked the usual way, then */ }
+  return askTrackingPermission();
+}
+
 export function askTrackingPermission() {
   if (attAsk) return attAsk;
   attAsk = (async () => {
@@ -25,8 +52,10 @@ export function askTrackingPermission() {
       const plugin = registerPlugin('AdMob');
       const before = await plugin.trackingAuthorizationStatus();
       if (before?.status && before.status !== 'notDetermined') return before.status;
-      await waitForStep(ONBOARDING_STEPS.permissions);
-      await waitForCalm();
+      await Promise.race([
+        (async () => { await waitForStep(ONBOARDING_STEPS.permissions); await waitForCalm(); })(),
+        nowSignal,
+      ]);
       await plugin.requestTrackingAuthorization();
       const after = await plugin.trackingAuthorizationStatus();
       const status = after?.status || 'unknown';
