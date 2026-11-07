@@ -120,7 +120,7 @@ export default function PrivacyPolicy() {
               "With service providers that run the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
               // Nov 6 2026: the OpenAI account shares API inputs and outputs with
               // OpenAI (its complimentary-token program), so this must be said.
-              "OpenAI may also use what ADHDone sends it to improve and train its AI models. OpenAI does not sell it.",
+              "OpenAI may also use what ADHDone sends it to improve and train its AI models.",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
