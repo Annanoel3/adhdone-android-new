@@ -17,6 +17,7 @@ import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 import { putOffFields, easeStep } from '../../shared/easeOff.ts';
+import { repairMissingRepeatsAs } from '../../shared/nextCopy.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
@@ -397,6 +398,20 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     }
     if (owner?.id) await svc.User.update(owner.id, { phone_push_state: state, phone_seen_at: nowIso, ...extra });
     console.log(`[phoneReport] push_state ${email}: ${JSON.stringify(state)}`);
+    // A repeating task finished lately whose next copy was never made gets it
+    // now, under the person's own sign-in (this request is theirs; never
+    // asServiceRole, RULES §8.5), with its reminder booked and the phone's
+    // alarm list told. Anna, Nov 6 2026: "yes" (shared/nextCopy.ts).
+    if (owner) {
+      try {
+        const fixed = await repairMissingRepeatsAs(base44, { email: String(me.email), owner, nowMs: Date.now() });
+        if (fixed.made.length || fixed.linked.length || fixed.errors.length) {
+          console.log(`[phoneReport] push_state ${email}: next copies made ${fixed.made.length} (booked ${fixed.booked}), linked ${fixed.linked.length}${fixed.errors.length ? `, errors: ${fixed.errors.join(' | ')}` : ''}`);
+        }
+      } catch (e) {
+        console.warn('[phoneReport] push_state next-copy repair failed:', (e as any)?.message || e);
+      }
+    }
     return Response.json({ success: true });
   }
 
