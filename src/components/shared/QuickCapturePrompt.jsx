@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Zap, LayoutGrid, Bell, AlarmClock, Check, Moon, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
