@@ -101,11 +101,21 @@ export default function QuickCapturePrompt() {
         clearInterval(poll);
         waitForStep(ONBOARDING_STEPS.homeTour)
           .then(waitForCalm)
-          .then(() => {
+          .then(async () => {
             if (cancelled) return;
             // A returning account has this step marked done while it waits
             // (they get the "welcome back" chat instead of the walkthrough).
             if (isStepDone(ONBOARDING_STEPS.permissions)) return;
+            // iPhone, notifications already allowed on this phone: Apple won't
+            // show its box again, so a card saying "iPhone will ask" would
+            // ask nothing (Anna, Nov 6 2026). Counted as answered instead.
+            if (!onThisPhone('pinnedCapture')) {
+              try {
+                const st = await getPlugins().NotifyBridge?.getPermissionState?.();
+                if (st?.granted) { settle(); return; }
+              } catch (e) { /* unknown: the card shows as usual */ }
+              if (cancelled) return;
+            }
             // Shown whether or not the shortcut is already pinned — the card is
             // also where notifications get explained, and the switch starts on.
             if (!cancelled) setOpen(true);
