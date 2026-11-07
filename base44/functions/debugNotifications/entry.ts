@@ -119,8 +119,23 @@ Deno.serve(async (req) => {
                     body: JSON.stringify({ model: 'gpt-6-luna', messages: [{ role: 'user', content: 'Say ok.' }] }),
                 }).catch((e) => ({ ok: false, status: 0, headers: new Headers(), text: async () => String(e?.message || e) } as any));
                 const body = res.ok ? '' : String(await res.text()).slice(0, 300);
+                // Record Notes' transcription model on the same key: a 1 s tone.
+                const fr = 16000, n = fr, wav = new DataView(new ArrayBuffer(44 + n * 2));
+                const ws = (o: number, s: string) => { for (let i = 0; i < s.length; i++) wav.setUint8(o + i, s.charCodeAt(i)); };
+                ws(0, 'RIFF'); wav.setUint32(4, 36 + n * 2, true); ws(8, 'WAVE'); ws(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+                wav.setUint32(24, fr, true); wav.setUint32(28, fr * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true); ws(36, 'data'); wav.setUint32(40, n * 2, true);
+                for (let i = 0; i < n; i++) wav.setInt16(44 + i * 2, Math.round(3000 * Math.sin(2 * Math.PI * 440 * i / fr)), true);
+                const form = new FormData();
+                form.append('model', String(reqBody?.transcribe_model || 'gpt-transcribe'));
+                form.append('file', new File([wav.buffer], 'tone.wav', { type: 'audio/wav' }));
+                const tr = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form,
+                }).catch(() => null);
+                const trBody = tr && !tr.ok ? String(await tr.text()).slice(0, 300) : '';
                 return {
                     name, set: true, status: res.status,
+                    transcribe_status: tr?.status ?? 0,
+                    ...(trBody ? { transcribe_error: trBody } : {}),
                     project: res.headers.get('openai-project'),
                     organization: res.headers.get('openai-organization'),
                     ...(body ? { error: body } : {}),
