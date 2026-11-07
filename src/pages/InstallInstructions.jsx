@@ -10,6 +10,7 @@ import {
 import { FileDown } from "lucide-react";
 import { downloadNotesPdf } from "@/components/notes/notesPdf";
 import { billingAvailable, boughtLeftSeconds, loadPacks, buyPack, syncPacks } from "@/lib/minutePacks";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 
 // ── Notes: record a meeting, appointment or class; get ADHD-friendly notes ────
 //
