@@ -33,13 +33,25 @@ import { usePopupTurn } from './onboardingSurface';
 // Record Notes, and what they log on their Parking Lot trackers (the Log box
 // and the Parking Lot page; categorizeIdea private: true, foldIdeaIntoTrackers).
 // What may be used is said after it, in full, as 5.1.2(i) needs.
+// The phone's copy is kept per ACCOUNT (its id). Until Nov 6 2026 it was one
+// key for the whole phone, so a second account on the same phone (or one
+// deleted and made again, which is how Anna tests: "I just keep deleting the
+// test account") skipped the popup, and the "save it now" step below then
+// wrote a consent onto the new account that its owner never gave. A re-made
+// account gets a new id, so it is asked again.
 const CONSENT_KEY = 'ai_consent_at';
+const consentKey = (user) => (user?.id ? `${CONSENT_KEY}:${user.id}` : '');
 const PRIVACY_URL = 'https://adhdone.space/privacypolicy';
 export const AI_CONSENT_EVENT = 'adhdone:ai-consent';
 
+// The old phone-wide key means nothing for any account: dropped once.
+try { localStorage.removeItem(CONSENT_KEY); } catch (e) { /* no storage */ }
+
 export function aiConsentGiven(user) {
   if (user?.ai_consent_at) return true;
-  try { return !!localStorage.getItem(CONSENT_KEY); } catch (e) { return false; }
+  const key = consentKey(user);
+  if (!key) return false;
+  try { return !!localStorage.getItem(key); } catch (e) { return false; }
 }
 
 // True where the popup is needed and not answered yet (iPhone app only).
@@ -54,15 +66,17 @@ export default function AiConsentDialog({ user }) {
   const shown = usePopupTurn(wanted, { reactive: true });
 
   useEffect(() => {
-    if (user?.ai_consent_at) {
-      try { localStorage.setItem(CONSENT_KEY, user.ai_consent_at); } catch (e) { /* no storage */ }
+    const key = consentKey(user);
+    if (user?.ai_consent_at && key) {
+      try { localStorage.setItem(key, user.ai_consent_at); } catch (e) { /* no storage */ }
     }
-  }, [user?.ai_consent_at]);
+  }, [user?.id, user?.ai_consent_at]);
 
   const allow = async () => {
     const at = new Date().toISOString();
     setSaving(true);
-    try { localStorage.setItem(CONSENT_KEY, at); } catch (e) { /* no storage */ }
+    const key = consentKey(user);
+    try { if (key) localStorage.setItem(key, at); } catch (e) { /* no storage */ }
     try {
       await base44.auth.updateMe({ ai_consent_at: at });
     } catch (e) {
@@ -77,8 +91,10 @@ export default function AiConsentDialog({ user }) {
   // Given on this phone before the account copy saved: save it now.
   useEffect(() => {
     if (!user || user.ai_consent_at || !isIPhoneApp()) return;
+    const key = consentKey(user);
+    if (!key) return;
     let local = null;
-    try { local = localStorage.getItem(CONSENT_KEY); } catch (e) { local = null; }
+    try { local = localStorage.getItem(key); } catch (e) { local = null; }
     if (local) base44.auth.updateMe({ ai_consent_at: local }).catch(() => {});
   }, [user]);
 
