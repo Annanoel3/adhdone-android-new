@@ -8,6 +8,7 @@ import { MessageCircleHeart, Send, Loader2, Info, Mic } from "lucide-react"; // 
 import { APP_FEATURE_GUIDE } from "@/components/utils/appFeatureGuide";
 import { isIPhoneApp, onThisPhone } from "@/lib/phonePlatform";
 import SupportEscalationCard from "@/components/support/SupportEscalationCard";
+import ReportResponseButton from "@/components/support/ReportResponseButton";
 
 export default function SupportSpace() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -537,6 +538,13 @@ Answer plainly and practically, then stop.`;
                         }`}>
                           {msg.content}
                         </p>
+                        {msg.role === 'assistant' && (
+                          <ReportResponseButton
+                            aiMessage={msg.content}
+                            userMessage={[...messages.slice(0, index)].reverse().find(m => m.role === 'user')?.content}
+                            theme={theme}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
