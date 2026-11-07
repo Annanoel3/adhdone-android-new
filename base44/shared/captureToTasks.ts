@@ -12,6 +12,7 @@
 
 import OpenAI from "npm:openai";
 import { lean } from './aiCost.ts';
+import { privateOpenAiKey } from './privateAi.ts';
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
@@ -237,7 +238,9 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
     const trackers = (rows || []).filter((i: any) => i && i.tracker && !i.parent_idea_id && i.id !== idea.id);
     if (trackers.length === 0) return await handBack("no trackers yet");
     const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea })));
-    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'captureToTasks' });
+    // On the private key (shared/privateAi.ts), like the page's look: tracker
+    // readings are often health readings.
+    const openai = lean(new OpenAI({ apiKey: privateOpenAiKey('captureToTasks') }), { name: 'captureToTasks' });
     // gpt-6-astra, like the page's look (categorizeIdea): gpt-4o-mini logged
     // "this is an idea" as a heart rate reading (Oct 16 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const completion = await openai.chat.completions.create({ model: "gpt-6-astra", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
