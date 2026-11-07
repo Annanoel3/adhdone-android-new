@@ -73,7 +73,8 @@ When something in the app isn't working (a notification missing, a feature not s
     }
     const originalReply = message;
     if (replyBlocked.length) {
-      message = "Sorry, I can't share that reply. Could you tell me a bit more about what you'd like help with?";
+      // Anna's words, Nov 6 2026.
+      message = "Sorry, I can't reply to that. Could you tell me a bit more about what you’d like help with.";
       waitUntil((async () => {
         try {
           await base44.asServiceRole.integrations.Core.SendEmail({
