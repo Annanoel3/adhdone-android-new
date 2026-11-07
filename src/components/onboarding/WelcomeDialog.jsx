@@ -47,8 +47,13 @@ async function accountHasTasks(user) {
   try {
     const rows = await base44.entities.Task.list('-created_date', 1);
     if (!Array.isArray(rows) || rows.length === 0) return false;
-    const created = Date.parse(user?.created_date || '');
-    const newest = Date.parse(rows[0]?.created_date || '');
+    // Platform dates can come without a zone; they are UTC.
+    const utc = (v) => {
+      const s = String(v || '');
+      return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
+    };
+    const created = utc(user?.created_date);
+    const newest = utc(rows[0]?.created_date);
     if (!isNaN(created) && !isNaN(newest) && newest < created - 60 * 1000) return false;
     return true;
   } catch (e) {
