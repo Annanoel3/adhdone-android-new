@@ -123,7 +123,7 @@ export default function PrivacyPolicy() {
               // Support Space and Record Notes run on a separate project that is
               // not shared (base44/shared/privateAi.ts). OpenAI keeps API data
               // up to 30 days to check for abuse, shared or not.
-              "OpenAI may also use what ADHDone sends it to improve and train its AI models, except your Support Space chats (typed or spoken), your recordings and the notes made from them, which are never used for that. OpenAI may keep what it receives for up to 30 days to check for abuse, then deletes it unless the law requires otherwise.",
+              "OpenAI may also use what ADHDone sends it to improve and train its AI models, except your Support Space chats (typed or spoken), your Record Notes recordings and the notes made from them, and what you log on your Parking Lot trackers, which are never used for that. OpenAI may keep what it receives for up to 30 days to check for abuse, then deletes it unless the law requires otherwise.",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
