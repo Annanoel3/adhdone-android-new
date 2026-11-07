@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: event_heads_up, event_conflict and first_task_nudge count as soft pushes in the ledger.
 // Re-saved Nov 1 2026 (5 PM): picks up shared/reminderBrief.ts r41 (Judge the day, not just the ping).
 // Oct 31 2026: ARE THEY HELPING? (asked once, one a day after a No, a pause only an app open ends; RULES.md §10).
@@ -54,8 +55,11 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep } from '../../shared/easeOff.ts';
+import { countUsage } from '../../shared/aiCost.ts';
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+// countUsage only counts tokens per feature (shared/aiCost.ts, Nov 6 2026);
+// every call goes out exactly as before.
+const openai = countUsage(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronSmartTaskNudge' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // A planned nudge held (by the spacing rules or the morning summary) this
