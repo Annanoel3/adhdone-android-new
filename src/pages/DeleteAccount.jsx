@@ -503,9 +503,11 @@ export default function DeleteAccount() {
               <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
-                {/* The iPhone app sells nothing (no purchases or subscriptions there
-                    yet), so it doesn't claim to keep payment records. */}
-                {!isIPhoneApp() && <li><strong>Financial records</strong> (subscription payments, refunds) - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>}
+                {/* The iPhone app sells nothing yet, so it doesn't claim to keep
+                    payment records. ADHDone has no subscriptions (Anna, Nov 7
+                    2026: "we don't necessarily have subscriptions"): on Android
+                    the only purchase is extra recording time. */}
+                {!isIPhoneApp() && <li><strong>Purchase records</strong> (extra recording time you bought, refunds) - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>}
                 <li><strong>Anonymized feedback and reports</strong> - Used to improve app safety. They don't contain anything that identifies you. <strong>Retention period: Indefinite (anonymized)</strong></li>
                 <li><strong>System backups</strong> - May exist in backups for disaster recovery. <strong>Retention period: Up to 90 days</strong>, but will be inaccessible during normal operations</li>
               </ul>
@@ -526,7 +528,6 @@ export default function DeleteAccount() {
                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 <li>Consider requesting a copy of your data before deletion (include this in your email request)</li>
-                {!isIPhoneApp() && <li>Cancel your subscription through the App Store or Google Play if you have an active subscription</li>}
                 <li>Remember that deletion is permanent and cannot be undone</li>
                 <li>If you only want to delete specific data, use our <a href={createPageUrl("DeleteData")} className={`underline ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Data Deletion</a> page instead</li>
               </ul>
