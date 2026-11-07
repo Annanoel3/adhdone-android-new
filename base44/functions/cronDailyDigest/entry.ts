@@ -221,7 +221,7 @@ function pausedForAway(user: any): boolean {
 const EVENING_CHECKINS = [
   { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' },
   { title: 'Anything go right today?', body: 'Even tiny counts. Save it before it slips away.' },
-  { title: 'Quick check-in', body: 'How are you feeling tonight? One tap and you're done.' },
+  { title: 'Quick check-in', body: "How are you feeling tonight? One tap and you're done." },
   { title: 'One win from today?', body: 'Made the bed, answered a text, got through it. It all counts.' },
   { title: 'How was your day, really?', body: 'Pick a face and jot down one thing that went okay.' },
 ];
