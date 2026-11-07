@@ -21,6 +21,13 @@ export default function DeleteAccount() {
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [requestError, setRequestError] = useState('');
+  // Anna, Nov 6 2026: "the delete my account thing was supposed to just show
+  // that it was done. Automatically log the user out and show an account
+  // deleted thing. then I will delete it on my end asap." After "Yes, delete
+  // my account": the request is saved (account_deletion_requested_at; the
+  // owner check tells Anna), they're signed out here, and this page shows
+  // that it's done.
+  const [deletedEmail, setDeletedEmail] = useState('');
 
   useEffect(() => {
     base44.auth.me().then((u) => {
@@ -42,6 +49,10 @@ export default function DeleteAccount() {
       await base44.auth.updateMe({ account_deletion_requested_at: at });
       setRequestedAt(at);
       setConfirming(false);
+      setDeletedEmail(me?.email || '');
+      // Signed out right here (the token only; this page stays up to say so).
+      try { await base44.auth.logout(); } catch (e) { /* the Done button reloads anyway */ }
+      setMe(null);
     } catch (e) {
       setRequestError("That didn't go through. Check your connection and try again.");
     } finally {
@@ -60,6 +71,34 @@ export default function DeleteAccount() {
     }, 100);
     return () => clearInterval(interval);
   }, []);
+
+  if (deletedEmail) {
+    return (
+      <div className="min-h-screen p-4 md:p-8 flex items-center justify-center" style={{
+        paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
+        paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
+      }}>
+        <Card className={`border-none shadow-lg w-full max-w-md ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+          <CardContent className="pt-8 pb-6 space-y-4 text-center">
+            <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Account deleted
+            </h1>
+            <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              You've been signed out. Your account and everything in it is being erased, and
+              you'll get an email at <strong className="break-all">{deletedEmail}</strong> when
+              it's finished.
+            </p>
+            <Button
+              onClick={() => { window.location.href = '/'; }}
+              className="w-full"
+            >
+              Done
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-4 md:p-8" style={{
@@ -155,7 +194,11 @@ export default function DeleteAccount() {
               </div>
             )}
 
-            {/* Prominent Steps Section */}
+            {/* Prominent Steps Section: the email way, for someone who isn't
+                signed in (this page is also the public deletion page). Signed
+                in, it was a "Can't sign in?" box with no reason to be there
+                (Anna, Nov 6 2026: "Seems pointless"). */}
+            {!me?.email && (
             <div className={`p-6 rounded-xl border-2 ${
               theme === 'dark' 
                 ? 'bg-blue-900/20 border-blue-700' 
@@ -281,6 +324,7 @@ export default function DeleteAccount() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Data Deletion Details */}
             <div>
