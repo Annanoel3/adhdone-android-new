@@ -382,13 +382,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
                 row and then jumped down to the next one once it no longer
                 fit, which looked like it started the word over (Anna, Nov 6
                 2026: "it will like type the word build and super quickly
-                start over the word"). The cursor takes up no room. */}
+                start over the word"). No cursor: its gray block sat where
+                the first letter goes before typing began ("the first letter
+                of each message has like a gray highlight over it"). */}
             {shown}
-            {!done && (
-              <span className="relative">
-                <span className="absolute left-0 top-0 opacity-40 pointer-events-none select-none" aria-hidden="true">▍</span>
-              </span>
-            )}
             {!done && <span className="opacity-0 select-none" aria-hidden="true">{line.slice(shown.length)}</span>}
           </ChatBubble>
         )}
