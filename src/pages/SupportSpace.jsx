@@ -9,6 +9,7 @@ import { APP_FEATURE_GUIDE } from "@/components/utils/appFeatureGuide";
 import { isIPhoneApp, onThisPhone } from "@/lib/phonePlatform";
 import SupportEscalationCard from "@/components/support/SupportEscalationCard";
 import ReportResponseButton from "@/components/support/ReportResponseButton";
+import SupportReply from "@/components/support/SupportReply";
 
 export default function SupportSpace() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -543,11 +544,16 @@ Answer plainly and practically, then stop.`;
                         }`}>
                           {msg.role === 'user' ? 'You' : 'Support'}
                         </p>
-                        <p className={`leading-relaxed whitespace-pre-line ${
-                          theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
-                        }`}>
-                          {msg.content}
-                        </p>
+                        {msg.role === 'assistant' ? (
+                          // Formatted, with tappable links (SupportReply).
+                          <SupportReply text={msg.content} theme={theme} />
+                        ) : (
+                          <p className={`leading-relaxed whitespace-pre-line ${
+                            theme === 'dark' ? 'text-gray-200' : 'text-gray-800'
+                          }`}>
+                            {msg.content}
+                          </p>
+                        )}
                         {msg.role === 'assistant' && (
                           <ReportResponseButton
                             aiMessage={msg.content}
