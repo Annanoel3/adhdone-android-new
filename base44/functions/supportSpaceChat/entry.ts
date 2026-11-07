@@ -36,7 +36,44 @@ When something in the app isn't working (a notification missing, a feature not s
       input: prompt + sourcingRules
     });
 
-    const message = response.output_text;
+    let message = response.output_text;
+
+    // The AI's own reply is checked BEFORE it is shown (App Store 1.2: AI
+    // content apps must filter objectionable material). Until Nov 6 2026 only
+    // the person's message was checked, after the reply had already gone out,
+    // and only to email Anna (Anna: "This is already supposed to happen"). A
+    // reply flagged for one of the clearly objectionable kinds is replaced; a
+    // caring reply about self-harm or a hard subject is not ("self-harm",
+    // "self-harm/intent", plain "violence" and "harassment" are left alone,
+    // since a supportive answer trips those).
+    const BLOCK_KINDS = ['sexual', 'sexual/minors', 'hate', 'hate/threatening', 'harassment/threatening', 'violence/graphic', 'self-harm/instructions', 'illicit/violent'];
+    let replyBlocked: string[] = [];
+    if (message) {
+      try {
+        const out = await openai.moderations.create({ model: 'omni-moderation-latest', input: message });
+        const r = out.results?.[0];
+        const scores = r?.category_scores || {};
+        replyBlocked = BLOCK_KINDS.filter((c) => r?.categories?.[c] && (scores[c] ?? 0) >= 0.5);
+      } catch (e) {
+        console.error('Reply check failed:', (e as any)?.message || e);
+      }
+    }
+    const originalReply = message;
+    if (replyBlocked.length) {
+      message = "Sorry, I can't share that reply. Could you tell me a bit more about what you'd like help with?";
+      waitUntil((async () => {
+        try {
+          await base44.asServiceRole.integrations.Core.SendEmail({
+            to: 'mediocreatbestdev@outlook.com',
+            from_name: 'ADHDone Safety Alerts',
+            subject: `ADHDone: an AI reply was blocked (${replyBlocked[0]})`,
+            body: `A Support Space reply was blocked before it was shown and replaced.\n\nUser: ${user.full_name || 'Unknown'} (${user.email})\nTime: ${new Date().toISOString()}\nBlocked for: ${replyBlocked.join(', ')}\n\nBlocked reply:\n"${(originalReply || '').slice(0, 1500)}"`
+          });
+        } catch (e) {
+          console.error('Blocked-reply alert failed:', (e as any)?.message || e);
+        }
+      })());
+    }
 
     // Acceptable-use monitoring: flag only genuinely severe content (OpenAI
     // moderation), then alert the app owner by email. Runs after the response
