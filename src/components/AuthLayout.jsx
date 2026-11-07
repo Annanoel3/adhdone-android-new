@@ -5,8 +5,14 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary mb-4">
-            <Icon className="w-7 h-7 text-primary-foreground" aria-hidden="true" />
+          {/* ADHDone logo and name (was a generic icon in a black square). */}
+          <div className="flex flex-col items-center mb-6">
+            <img
+              src="https://media.base44.com/images/public/68dd79726fce6eca73056b9b/052e0f4d2_ADHD1.png"
+              alt="ADHDone logo"
+              className="w-20 h-20 rounded-2xl object-contain"
+            />
+            <span className="mt-2 text-xl font-bold text-foreground">ADHDone</span>
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
           {subtitle && <p className="text-muted-foreground mt-2">{subtitle}</p>}
