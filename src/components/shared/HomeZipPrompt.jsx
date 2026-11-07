@@ -13,11 +13,16 @@ import { useNavigate } from 'react-router-dom';
 import HomeBaseFields from '@/components/settings/HomeBaseFields';
 import { base44 } from '@/api/base44Client';
 import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
+import { ONBOARDING_STEPS, isStepDone } from '@/components/onboarding/onboardingGate';
 import { trackFire } from '@/lib/appTrack';
 
 // v2: the prompt moved from "on launch" to "first errand", so everyone who
 // hasn't actually saved a home base yet gets one more chance to see it.
 const SEEN_KEY = 'home_zip_prompt_seen_v2';
+// When their first errand went in (this phone). Starts with "onboarding_" so a
+// different account signing in on this phone starts fresh (onboardingSync).
+const ERRAND_AT_KEY = 'onboarding_home_errand_at';
+const LATER_MS = 4 * 60 * 60 * 1000;
 
 // One-time, skippable ask for a home base. Only asked the first time the user
 // creates something that actually leaves the house (an errand / a task with a
@@ -25,9 +30,9 @@ const SEEN_KEY = 'home_zip_prompt_seen_v2';
 // arriving out of nowhere on launch.
 export default function HomeZipPrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
-  // Takes its turn with other popups (never stacks on one), but as the answer
-  // to something the user just did it shows the moment the screen is free.
-  const shown = usePopupTurn(open, { reactive: true });
+  // Takes its turn with other popups (never stacks on one) and waits for a
+  // calm moment: nothing else up, and not while they're typing or tapping.
+  const shown = usePopupTurn(open);
   // Second step, only after home base is saved: commuters get far more out of
   // this than anyone else, but asking about work up front would bury the ask
   // that actually matters.
@@ -53,9 +58,42 @@ export default function HomeZipPrompt({ user, theme }) {
       localStorage.setItem(SEEN_KEY, 'true');
       return;
     }
-    const onErrand = () => setOpen(true);
+    // Timing (Anna, Nov 6 2026: "it happens like 5 seconds after onboarding
+    // ends. horrible timing" while she was typing her next task). It opened
+    // the moment the first errand went in, and the welcome chat's own first
+    // task is often an errand, so it landed right as the chat closed. That
+    // trigger came from Base44's builder on Sep 10 2026 ("first errand"
+    // instead of on launch), and Sep 24 made it show the instant the screen
+    // was free. Now the first errand is only noted, and the question waits
+    // for a later visit: at least 4 hours after that errand, with the welcome
+    // chat and the Home tour done, a few seconds into the visit, when nothing
+    // else is up and they aren't typing.
+    let cancelled = false;
+    const tryAsk = () => {
+      if (cancelled) return;
+      let at = 0;
+      try { at = Number(localStorage.getItem(ERRAND_AT_KEY)) || 0; } catch (e) { at = 0; }
+      if (!at || Date.now() - at < LATER_MS) return;
+      if (!isStepDone(ONBOARDING_STEPS.welcome) || !isStepDone(ONBOARDING_STEPS.homeTour)) return;
+      setOpen(true);
+    };
+    const onErrand = () => {
+      try {
+        if (!localStorage.getItem(ERRAND_AT_KEY)) localStorage.setItem(ERRAND_AT_KEY, String(Date.now()));
+      } catch (e) { /* asked after a later errand, then */ }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setTimeout(tryAsk, 8000);
+    };
     window.addEventListener('errand-task-created', onErrand);
-    return () => window.removeEventListener('errand-task-created', onErrand);
+    document.addEventListener('visibilitychange', onVisible);
+    const first = setTimeout(tryAsk, 8000);
+    return () => {
+      cancelled = true;
+      clearTimeout(first);
+      window.removeEventListener('errand-task-created', onErrand);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [user]);
 
   const dismiss = () => {
