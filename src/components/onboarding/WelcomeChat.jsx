@@ -122,6 +122,33 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const [offerWork, setOfferWork] = useState(false);
   const navigate = useNavigate();
 
+  // Whether the phone already allows ADHDone's notifications (iPhone app).
+  // Apple shows its "Allow notifications?" box once per install; after that
+  // asking again does nothing on screen. Anna, Nov 6 2026, re-testing with a
+  // fresh account on the same iPhone: the line said the iPhone was about to
+  // ask, and the only thing that happened was the app's own button. Already
+  // allowed: the question is stepped over and counts as answered "yes".
+  // null = not known yet (the beat then shows as usual).
+  const [phoneAllows, setPhoneAllows] = useState(null);
+  useEffect(() => {
+    if (offerPin) return undefined;
+    let stopped = false;
+    const started = Date.now();
+    const look = async () => {
+      const NB = window.Capacitor?.Plugins?.NotifyBridge;
+      if (!NB?.getPermissionState) {
+        if (!stopped && Date.now() - started < 15000) setTimeout(look, 500);
+        return;
+      }
+      try {
+        const st = await NB.getPermissionState();
+        if (!stopped) setPhoneAllows(!!st?.granted);
+      } catch (e) { /* unknown: the question shows as usual */ }
+    };
+    look();
+    return () => { stopped = true; };
+  }, [offerPin]);
+
   // Beats that don't apply are stepped over (a "when?" with no task; the
   // notifications question outside the phone app, where there is nothing to
   // ask). Decided as each beat comes up, not once at the start: the phone's
@@ -130,14 +157,19 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     const b = script[idx];
     if (!b) return;
     const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+    const alreadyOn = b.input === 'notify' && !offerPin && phoneAllows === true && !notify;
+    if (alreadyOn) {
+      settleNotifications();
+      setNotify('allowed');
+    }
     const gone =
-      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge;
+      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn;
     // No notifications question here (a browser, or an account that already
     // answered it when the chat is picked back up): the task goes in now
     // instead of after that answer.
     if (b.input === 'notify' && gone && task && hasWhenBeat) captureTask(task, phraseRef.current);
     if (gone) setIdx((i) => i + 1);
-  }, [idx, script, name, handle, about, task, when, notify]);
+  }, [idx, script, name, handle, about, task, when, notify, phoneAllows]);
 
   // The about-you question is asked once per account, wherever it comes up
   // (the welcome chat ends with it; the catch-up asks it otherwise): reaching
@@ -344,8 +376,20 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             history above them, so the live bubble steps aside. */}
         {beat && !taskOffers && (
           <ChatBubble from="app">
+            {/* The rest of the line is already there, invisible, so every
+                word sits where it will end up. Typed one letter at a time
+                into an empty bubble, a long word started at the end of a
+                row and then jumped down to the next one once it no longer
+                fit, which looked like it started the word over (Anna, Nov 6
+                2026: "it will like type the word build and super quickly
+                start over the word"). The cursor takes up no room. */}
             {shown}
-            {!done && <span className="opacity-40">▍</span>}
+            {!done && (
+              <span className="relative">
+                <span className="absolute left-0 top-0 opacity-40 pointer-events-none select-none" aria-hidden="true">▍</span>
+              </span>
+            )}
+            {!done && <span className="opacity-0 select-none" aria-hidden="true">{line.slice(shown.length)}</span>}
           </ChatBubble>
         )}
         <div ref={endRef} />
