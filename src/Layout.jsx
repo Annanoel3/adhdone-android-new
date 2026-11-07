@@ -79,6 +79,7 @@ import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissions
 import { FeedbackPrompt, FeedbackAskPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
+import AiConsentDialog from "./components/onboarding/AiConsentDialog";
 import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
@@ -1398,6 +1399,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <GoalStepSync user={user} />
         <AppDialogHost />
         <UsageTracker user={user} />
+        {/* iPhone only: permission before anything goes to OpenAI (App Store
+            5.1.2(i)); the welcome chat waits for it. */}
+        <AiConsentDialog user={user} />
         <WelcomeDialog user={user} />
         <CatchUpDialog user={user} />
         <PageIntroTour currentPageName={currentPageName} user={user} />
