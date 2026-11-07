@@ -65,7 +65,9 @@ function handleNotificationData(data, navigate) {
   }
   // A come-back push ("Brain getting crowded?", cronBackBurnerCheckIn) opens
   // Add Task: it's about putting something on an empty list.
-  if (data.type === 'comeback') {
+  // The evening brain-dump push (cronDailyDigest, alternating nights with the
+  // win check-in; Anna, Nov 6 2026) opens Add Task the same way.
+  if (data.type === 'comeback' || data.type === 'evening_dump') {
     const target = data.screen || '/AddTask';
     if (navigate) navigate(target); else window.location.href = target;
     return;
