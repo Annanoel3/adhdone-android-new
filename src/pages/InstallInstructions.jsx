@@ -956,7 +956,10 @@ export default function NotesPage() {
           </h2>
           <p className="text-[15px] leading-relaxed text-muted-foreground">
             {capOpen
-              ? `You get ${FREE_MINUTES} free minutes a month, and they come back on ${nextMonthStart()}.${canBuy ? " Need more before then? You can buy extra time." : " A paid version with more recording time is coming."}`
+              // No "a paid version is coming" on the iPhone app (Nov 7 2026):
+              // App Review asks to see any paid features, and there are none
+              // there yet, so it doesn't mention any.
+              ? `You get ${FREE_MINUTES} free minutes a month, and they come back on ${nextMonthStart()}.${canBuy ? " Need more before then? You can buy extra time." : isIPhoneApp() ? "" : " A paid version with more recording time is coming."}`
               : `You get ${FREE_MINUTES} free minutes a month. Extra time you buy is used after those, and it never expires.`}
           </p>
           {canBuy && (
