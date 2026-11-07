@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI, { toFile } from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { privateOpenAiKey } from '../../shared/privateAi.ts';
 import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
 
 // Two jobs, both on the app's own OpenAI key (RULES.md rule 1):
@@ -178,7 +179,7 @@ async function notesPart(base44: any, user: any, body: any) {
   const context = [rec.title ? `Recording: ${rec.title}.` : "", before ? String(before).slice(-600) : ""]
     .filter(Boolean).join(" ");
 
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   const file = await toFile(bytes, `part-${index}.m4a`, { type: "audio/mp4" });
   let text = "";
   try {
@@ -501,7 +502,7 @@ async function notesMake(base44: any, user: any, body: any) {
   if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
     notes = cleanNotes({ title: rec.title || "Recording", gist: ["This recording didn't pick up any speech."] }, asked);
   } else {
-    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+    const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
     const when = whenRecorded(rec.started_at, user?.timezone);
     const length = lengthOf(rec.duration_ms);
     const aboutMe = String(user?.about_me || "").slice(0, 400);
@@ -631,7 +632,7 @@ async function notesChange(base44: any, user: any, body: any) {
   const asked = questionsOf(rec);
   const before: any = { ...rec.notes, title: String(rec.title || rec.notes.title || "").trim() };
   delete before.edited;
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   let out: any;
   try {
     out = await askJson(openai, NOTES_SYSTEM, `These are the notes from a recording they made (${whenRecorded(rec.started_at, user?.timezone)}), as JSON:
@@ -702,7 +703,7 @@ async function notesAsk(base44: any, user: any, body: any) {
       open: (n.questions || []).map((x: any) => x.text),
     };
   };
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   const SYSTEM = "You help someone with ADHD find things in recordings they made of meetings, appointments, classes and conversations. Answer with JSON only.";
 
   // 1. Which recordings could answer it.
@@ -777,7 +778,7 @@ async function notesFill(base44: any, user: any, body: any) {
   if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
     return Response.json({ ok: true, added: 0, notes: rec.notes, said: "There's no transcript to check against." });
   }
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   // Taken as saved (cleanNotes would re-cap lists and drop the edited flag).
   const list = (v: any) => (Array.isArray(v) ? v : []);
   const saved = { ...rec.notes, todos: list(rec.notes.todos), details: list(rec.notes.details), sections: list(rec.notes.sections), decisions: list(rec.notes.decisions), questions: list(rec.notes.questions) };
@@ -838,7 +839,7 @@ async function notesAskOne(base44: any, user: any, body: any) {
   if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
     return Response.json({ ok: true, answer: "This recording didn't pick up any speech, so there's nothing to look in.", quotes: [] });
   }
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   const SYSTEM = "You help someone with ADHD find what was said in a recording they made of an appointment, meeting, class or conversation. You answer only from the transcript, and you quote it exactly. Answer with JSON only.";
   let out: any;
   try {
@@ -888,7 +889,7 @@ async function notesTry(user: any, body: any) {
   if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
   const transcript = String(body?.transcript || "");
   const model = TRY_MODELS.includes(body?.model) ? body.model : NOTES_MODEL;
-  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   const started = Date.now();
   // { question } instead: the one-recording ask (notes_ask_one) run on this
   // transcript, quotes checked the same way, nothing saved.
@@ -937,7 +938,7 @@ Deno.serve(async (req) => {
     if (!audio_base64) return Response.json({ error: "audio_base64 is required" }, { status: 400 });
     const bytes = decodeBase64(String(audio_base64));
     const audioFile = new File([bytes], filename || "audio.webm", { type: "audio/webm" });
-    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'transcribeAudioNew' });
+    const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
     const transcription = await openai.audio.transcriptions.create({ file: audioFile, model: "whisper-1" });
     return Response.json({ text: transcription.text });
   } catch (error) {
