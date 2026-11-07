@@ -104,6 +104,30 @@ Deno.serve(async (req) => {
 
         let reqBody: any = {};
         try { reqBody = await req.clone().json(); } catch { reqBody = {}; }
+        // { mode: 'ai_projects' } (owner only): which OpenAI project each key
+        // belongs to, from the openai-project header OpenAI sends back. The
+        // private key's project must not be in Data controls > Sharing
+        // (shared/privateAi.ts). Never returns the keys themselves.
+        if (reqBody?.mode === 'ai_projects') {
+            if (user.role !== 'admin') return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            const look = async (name: string) => {
+                const key = (Deno.env.get(name) || '').trim();
+                if (!key) return { name, set: false };
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+                    body: JSON.stringify({ model: 'gpt-6-luna', messages: [{ role: 'user', content: 'Say ok.' }] }),
+                }).catch((e) => ({ ok: false, status: 0, headers: new Headers(), text: async () => String(e?.message || e) } as any));
+                const body = res.ok ? '' : String(await res.text()).slice(0, 300);
+                return {
+                    name, set: true, status: res.status,
+                    project: res.headers.get('openai-project'),
+                    organization: res.headers.get('openai-organization'),
+                    ...(body ? { error: body } : {}),
+                };
+            };
+            return Response.json({ success: true, keys: [await look('OPENAI_API_KEY'), await look('OPENAI_API_KEY_PRIVATE')] });
+        }
         // { ringSelfTest: true } (owner only): which reminders ring as alarms,
         // checked against Anna's rules (RULES.md §9 Q6). Run it after ANY change
         // to ringsOutLoudOn (shared/reminderTitle.ts) or ringsOutLoud
