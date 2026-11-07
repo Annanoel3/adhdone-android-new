@@ -120,7 +120,10 @@ export default function PrivacyPolicy() {
               "With service providers that run the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
               // Nov 6 2026: the OpenAI account shares API inputs and outputs with
               // OpenAI (its complimentary-token program), so this must be said.
-              "OpenAI may also use what ADHDone sends it to improve and train its AI models.",
+              // Support Space and Record Notes run on a separate project that is
+              // not shared (base44/shared/privateAi.ts). OpenAI keeps API data
+              // up to 30 days to check for abuse, shared or not.
+              "OpenAI may also use what ADHDone sends it to improve and train its AI models, except your Support Space chats (typed or spoken), your recordings and the notes made from them, which are never used for that. OpenAI may keep what it receives for up to 30 days to check for abuse, then deletes it unless the law requires otherwise.",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
