@@ -130,17 +130,24 @@ export default function PageIntroTour({ currentPageName, user }) {
     //    card must not land on top of that chat.
     //  - Welcome already done (any later first visit to a page) → wait for a
     //    genuinely clear screen so we never stack on another surface.
+    //    Anna, Nov 7 2026: "takes too long to pop up. I went to parking lot
+    //    and started typing an idea and then it popped up mid type." It
+    //    waited for a calm moment, which meant whenever they paused. Now it
+    //    comes the moment they land (a short beat for the page to draw, and
+    //    nothing else on screen), and if they're already typing by then it
+    //    stays away this visit and comes on the next one.
     let cancelled = false;
     const chainedToWelcome = !isStepDone(ONBOARDING_STEPS.welcome);
+    const typingNow = () => {
+      const el = document.activeElement;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
     waitForStep(ONBOARDING_STEPS.welcome)
-      .then(() =>
-        chainedToWelcome
-          ? new Promise((r) => setTimeout(r, 250)).then(waitForClear)
-          : waitForCalm()
-      )
+      .then(() => new Promise((r) => setTimeout(r, chainedToWelcome ? 250 : 350)).then(waitForClear))
       .then(() => {
         if (cancelled) return;
         if (localStorage.getItem(seenKey(currentPageName))) return;
+        if (!chainedToWelcome && typingNow()) return;
         // Mark the page's tour seen the MOMENT it appears, not when the last
         // step is tapped. A user who opened Home, saw step 1 and left got the
         // whole thing again on every single app open.
