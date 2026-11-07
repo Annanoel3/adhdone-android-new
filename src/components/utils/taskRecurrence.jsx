@@ -462,9 +462,11 @@ async function makeNextCopy(task, opts = {}) {
 }
 
 // A repeating task finished in the last few days whose next copy never got
-// made (the app was closed or the request failed before it landed; only the
-// app makes the copy, as the person, and no server job can): made now, once
-// per app open, the same way a completion makes it. createNextRecurrence
+// made (the app was closed or the request failed before it landed; the copy
+// is made as the person: here, or on the server only when an Android phone on
+// build 48+ checks in from the background with the person's own sign-in,
+// base44/shared/nextCopy.ts, a port of nextOccurrence/makeNextCopy below; keep
+// them in step): made now, once per app open, the same way a completion makes it. createNextRecurrence
 // looks for an existing copy first, so this never doubles one. Nov 6 2026:
 // an 8 AM daily medication checked off from its alarm at 8:08 ended there,
 // and the person only ever opens the app from that alarm.
