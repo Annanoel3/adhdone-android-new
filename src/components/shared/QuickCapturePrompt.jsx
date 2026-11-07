@@ -1835,6 +1835,10 @@ export function AppUpdatePrompt({ user, theme }) {
   };
   const noteUpdateTapped = () => {
     try { localStorage.setItem(UPDATE_TAPPED_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+    // On the account too, so the server can tell an update made from this card
+    // from one the Play Store made by itself (User.app_update_log; Anna, Nov 6
+    // 2026: "Keep track of when anyone's phone automatically updates").
+    base44.auth.updateMe({ app_update_tapped_at: new Date().toISOString() }).catch(() => {});
   };
 
   useEffect(() => {
