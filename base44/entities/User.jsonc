@@ -562,6 +562,18 @@
       "type": "object",
       "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
     },
+    "app_update_tapped_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they last tapped Update on the app's update card (AppUpdatePrompt). Lets the server tell an update made from the card from one Google Play made by itself (app_update_log)."
+    },
+    "app_update_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Every Android app update this phone reported (Android builds 48 on; Anna, Nov 6 2026: \"Keep track of when anyone's phone automatically updates\"), newest last, 30 kept: { at, build, from_build (the build their last app open reported), how }. how: 'tapped_update' = Update on the update card in the 2 hours before; 'while_using' = the app was open in the 10 minutes before (most likely updated by hand); 'auto' = neither, so Google Play updated it by itself (or, rarely, by hand in the Play Store without opening ADHDone). Written by cancelTaskNotifications (mode push_state, why 'updated')."
+    },
     "phone_seen_at": {
       "type": "string",
       "format": "date-time",
