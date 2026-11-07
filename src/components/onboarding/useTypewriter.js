@@ -36,5 +36,9 @@ export default function useTypewriter(text, speed = 28, key = text) {
     return () => clearInterval(id);
   }, [text, speed, key]);
 
+  // The render where a NEW line arrives still holds the old line's letters
+  // (state catches up a moment later), which flashed the previous line in
+  // the new bubble for a frame. A new key shows nothing until typing starts.
+  if (keyRef.current !== key) return { shown: '', done: !text };
   return { shown, done: shown.length === (text || '').length };
 }
