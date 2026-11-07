@@ -43,10 +43,15 @@ When something in the app isn't working (a notification missing, a feature not s
       }
     }
 
+    // store: false — the Responses API keeps every call in the OpenAI
+    // dashboard's logs unless told not to (Data controls > Data retention:
+    // "API calls from the Responses API are logged by default"). Support Space
+    // chats are private (shared/privateAi.ts), so they are never kept there.
     const response = await openai.responses.create({
       model: "gpt-6-astra",
       tools: [{ type: "web_search" }],
-      input: prompt + sourcingRules
+      input: prompt + sourcingRules,
+      store: false,
     });
 
     let message = response.output_text;
