@@ -12,6 +12,7 @@ import { base44 } from '@/api/base44Client';
 import { isIPhoneApp } from '@/lib/phonePlatform';
 import { openInBrowser } from '@/components/utils/openInBrowser';
 import { ShieldCheck } from 'lucide-react';
+import { trackingQuestionPending, askTrackingPermissionNow } from '@/lib/admob';
 import { usePopupTurn } from './onboardingSurface';
 
 // Permission before anything of theirs goes to OpenAI, iPhone app only
@@ -64,6 +65,16 @@ export default function AiConsentDialog({ user }) {
   const [saving, setSaving] = useState(false);
   const wanted = aiConsentPending(user) && !given;
   const shown = usePopupTurn(wanted, { reactive: true });
+  // Apple's "Allow ADHDone to track…?" comes right after this popup, said
+  // here first, so it isn't a box out of nowhere later (Anna, Nov 6 2026).
+  // Only when this iPhone hasn't answered it yet.
+  const [trackingNext, setTrackingNext] = useState(false);
+  useEffect(() => {
+    if (!wanted) return undefined;
+    let stopped = false;
+    trackingQuestionPending().then((yes) => { if (!stopped) setTrackingNext(!!yes); }).catch(() => {});
+    return () => { stopped = true; };
+  }, [wanted]);
 
   useEffect(() => {
     const key = consentKey(user);
@@ -85,6 +96,11 @@ export default function AiConsentDialog({ user }) {
     }
     setSaving(false);
     setGiven(true);
+    // Apple's tracking question next, then the welcome chat (it waits for
+    // AI_CONSENT_EVENT), so the two never sit on top of each other.
+    if (trackingNext) {
+      try { await askTrackingPermissionNow(); } catch (e) { /* the chat goes on either way */ }
+    }
     window.dispatchEvent(new CustomEvent(AI_CONSENT_EVENT));
   };
 
@@ -120,6 +136,12 @@ export default function AiConsentDialog({ user }) {
               yourself. OpenAI may use that part to improve its AI models.
             </span>
             <span className="block text-sm">ADHDone can't work without OpenAI, so it asks first.</span>
+            {trackingNext && (
+              <span className="block text-sm">
+                Next, your iPhone will ask about ad tracking. ADHDone is free because of ads, and
+                either answer is fine: the app works the same.
+              </span>
+            )}
             <button
               type="button"
               className="underline text-primary"
