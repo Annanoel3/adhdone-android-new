@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Do this person's quiet hours cover the hours they sleep?
 //
 // Anna, Oct 18 2026: "If someone says they work the night shift, prompt them to

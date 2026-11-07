@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';

@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Double bookings and duplicates, the app's side of it (shared/eventConflicts.ts
 // is the checker; the calendar import calls it directly).
 //

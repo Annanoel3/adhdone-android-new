@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 6 2026 (night) so the bundled shared/captureToTasks.ts is picked up: the tracker look runs on the private OpenAI key (shared/privateAi.ts), never used for training.
 // Re-saved Nov 4 2026 (evening) so the bundled shared/runTaskParse.ts, shared/taskParsePrompt.ts and shared/captureToTasks.ts are picked up: prep_worthy (an appointment with something to get ready first) is parsed and saved, its night-before reminder asks for the prep note, and a capture too late for that gets one "anything to prep?" push (shared/prepNote.ts).
 // Re-saved Nov 4 2026 so the bundled shared/captureToTasks.ts is picked up: a captured event at a place has its "leave now" measured from where they'll be (the event before it, work, or home: shared/leaveOrigin.ts via generateReminderSchedule's ownerEmail/taskId).

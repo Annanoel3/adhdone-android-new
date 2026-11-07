@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Sorts what a person finished (and the events and birthdays that happened)
 // into areas of life, and counts them, for the "areas of life" bubbles on the
 // Insights page (src/components/progress/LifeAreasCard.jsx).

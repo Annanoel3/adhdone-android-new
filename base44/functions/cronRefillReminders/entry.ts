@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: an event's night-before / morning-of / prep ask is never cancelled to make room for a task's reminder booked after it (softer nudges still are).
 // Re-saved Nov 4 2026 (event alarms, all of them) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
 // Re-saved Nov 1 2026 so the bundled shared/sendLedger.ts is picked up: ledgerPrune keeps each push that went out as an AppEvent 'reminder_sent' before clearing it from the ledger (30 days of reminder history).

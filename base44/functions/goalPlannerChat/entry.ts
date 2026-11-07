@@ -1,3 +1,4 @@
+// Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Goals planner (ported Oct 31 2026 from Anna's Goals app, function of the
 // same name; what was copied, adapted and dropped is in GOALS_PORT.md).
 // Nov 1 2026: long plans finish (continue_plan) and extract_plan reads every
