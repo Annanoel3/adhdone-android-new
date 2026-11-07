@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 import { isIPhoneApp } from '@/lib/phonePlatform';
 import { openInBrowser } from '@/components/utils/openInBrowser';
+import { ShieldCheck } from 'lucide-react';
 import { usePopupTurn } from './onboardingSurface';
 
 // Permission before anything of theirs goes to OpenAI, iPhone app only
@@ -27,6 +28,11 @@ import { usePopupTurn } from './onboardingSurface';
 // OPENAI_API_KEY_PRIVATE, a project left out of OpenAI's training share
 // (base44/shared/privateAi.ts), hence "but never your Support Space chats or
 // recordings". Anything else moved there can be added; never claim more.
+// Anna, Nov 6 2026: "We need to make the biggest thing privacy", so the title
+// and the first, largest line are what OpenAI never uses: Support Space,
+// Record Notes, and what they log on their Parking Lot trackers (the Log box
+// and the Parking Lot page; categorizeIdea private: true, foldIdeaIntoTrackers).
+// What may be used is said after it, in full, as 5.1.2(i) needs.
 const CONSENT_KEY = 'ai_consent_at';
 const PRIVACY_URL = 'https://adhdone.space/privacypolicy';
 export const AI_CONSENT_EVENT = 'adhdone:ai-consent';
@@ -83,16 +89,21 @@ export default function AiConsentDialog({ user }) {
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <AlertDialogHeader>
-          <AlertDialogTitle>ADHDone uses OpenAI</AlertDialogTitle>
+          <AlertDialogTitle className="flex items-center gap-2 text-xl">
+            <ShieldCheck className="w-6 h-6 text-primary flex-shrink-0" aria-hidden="true" />
+            Your privacy comes first
+          </AlertDialogTitle>
           <AlertDialogDescription className="space-y-3 text-left">
-            <span className="block">
-              To sort what you add, plan your reminders, answer you in Support Space and turn
-              recordings into notes, ADHDone sends what you type, say or photograph, your tasks
-              and notes, and what you tell it about yourself to OpenAI, an AI company. OpenAI may
-              use some of it to improve its AI models, but never your Support Space chats or
-              recordings.
+            <span className="block rounded-lg bg-primary/10 p-3 text-base font-semibold leading-snug text-foreground">
+              OpenAI will never use your Support Space chats, your Record Notes recordings and
+              notes, or what you log on your Parking Lot trackers to improve its AI models.
             </span>
-            <span className="block">ADHDone can't work without it, so it asks first.</span>
+            <span className="block text-sm">
+              To sort the tasks you add and plan your reminders, ADHDone also sends OpenAI, an AI
+              company, what you type, say or photograph, your tasks, and what you tell it about
+              yourself. OpenAI may use that part to improve its AI models.
+            </span>
+            <span className="block text-sm">ADHDone can't work without OpenAI, so it asks first.</span>
             <button
               type="button"
               className="underline text-primary"
