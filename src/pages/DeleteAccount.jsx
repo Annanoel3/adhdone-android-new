@@ -27,7 +27,19 @@ export default function DeleteAccount() {
   // my account": the request is saved (account_deletion_requested_at; the
   // owner check tells Anna), they're signed out here, and this page shows
   // that it's done.
-  const [deletedEmail, setDeletedEmail] = useState('');
+  // Signing out leaves the page (Base44's sign-out goes through its own
+  // address and comes back), so the "done" view is shown on the way back:
+  // /DeleteAccount?deleted=1, with the address kept on the phone, never in
+  // the link.
+  const DELETED_KEY = 'adhd_account_deleted_email';
+  const [deletedEmail, setDeletedEmail] = useState(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get('deleted') !== '1') return '';
+      return localStorage.getItem(DELETED_KEY) || ' ';
+    } catch (e) {
+      return '';
+    }
+  });
 
   useEffect(() => {
     base44.auth.me().then((u) => {
@@ -49,10 +61,12 @@ export default function DeleteAccount() {
       await base44.auth.updateMe({ account_deletion_requested_at: at });
       setRequestedAt(at);
       setConfirming(false);
-      setDeletedEmail(me?.email || '');
-      // Signed out right here (the token only; this page stays up to say so).
-      try { await base44.auth.logout(); } catch (e) { /* the Done button reloads anyway */ }
-      setMe(null);
+      try { localStorage.setItem(DELETED_KEY, me?.email || ''); } catch (e) { /* shown without the address */ }
+      setDeletedEmail(me?.email || ' ');
+      // Signed out, then back here to the "Account deleted" view.
+      try {
+        base44.auth.logout(`${window.location.origin}/DeleteAccount?deleted=1`);
+      } catch (e) { /* the view above is already up; Done signs them out of the page */ }
     } catch (e) {
       setRequestError("That didn't go through. Check your connection and try again.");
     } finally {
@@ -85,11 +99,14 @@ export default function DeleteAccount() {
             </h1>
             <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
               You've been signed out. Your account and everything in it is being erased, and
-              you'll get an email at <strong className="break-all">{deletedEmail}</strong> when
+              you'll get an email{deletedEmail.trim() ? <> at <strong className="break-all">{deletedEmail}</strong></> : null} when
               it's finished.
             </p>
             <Button
-              onClick={() => { window.location.href = '/'; }}
+              onClick={() => {
+                try { localStorage.removeItem(DELETED_KEY); } catch (e) { /* nothing kept */ }
+                window.location.href = '/';
+              }}
               className="w-full"
             >
               Done
