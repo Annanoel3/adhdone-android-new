@@ -172,7 +172,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     if (!pinnedRef.current) return undefined;
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
-  }, [shown, history.length, taskOffers]);
+  }, [shown, history.length]);
 
   // Lines with nothing to answer roll on by themselves after a short beat.
   useEffect(() => {
