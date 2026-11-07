@@ -496,13 +496,17 @@ export default function DeleteAccount() {
               <p className={`mb-3 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
-                Some data may be retained for legal or business purposes:
+                {/* Apple 5.1.1(v): data may be kept only where the law requires it,
+                    and people must be told what is and isn't kept (Nov 7 2026). */}
+                After your account is deleted, only this is kept:
               </p>
               <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
-                <li><strong>Financial records</strong> (subscription payments, refunds) - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>
-                <li><strong>Anonymized feedback and reports</strong> - Used to improve app safety and may not contain your personally identifiable information. <strong>Retention period: Indefinite (anonymized)</strong></li>
+                {/* The iPhone app sells nothing (no purchases or subscriptions there
+                    yet), so it doesn't claim to keep payment records. */}
+                {!isIPhoneApp() && <li><strong>Financial records</strong> (subscription payments, refunds) - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>}
+                <li><strong>Anonymized feedback and reports</strong> - Used to improve app safety. They don't contain anything that identifies you. <strong>Retention period: Indefinite (anonymized)</strong></li>
                 <li><strong>System backups</strong> - May exist in backups for disaster recovery. <strong>Retention period: Up to 90 days</strong>, but will be inaccessible during normal operations</li>
               </ul>
             </div>
