@@ -375,7 +375,27 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     } catch (e) {
       console.warn('[phoneReport] push_state OneSignal lookup failed:', (e as any)?.message || e);
     }
-    if (owner?.id) await svc.User.update(owner.id, { phone_push_state: state, phone_seen_at: nowIso });
+    // An update: how it happened (Anna, Nov 6 2026: "Keep track of when
+    // anyone's phone automatically updates"). 'tapped_update' = the Update
+    // button on the app's update card in the last 2 hours; 'while_using' = the
+    // app was open in the 10 minutes before (most likely updated by hand);
+    // 'auto' = neither: Google Play updated it by itself (or, rarely, the
+    // person updated it in the Play Store without opening ADHDone). One row per
+    // update in User.app_update_log, newest last, 30 kept.
+    const extra: any = {};
+    if (state.why === 'updated' && owner) {
+      const msOfField = (v: any) => Date.parse(String(v || '')) || 0;
+      const tappedMs = msOfField(owner.app_update_tapped_at);
+      const openMs = msOfField(owner.last_active_at);
+      const how = tappedMs && nowMs - tappedMs < 2 * 60 * 60 * 1000 ? 'tapped_update'
+        : openMs && nowMs - openMs < 10 * 60 * 1000 ? 'while_using'
+        : 'auto';
+      (state as any).how = how;
+      const fromBuild = Number(owner.app_build) || null;
+      const log = Array.isArray(owner.app_update_log) ? owner.app_update_log : [];
+      extra.app_update_log = [...log, { at: nowIso, build: state.build, from_build: fromBuild, how }].slice(-30);
+    }
+    if (owner?.id) await svc.User.update(owner.id, { phone_push_state: state, phone_seen_at: nowIso, ...extra });
     console.log(`[phoneReport] push_state ${email}: ${JSON.stringify(state)}`);
     return Response.json({ success: true });
   }
