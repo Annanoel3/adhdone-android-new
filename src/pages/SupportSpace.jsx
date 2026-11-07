@@ -308,11 +308,21 @@ Answer plainly and practically, then stop.`;
       // .webm holding mp4 audio is turned down by transcription (Oct 30 2026).
       const voiceType = audioBlob.type || 'audio/webm';
       const voiceExt = voiceType.includes('mp4') ? 'mp4' : voiceType.includes('ogg') ? 'ogg' : 'webm';
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.${voiceExt}`, { type: voiceType });
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: audioFile });
-
-      const sttResult = await base44.functions.invoke('transcribeAudio', { file_url });
-      const text = sttResult?.data?.transcription;
+      // Straight to transcribeAudioNew, on the private OpenAI key (never used
+      // for training; base44/shared/privateAi.ts), like Parking Lot voice
+      // typing. Until Nov 6 2026 the clip was uploaded to Base44's file storage
+      // and transcribed by Base44's own transcription (transcribeAudio).
+      const audio_base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(audioBlob);
+      });
+      const sttResult = await base44.functions.invoke('transcribeAudioNew', {
+        audio_base64,
+        filename: `voice-${Date.now()}.${voiceExt}`,
+      });
+      const text = String(sttResult?.data?.text || '').trim();
 
       if (text) {
         await sendMessage(text);
