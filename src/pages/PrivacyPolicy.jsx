@@ -63,7 +63,7 @@ export default function PrivacyPolicy() {
             <List items={[
               "ADHDone keeps the event's title, time, place, and the importance the AI assigns it, so it can remind you and avoid importing the same event twice.",
               "ADHDone never changes or deletes anything in your calendar. The only time it adds to your calendar is when you tap \"Add to phone calendar\" on an event, and your phone's own calendar screen asks you to confirm.",
-              "ADHDone never sells or shares your calendar data, never uses it for advertising, and never uses it to train AI models.",
+              "ADHDone never sells your calendar data and never uses it for advertising. To sort events, their details are sent to OpenAI, as described under Data Sharing.",
               "You can turn calendar reading off at any time on the Calendar page, or in your phone's app permissions.",
             ]} />
           </Section>
@@ -117,7 +117,10 @@ export default function PrivacyPolicy() {
             <P>We do not sell your data. We only share it in these cases:</P>
             <List items={[
               ...(isIPhoneApp() ? [] : ["With accountability partners — when you connect with someone, they can see your shared check-ins and messages"]),
-              "With service providers, solely to operate the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
+              "With service providers that run the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
+              // Nov 6 2026: the OpenAI account shares API inputs and outputs with
+              // OpenAI (its complimentary-token program), so this must be said.
+              "OpenAI may also use what ADHDone sends it to improve and train its AI models. OpenAI does not sell it.",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
