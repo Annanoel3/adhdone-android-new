@@ -937,7 +937,12 @@ Deno.serve(async (req) => {
     const { audio_base64, filename } = body || {};
     if (!audio_base64) return Response.json({ error: "audio_base64 is required" }, { status: 400 });
     const bytes = decodeBase64(String(audio_base64));
-    const audioFile = new File([bytes], filename || "audio.webm", { type: "audio/webm" });
+    // Voice typing (Parking Lot) and Support Space voice messages (from Nov 6
+    // 2026). The type follows the name: iPhone records audio/mp4.
+    const name = String(filename || "audio.webm");
+    const ext = (name.split(".").pop() || "").toLowerCase();
+    const type = ext === "mp4" || ext === "m4a" ? "audio/mp4" : ext === "ogg" ? "audio/ogg" : ext === "wav" ? "audio/wav" : "audio/webm";
+    const audioFile = new File([bytes], name, { type });
     const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
     const transcription = await openai.audio.transcriptions.create({ file: audioFile, model: "whisper-1" });
     return Response.json({ text: transcription.text });
