@@ -589,7 +589,7 @@ export default function ParkingLot() {
 Those things: ${JSON.stringify(list)}
 Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Something they noticed or describe about one of them that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is its own item, with "entry": null and their words in "note": "entry" is only ever the reading itself, because entries are drawn on a chart as numbers. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
     try {
-      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      const res = await base44.functions.invoke('categorizeIdea', { prompt, private: true });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       const out = JSON.parse(raw);
       const actions = (Array.isArray(out?.actions) ? out.actions : []).filter((a) => a && typeof a === 'object');
@@ -822,7 +822,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
     let answered = false;
     try {
       // categorizeIdea runs on gpt-6-astra (Oct 17 2026).
-      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      const res = await base44.functions.invoke('categorizeIdea', { prompt, private: true });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       answered = raw.length > 0;
       out = JSON.parse(raw);
@@ -1120,7 +1120,7 @@ Categories:
 Return ONLY the category name, nothing else.`;
 
       try {
-        const result = await base44.functions.invoke('categorizeIdea', { prompt });
+        const result = await base44.functions.invoke('categorizeIdea', { prompt, private: true });
         const response = result?.data?.message;
         const category = response.trim().toLowerCase();
         
