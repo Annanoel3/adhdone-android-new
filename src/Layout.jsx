@@ -75,7 +75,7 @@ import { pushAlarmTheme } from "./components/utils/widgetBridge";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
-import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt, QuietHoursNagPrompt, AppUpdatePrompt, WakeOfferPrompt } from "./components/shared/QuickCapturePrompt";
+import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt, QuietHoursNagPrompt, AppUpdatePrompt, WakeOfferPrompt, PushPauseNotice } from "./components/shared/QuickCapturePrompt";
 import { FeedbackPrompt, FeedbackAskPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1377,6 +1377,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <AlarmPermissionsDialog theme={theme} />
         <QuietHoursReviewPrompt user={user} theme={theme} currentPageName={currentPageName} />
         <QuietHoursNagPrompt user={user} theme={theme} />
+        {/* "Sorry about the quiet": a one-time note for an account whose
+            notifications stopped before build 48 (see PushPauseNotice). Before
+            the update card, which stands aside that open. */}
+        <PushPauseNotice user={user} theme={theme} />
         {/* The one "there's an update" popup (see AppUpdatePrompt). */}
         <AppUpdatePrompt user={user} theme={theme} />
         {/* "Notice when I wake up", offered once (see WakeOfferPrompt). */}
