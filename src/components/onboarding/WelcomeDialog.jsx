@@ -144,8 +144,11 @@ export default function WelcomeDialog({ user }) {
     markStepDone(ONBOARDING_STEPS.homeTour);
   };
 
-  // Swiped away, tapped outside, or the phone's back button mid-chat: that is
-  // a pause, not an answer. Nothing is marked done, so the chat comes back on
+  // The X mid-chat: that is a pause, not an answer. (Since Nov 6 2026 nothing
+  // else closes it: a tap outside the chat, the phone's back button and Escape
+  // are ignored. Anna: "it's way too easy to click out of the welcome chat on
+  // accident. The only thing that should close that is completing it or
+  // pressing the x".) Nothing is marked done, so the chat comes back on
   // the next open at the beat they left (the same rule as closing the app).
   // Only "Let's go" at the end (onDone) finishes it. The catch-up chat is
   // the one exception: it was already marked done before it opened.
@@ -162,7 +165,12 @@ export default function WelcomeDialog({ user }) {
 
   return (
     <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleDismiss(); }}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border">
+      <DialogContent
+        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <div className="pt-2">
           {mode === 'catchup' ? (
             <WelcomeChat onDone={handleClose} script={catchUpScript} initialName={knownName} />
