@@ -208,8 +208,38 @@ function pausedForAway(user: any): boolean {
   return !(Number.isFinite(back) && back > paused);
 }
 
-const WIN_ASK_TITLE = 'How did you feel today?';
-const WIN_ASK_BODY = 'Tap to check in and save one win, big or small.';
+// The evening push changes every night (Anna, Nov 6 2026: "the wording for
+// 'what's one win today' should definitely differ day by day. 3 days in a row
+// of that is annoying. Maybe alternate between the come back push like
+// 'what's something you could get off your brain' etc."). Nights alternate
+// between a check-in (opens the mood faces + win box, data.type 'win_ask')
+// and a brain dump (opens Add Task, data.type 'evening_dump'), and each kind
+// walks through its own lines, so no line comes back for a while. Picked by
+// their calendar day, so a second run in the hour can't pick a different one.
+// The come-back pushes (cronBackBurnerCheckIn) have their own lines; these
+// don't repeat them.
+const EVENING_CHECKINS = [
+  { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' },
+  { title: 'Anything go right today?', body: 'Even tiny counts. Save it before it slips away.' },
+  { title: 'Quick check-in', body: 'How are you feeling tonight? One tap and you're done.' },
+  { title: 'One win from today?', body: 'Made the bed, answered a text, got through it. It all counts.' },
+  { title: 'How was your day, really?', body: 'Pick a face and jot down one thing that went okay.' },
+];
+const EVENING_DUMPS = [
+  { title: "What's on your mind for tomorrow?", body: 'Get it out of your head and into ADHDone before bed.' },
+  { title: 'Brain still running?', body: 'Drop one thing here and let ADHDone hold onto it overnight.' },
+  { title: "Anything you don't want to forget?", body: "Say it or type it. We'll handle the reminding." },
+  { title: 'Off your brain, onto the list', body: "One thing you'd rather not carry into tomorrow?" },
+];
+function eveningLine(dayKey: string): { title: string; body: string; dump: boolean } {
+  const [y, mo, d] = String(dayKey).split('-').map(Number);
+  const n = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
+    ? Math.floor(Date.UTC(y, mo - 1, d) / (24 * 60 * 60 * 1000))
+    : 0;
+  const dump = n % 2 === 1;
+  const list = dump ? EVENING_DUMPS : EVENING_CHECKINS;
+  return { ...list[Math.floor(n / 2) % list.length], dump };
+}
 
 // The day the evening card and the box stamp a win or a mood with
 // (winsStore.eveningWindow on the phone): their calendar day, except that an
@@ -310,9 +340,10 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
       console.error(`[DIGEST] Could not claim the win ask for ${email}:`, e);
       continue;
     }
-    const id = await sendWinAsk(email);
+    const line = eveningLine(dayKey);
+    const id = await sendWinAsk(email, line);
     if (id) {
-      await ledgerRecord(base44, { email, kind: 'motivation', source: 'cronDailyDigest', notificationId: id, title: WIN_ASK_TITLE });
+      await ledgerRecord(base44, { email, kind: 'motivation', source: 'cronDailyDigest', notificationId: id, title: line.title });
       sent += 1;
     } else {
       try { await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: user.win_ask_date || null }); } catch {}
@@ -322,7 +353,7 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
   return sent;
 }
 
-async function sendWinAsk(email: string): Promise<string | false> {
+async function sendWinAsk(email: string, line: { title: string; body: string; dump: boolean }): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -334,9 +365,9 @@ async function sendWinAsk(email: string): Promise<string | false> {
         app_id: appId,
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
-        headings: { en: WIN_ASK_TITLE },
-        contents: { en: WIN_ASK_BODY },
-        data: { type: 'win_ask', screen: '/Home?win=1' },
+        headings: { en: line.title },
+        contents: { en: line.body },
+        data: line.dump ? { type: 'evening_dump', screen: '/AddTask' } : { type: 'win_ask', screen: '/Home?win=1' },
         // An evening question: gone by the time it would be stale.
         ttl: 2 * 60 * 60,
       }),
