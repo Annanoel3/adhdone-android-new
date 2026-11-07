@@ -7,6 +7,7 @@ import { wasReplayedThisSession } from './onboardingReplay';
 import WelcomeChat from './WelcomeChat';
 import { resumeScript } from './welcomeScript';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
+import { aiConsentPending, AI_CONSENT_EVENT } from './AiConsentDialog';
 
 // The very first thing a new user sees — a short back-and-forth that collects a
 // name, a first task and its time, and asks for notifications. Nothing else in
@@ -73,10 +74,19 @@ export default function WelcomeDialog({ user }) {
   // Which beats the picked-up chat may skip: a task already on the list, the
   // notifications question already answered on this account.
   const [resumeOpts, setResumeOpts] = useState({ hasTask: false, notifyAnswered: false });
+  // iPhone: the chat sends their first task to OpenAI, so it waits for the
+  // OpenAI permission popup (AiConsentDialog) to be answered.
+  const [consentTick, setConsentTick] = useState(0);
+  useEffect(() => {
+    const onConsent = () => setConsentTick((n) => n + 1);
+    window.addEventListener(AI_CONSENT_EVENT, onConsent);
+    return () => window.removeEventListener(AI_CONSENT_EVENT, onConsent);
+  }, []);
 
   useEffect(() => {
     if (!user) return undefined;
     if (isStepDone(ONBOARDING_STEPS.welcome)) return undefined;
+    if (aiConsentPending(user)) return undefined;
     // An about-me means they got past the chat (it asked that question until
     // Nov 4 2026, and the catch-up asks it only once the chat is done). An
     // account older than a few days with a name is done too, as before.
@@ -123,7 +133,7 @@ export default function WelcomeDialog({ user }) {
       setMode('catchup');
     });
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, consentTick]);
 
   // While it's up, no other onboarding surface may appear behind it.
   useEffect(() => {
