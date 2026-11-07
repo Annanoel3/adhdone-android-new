@@ -658,6 +658,11 @@ bug, a cleanup, "make it faster", "save credits") is not permission. If a fix so
 seems to need a change here, stop and ask her first.
 ## 11. THE IPHONE APP — ANDROID-ONLY THINGS NEVER SHOW THERE
 
+**OpenAI permission (iPhone only, Nov 6 2026).** App Store guideline 5.1.2(i): disclose where personal data goes, third-party AI included, and get explicit permission first. `src/components/onboarding/AiConsentDialog.jsx` asks once per account (`User.ai_consent_at`) before anything of theirs goes to OpenAI; Anna chose "Required to continue": one button, "Allow and continue", a Privacy Policy link, no X, and a tap outside or Escape does nothing. The welcome chat waits for it (WelcomeDialog, `aiConsentPending`). Its text names what goes (what they type, say or photograph, their tasks and notes, what they tell it about themselves), to whom (OpenAI) and why.
+
+**Support Space replies are checked before they're shown (all platforms, Nov 6 2026).** App Store 1.2 names "AI content creation apps": filtering objectionable material and a way to report it. `supportSpaceChat` runs OpenAI moderation on the AI's reply first; a reply flagged (score 0.5+) for sexual, sexual/minors, hate, hate/threatening, harassment/threatening, violence/graphic, self-harm/instructions or illicit/violent is replaced with "Sorry, I can't share that reply..." and Anna is emailed. Plain self-harm, self-harm/intent, violence and harassment are not blocked, because a caring reply trips them. The person's own message is still checked after the reply, as before. A Report button on replies is NOT built yet.
+
+
 The iPhone app (built by Haris, Oct 2026) loads this same website. Anna, Oct 22 2026: "show
 certain things to android users only and then show only the things that work to iphone users.
 Like the wakeup thing. That cant be in the settings for iphone users and that popup cant happen
