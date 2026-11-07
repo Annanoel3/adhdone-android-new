@@ -1844,8 +1844,14 @@ export function PushPauseNotice({ user, theme }) {
     // can't slip in first).
     updateAskedThisOpen = true;
     (async () => {
-      const build = await phoneBuild();
-      setNeedsUpdate(onThisPhone('playUpdate') && build > 0 && build < NEWEST_BUILD);
+      // The build number can take a moment to be readable; unknown counts as
+      // older (the Play Store just says "Open" if it's already up to date).
+      let build = 0;
+      for (let i = 0; i < 8 && !build; i++) {
+        build = await phoneBuild();
+        if (!build) await new Promise((r) => setTimeout(r, 500));
+      }
+      setNeedsUpdate(onThisPhone('playUpdate') && (build === 0 || build < NEWEST_BUILD));
       setWanted(true);
     })();
   }, [user]);
