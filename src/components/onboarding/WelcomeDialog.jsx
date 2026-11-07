@@ -37,10 +37,20 @@ const accountIsOld = (user) => {
   return !isNaN(created) && Date.now() - created > EXISTING_ACCOUNT_DAYS * 24 * 60 * 60 * 1000;
 };
 
-async function accountHasTasks() {
+// Tasks made by THIS account. Tasks older than the account itself are left
+// over from a deleted account with the same email (deleting the account left
+// its tasks behind, and they still belong to the email): they don't make a
+// new account an old one. Nov 6 2026: Anna deleted and remade a test account
+// and its first words were "Welcome back! ADHDone is a new app..." ("it
+// should have acted new").
+async function accountHasTasks(user) {
   try {
     const rows = await base44.entities.Task.list('-created_date', 1);
-    return Array.isArray(rows) && rows.length > 0;
+    if (!Array.isArray(rows) || rows.length === 0) return false;
+    const created = Date.parse(user?.created_date || '');
+    const newest = Date.parse(rows[0]?.created_date || '');
+    if (!isNaN(created) && !isNaN(newest) && newest < created - 60 * 1000) return false;
+    return true;
   } catch (e) {
     return false;
   }
@@ -48,7 +58,7 @@ async function accountHasTasks() {
 
 async function accountHasHistory(user) {
   if (accountIsOld(user)) return true;
-  return accountHasTasks();
+  return accountHasTasks(user);
 }
 
 export default function WelcomeDialog({ user }) {
@@ -72,7 +82,7 @@ export default function WelcomeDialog({ user }) {
     let cancelled = false;
     // A new account with a name and no finished chat: pick it back up.
     if (user.preferred_name && !wasReplayedThisSession()) {
-      accountHasTasks().then((hasTask) => {
+      accountHasTasks(user).then((hasTask) => {
         if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
         const notifyAnswered = isStepDone(ONBOARDING_STEPS.permissions);
         // Everything the chat asks is already answered (they closed it on its
