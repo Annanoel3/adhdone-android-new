@@ -59,8 +59,14 @@ export default function Home() {
 
   useEffect(() => {
     loadData();
-    checkEndOfDayReview();
   }, []);
+
+  // The day review waits for the account and the list: it is only for people
+  // who have actually been using the app (see checkEndOfDayReview).
+  useEffect(() => {
+    if (!tasksLoaded || !user) return;
+    checkEndOfDayReview();
+  }, [tasksLoaded, user]);
 
   // The layout writes the theme from the user's profile into localStorage a
   // moment after auth resolves — which is AFTER this page first renders. Keep
@@ -174,10 +180,30 @@ export default function Home() {
       .catch(() => {});
   };
 
+  // Anna, Nov 6 2026: "no day in review should pop up for a brand new user.
+  // Or for anyone who hasn't used the app yet." A new account opened after
+  // 7 PM got "Your Day in Review" right after the welcome chat, with nothing
+  // to review. Now it needs an account made before today AND at least one
+  // task on their list (the welcome chat's first task counts, but not on the
+  // day they joined). Base44 dates come without a zone and are UTC.
+  const hasUsedTheApp = () => {
+    const localDay = (v) => {
+      if (!v) return '';
+      const s = String(v);
+      const d = new Date(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+      return Number.isNaN(d.getTime()) ? '' : getLocalDateString(d);
+    };
+    const todayLocal = getLocalDateString(new Date());
+    const joined = localDay(user?.created_date);
+    if (!joined || joined >= todayLocal) return false;
+    return (tasks || []).length > 0;
+  };
+
   const checkEndOfDayReview = () => {
     const lastReview = localStorage.getItem('last_eod_review');
     const today = new Date().toISOString().split('T')[0];
     const hour = new Date().getHours();
+    if (!hasUsedTheApp()) return;
     
     if (hour >= 19 && lastReview !== today) {
       setTimeout(() => {
