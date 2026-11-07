@@ -23,6 +23,10 @@ import { usePopupTurn } from './onboardingSurface';
 // nothing. It comes before the welcome chat (WelcomeDialog waits for it,
 // since the chat itself sends their first task to OpenAI). Given once per
 // account (User.ai_consent_at), remembered on the phone too.
+// Nov 6 2026: Support Space (typed and spoken) and Record Notes run on
+// OPENAI_API_KEY_PRIVATE, a project left out of OpenAI's training share
+// (base44/shared/privateAi.ts), hence "but never your Support Space chats or
+// recordings". Anything else moved there can be added; never claim more.
 const CONSENT_KEY = 'ai_consent_at';
 const PRIVACY_URL = 'https://adhdone.space/privacypolicy';
 export const AI_CONSENT_EVENT = 'adhdone:ai-consent';
@@ -85,7 +89,8 @@ export default function AiConsentDialog({ user }) {
               To sort what you add, plan your reminders, answer you in Support Space and turn
               recordings into notes, ADHDone sends what you type, say or photograph, your tasks
               and notes, and what you tell it about yourself to OpenAI, an AI company. OpenAI may
-              also use it to improve its AI models.
+              use some of it to improve its AI models, but never your Support Space chats or
+              recordings.
             </span>
             <span className="block">ADHDone can't work without it, so it asks first.</span>
             <button
