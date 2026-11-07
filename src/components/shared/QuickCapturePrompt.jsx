@@ -1814,6 +1814,118 @@ const phoneBuild = async () => {
     return 0;
   }
 };
+// ── "Sorry about the quiet" ──
+// A one-time note for an account whose notifications stopped reaching the
+// phone before build 48 fixed it (PushHealthWorker). Anna, Nov 7 2026, for
+// Chad, whose 8 AM medicine reminder never came because his phone was still
+// on build 47: "Make a popup for chad. just in case he opens his phone again.
+// Make it sound like the AI in the app noticed something was off ... just show
+// it to him on his next open." By account id, so no name or email ships in
+// the app. Shown once per account (marked the moment it's on screen). On an
+// older build it carries the Update button, and the regular update card
+// waits for his next open, so it's one popup, not two. It says nothing about
+// what he did or didn't do in the app.
+const PUSH_PAUSE_NOTICE_IDS = new Set(['6ad1a3ca70433ea9b71f189e']);
+const PUSH_PAUSE_NOTICE_STEP = 'onboarding_notice_push_pause_v1';
+export function PushPauseNotice({ user, theme }) {
+  const dark = theme === 'dark';
+  const [wanted, setWanted] = useState(false);
+  const [needsUpdate, setNeedsUpdate] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const shown = usePopupTurn(wanted);
+  const checked = useRef(false);
+
+  useEffect(() => {
+    if (!user || checked.current) return;
+    checked.current = true;
+    if (!PUSH_PAUSE_NOTICE_IDS.has(String(user.id || ''))) return;
+    if (isStepDone(PUSH_PAUSE_NOTICE_STEP)) return;
+    // The update card stands aside this open (set before any waiting, so it
+    // can't slip in first).
+    updateAskedThisOpen = true;
+    (async () => {
+      const build = await phoneBuild();
+      setNeedsUpdate(onThisPhone('playUpdate') && build > 0 && build < NEWEST_BUILD);
+      setWanted(true);
+    })();
+  }, [user]);
+
+  useEffect(() => {
+    if (!shown) return;
+    markStepDone(PUSH_PAUSE_NOTICE_STEP);
+    trackFire('push_pause_notice', { props: { action: 'shown', needs_update: needsUpdate } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
+
+  const close = () => {
+    trackFire('push_pause_notice', { props: { action: 'got_it' } });
+    setWanted(false);
+  };
+
+  const update = async () => {
+    trackFire('push_pause_notice', { props: { action: 'update' } });
+    setBusy(true);
+    const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+    const tapped = () => {
+      try { localStorage.setItem(UPDATE_TAPPED_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+      base44.auth.updateMe({ app_update_tapped_at: new Date().toISOString() }).catch(() => {});
+    };
+    try {
+      if (typeof NotifyBridge?.startAppUpdate === 'function') {
+        const r = await NotifyBridge.startAppUpdate();
+        if (r?.result === 'started') { tapped(); setWanted(false); return; }
+        if (r?.result === 'cancelled') return;
+      }
+      if (typeof NotifyBridge?.openPlayStore === 'function') {
+        await NotifyBridge.openPlayStore();
+        tapped();
+        setWanted(false);
+        return;
+      }
+    } catch (e) {
+      /* closes below; the regular update card asks on the next open */
+    } finally {
+      setBusy(false);
+    }
+    setWanted(false);
+  };
+
+  return (
+    <Dialog open={shown} onOpenChange={(o) => { if (!o && !busy) close(); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <Bell className="w-5 h-5" />
+            Sorry about the quiet
+          </DialogTitle>
+          <DialogDescription className={`space-y-2 text-left ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
+            <span className="block">
+              ADHDone noticed your notifications may have paused for a little while. That was a
+              temporary bug on our end, not anything you did, and it's been fixed for everyone in
+              the newest version.
+            </span>
+            <span className="block">
+              {needsUpdate
+                ? 'Update ADHDone and your reminders will keep coming like normal.'
+                : "You're on the newest version, so your reminders will keep coming like normal."}
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          {needsUpdate && (
+            <Button onClick={update} disabled={busy} className="w-full sm:w-auto">
+              Update ADHDone
+            </Button>
+          )}
+          <Button variant={needsUpdate ? 'outline' : 'default'} onClick={close} disabled={busy} className="w-full sm:w-auto">
+            Got it
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
   const [wanted, setWanted] = useState(false);
