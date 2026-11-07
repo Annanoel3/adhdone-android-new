@@ -84,7 +84,8 @@ export default function AiConsentDialog({ user }) {
             <span className="block">
               To sort what you add, plan your reminders, answer you in Support Space and turn
               recordings into notes, ADHDone sends what you type, say or photograph, your tasks
-              and notes, and what you tell it about yourself to OpenAI, an AI company.
+              and notes, and what you tell it about yourself to OpenAI, an AI company. OpenAI may
+              also use it to improve its AI models.
             </span>
             <span className="block">ADHDone can't work without it, so it asks first.</span>
             <button
