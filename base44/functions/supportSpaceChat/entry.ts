@@ -30,6 +30,18 @@ When something in the app isn't working (a notification missing, a feature not s
 - If the app reference doesn't tell you enough to name a likely cause, say so honestly, give the one thing worth trying (usually reopening the app), and point them to Report a Bug in Settings — do not pad the answer with guesses.
 - Specific case: the pinned Quick Capture notification disappears when Android clears it or the app hasn't been opened in a while. It re-posts when the app is opened, so the answer is "fully close and reopen ADHDone and it should come back" — nothing else first.`;
 
+    // The person's message is checked first (OpenAI moderation): for
+    // self-harm (below) and for the acceptable-use alert at the end.
+    let userMod: any = null;
+    if (userMessage) {
+      try {
+        const m = await openai.moderations.create({ model: 'omni-moderation-latest', input: userMessage });
+        userMod = m.results?.[0] || null;
+      } catch (e) {
+        console.error('Message check failed:', (e as any)?.message || e);
+      }
+    }
+
     const response = await openai.responses.create({
       model: "gpt-6-astra",
       tools: [{ type: "web_search" }],
@@ -48,12 +60,13 @@ When something in the app isn't working (a notification missing, a feature not s
     // since a supportive answer trips those).
     const BLOCK_KINDS = ['sexual', 'sexual/minors', 'hate', 'hate/threatening', 'harassment/threatening', 'violence/graphic', 'self-harm/instructions', 'illicit/violent'];
     let replyBlocked: string[] = [];
+    let replyMod: any = null;
     if (message) {
       try {
         const out = await openai.moderations.create({ model: 'omni-moderation-latest', input: message });
-        const r = out.results?.[0];
-        const scores = r?.category_scores || {};
-        replyBlocked = BLOCK_KINDS.filter((c) => r?.categories?.[c] && (scores[c] ?? 0) >= 0.5);
+        replyMod = out.results?.[0] || null;
+        const scores = replyMod?.category_scores || {};
+        replyBlocked = BLOCK_KINDS.filter((c) => replyMod?.categories?.[c] && (scores[c] ?? 0) >= 0.5);
       } catch (e) {
         console.error('Reply check failed:', (e as any)?.message || e);
       }
@@ -75,17 +88,26 @@ When something in the app isn't working (a notification missing, a feature not s
       })());
     }
 
+    // Anything about self-harm, in what they wrote or in the reply: the reply
+    // starts by telling them where to get help right now; a caring reply
+    // follows unless it was blocked above. Anna, Nov 6 2026: "something about
+    // self harm should immediately tell them to seek help. But a caring reply
+    // about a hard subject is fine". A low bar on purpose (0.3, or OpenAI's
+    // own flag): a help line shown once too often costs nothing.
+    const SELF_HARM = ['self-harm', 'self-harm/intent', 'self-harm/instructions'];
+    const aboutSelfHarm = (r: any) => !!r && SELF_HARM.some((c) => r.categories?.[c] || (r.category_scores?.[c] ?? 0) >= 0.3);
+    if (aboutSelfHarm(userMod) || aboutSelfHarm(replyMod)) {
+      const help = "If you're thinking about hurting yourself, please reach out for help right now. In the US, call or text 988 (Suicide & Crisis Lifeline). Outside the US, findahelpline.com lists free helplines in your country. If you're in danger, call your local emergency number.";
+      message = replyBlocked.length ? help : `${help}\n\n${message || ''}`.trim();
+    }
+
     // Acceptable-use monitoring: flag only genuinely severe content (OpenAI
-    // moderation), then alert the app owner by email. Runs after the response
-    // so it never slows down or breaks the chat.
-    if (userMessage) {
+    // moderation, checked above), then alert the app owner by email. Sent after
+    // the response so it never slows down or breaks the chat.
+    if (userMessage && userMod) {
       waitUntil((async () => {
         try {
-          const mod = await openai.moderations.create({
-            model: 'omni-moderation-latest',
-            input: userMessage
-          });
-          const result = mod.results?.[0];
+          const result = userMod;
           if (!result?.flagged) return;
 
           const scores = result.category_scores || {};
