@@ -111,6 +111,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // nothing; the handle is still minted, just not waited for.)
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
+  // The chat's own scroll box, kept at the bottom while a line types out.
+  const listRef = useRef(null);
+  const pinnedRef = useRef(true);
+  const lastLenRef = useRef(0);
   // "Add my work hours" under the last line (Anna, Nov 2 2026, "idea 1"):
   // only when checkQuietHoursFit judged that their about-you answer has a
   // job, shifts or school with set hours in it, and none are saved yet. It
@@ -146,9 +150,29 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const line = beat ? beat.text(name || 'you', handle, about, task, when, notify) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
 
+  // Anna, Nov 6 2026 (iPhone): "The chat scrolls really slowly down while
+  // it's sending things". This was a smooth scrollIntoView on every typed
+  // letter (every 28 ms): each one restarted the last one's animation, so the
+  // box crawled and lagged behind the text. Now the box itself jumps to the
+  // bottom once per frame, no animation, and only while they're at the
+  // bottom: someone who scrolls up to reread isn't pulled back down until
+  // the next message lands.
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [shown, history.length]);
+    const el = listRef.current;
+    if (!el) return undefined;
+    if (history.length !== lastLenRef.current) {
+      lastLenRef.current = history.length;
+      pinnedRef.current = true;
+    }
+    if (!pinnedRef.current) return undefined;
+    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(id);
+  }, [shown, history.length, taskOffers]);
 
   // Lines with nothing to answer roll on by themselves after a short beat.
   useEffect(() => {
@@ -312,7 +336,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     <div className="space-y-4">
       <OnboardingBrandMark />
 
-      <div className="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1">
+      <div ref={listRef} onScroll={onListScroll} className="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1">
         {history.map((m, i) => (
           <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
         ))}
