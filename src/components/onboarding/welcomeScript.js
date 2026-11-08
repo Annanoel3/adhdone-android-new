@@ -57,9 +57,10 @@ const SCRIPT = [
     // It asks for something they can do today, so their first real reminder can
     // land on something they can check off. After 9 PM it says tomorrow, the
     // same cutoff as sometimeOption in WelcomeChat. The "When should it remind
-    // you?" buttons stay as they are: someone who means tomorrow can still pick
-    // it (Anna, Nov 2 2026, after Connie and Caterina's first reminders were
-    // both the next morning).
+    // you?" buttons are today's until 8 PM (Anna, Nov 8 2026: "we're trying to
+    // promote same day stuff"), with tomorrow at 9 still offered underneath so
+    // someone who means tomorrow can pick it (Anna, Nov 2 2026, after Connie
+    // and Caterina's first reminders were both the next morning).
     text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting that you could knock out ${new Date().getHours() >= 21 ? 'tomorrow' : 'today'}? Type it in and it's on your list.`,
     input: 'task',
   },
