@@ -22,6 +22,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // The phone's calendars with the app closed (registered before launch ends,
         // as iOS requires), and the alarms the phone holds.
         BackgroundCalendarSync.shared.start()
+        // The push sign-up kept alive with the app closed (the twin of Android's
+        // PushHealthWorker), registered before launch ends too, after OneSignal.
+        PushHealthCheck.shared.start()
         AlarmEngine.shared.start()
         return true
     }
