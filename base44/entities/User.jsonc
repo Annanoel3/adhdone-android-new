@@ -1,14 +1,6 @@
 {
   "type": "object",
   "properties": {
-    "preferred_name": {
-      "type": "string",
-      "description": "What the user asked to be called, in their own words, collected in the first-run chat. Used for greetings and in notification copy \u2014 the account's full_name is often a formal legal name (or a Google account name) that nobody actually calls them."
-    },
-    "about_me": {
-      "type": "string",
-      "description": "One or two sentences the user wrote about their own life in the first-run chat (e.g. 'I play violin at weddings', 'I'm a nurse on night shifts', 'two kids under 5'). Handed VERBATIM to the AI that classifies imported calendar items, parses tasks, plans reminders and writes nudges \u2014 a single title like 'Karly's Wedding' is unrankable without knowing the wedding is this person's job. Deliberately free text: a profession dropdown misses side work, caregiving and the hobbies that carry real obligation."
-    },
     "signed_up_at": {
       "type": "string",
       "format": "date-time",
@@ -19,62 +11,24 @@
       "format": "date-time",
       "description": "When the user was last active in the app"
     },
-    "suspected_uninstall": {
-      "type": "boolean",
-      "description": "True while this account looks uninstalled (Anna, Nov 3 2026: \"add a field to the user data that says suspected uninstall\"): OneSignal says no phone on the account takes pushes any more (every push subscription off, notification_types -10: the app was uninstalled, or its notifications turned off on the phone), and that came after their last open (push_unreachable_at later than last_active_at). Kept by the hourly health check in cronRefillReminders: set when a failed push of theirs is confirmed that way or a Smart Reminders nudge was refused; back to false the hour after they open the app again."
-    },
-    "suspected_uninstall_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When suspected_uninstall last went true."
-    },
-    "adhd_theme": {
-      "type": "string",
-      "description": "User's chosen base theme (minimalist, dark, colorful, spicybrains)"
-    },
-    "special_mode": {
-      "type": "string",
-      "description": "Special seasonal mode (normal, christmas, halloween, etc.)"
-    },
-    "seasonal_unlocked": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether the user has unlocked seasonal themes via the easter egg"
-    },
-    "chaos_mode": {
-      "type": "boolean",
-      "default": false,
-      "description": "The hidden 'chaos mode' ugly skin (found by tapping the version number in Settings seven times). Normally chaos mode lives only in sessionStorage so closing the app always escapes it \u2014 this flag exists so it can be switched ON for a specific account to look at. Tapping the version seven times clears it again, so nobody can be trapped in it."
-    },
     "timezone": {
       "type": "string",
       "description": "User's IANA timezone (set once on first login) for timezone-aware quiet hours"
     },
-    "home_lat": {
-      "type": "number",
-      "description": "Latitude of the CENTER of the ~5-mile home circle the user placed on the map. This exact point is the origin for every drive-time / 'leave now' / commute calculation \u2014 the circle's radius is visual reassurance only and is never used to fuzz the math. Never used for tracking."
-    },
-    "home_lng": {
-      "type": "number",
-      "description": "Longitude of the center of the user's home circle. See home_lat."
-    },
-    "home_zip_prompt_seen_v2": {
+    "quiet_hours_enabled": {
       "type": "boolean",
-      "default": false,
-      "description": "Whether the user has already been shown (and dismissed or answered) the one-time home base ask. Stored on the profile so a new device doesn't re-ask."
+      "default": true,
+      "description": "Whether quiet hours are active. Defaults to ON: a reminder is worthless at 3 AM and actively harmful to trust in the app, so overnight silence is opt-OUT, not opt-in. Users who genuinely want middle-of-the-night pushes can turn it off in Settings."
     },
-    "commute_avoid_tolls": {
-      "type": "boolean",
-      "description": "True when the user told us they don't take toll roads. Commute watch then measures the drive on toll-free routes only, so 'leave now' isn't timed on a toll road they won't use. Asked on the Places page when the work address goes in; unset = never answered (tolls allowed, Google's default)."
-    },
-    "work_remote": {
-      "type": "boolean",
-      "default": false,
-      "description": "True when the user works from home. There is no drive, so commute watch skips them entirely (no 'leave now' or traffic alerts) and no work address is asked for \u2014 but their work hours still count, so the 'don't notify me at work' quiet window works exactly the same."
-    },
-    "onboarding_replay_token": {
+    "quiet_hours_start": {
       "type": "string",
-      "description": "Set to any new value to replay the first-run sequence once on this account's next app open (the app wipes its first-run flags, then clears this). Leave blank otherwise."
+      "default": "22:00",
+      "description": "Quiet hours start in local HH:MM. Defaults to 22:00 so a user who never opens Settings still gets overnight silence."
+    },
+    "quiet_hours_end": {
+      "type": "string",
+      "default": "08:00",
+      "description": "Quiet hours end in local HH:MM. Defaults to 08:00; anything that would have fired overnight is delivered at this time instead."
     },
     "onboarding_flags": {
       "type": "array",
@@ -84,50 +38,13 @@
       "default": [],
       "description": "First-run steps this ACCOUNT has already completed (welcome note, per-page tours). These flags used to live only in localStorage, so signing in again in a fresh session or on another device replayed the whole welcome + tour sequence. Kept on the profile so onboarding follows the person, not the device."
     },
-    "pending_feedback_prompt": {
-      "type": "object",
-      "description": "Set by an admin when something this person captured was really a request for the app itself (a feature they want) and it wrongly became a task. Holds { text, task_id, queued_at } while waiting. The app shows a one-time popup with their own words, which they can edit, offering to send it to Anna through sendSupportRequest. Once they answer, the app overwrites this with { answered_at, answer } \u2014 never null, which the schema would reject \u2014 so the popup never shows again. While it is waiting, the ways-to-add popup holds off."
-    },
-    "feedback_ask": {
-      "type": "object",
-      "description": "The one-time \"What can we do better?\" ask. An admin sends it through broadcastAnnouncement (ask: 'feedback'), which stamps { asked_at } here and pushes a notification that just opens the app. The app shows the popup (FeedbackAskPrompt) while asked_at is set and answered_at is not, on that tap or the next time they open the app on their own. Answering overwrites this with { asked_at, answered_at, answer: yes | no | dismissed, sent_text?, email? } \u2014 never null, which the schema would reject \u2014 so it shows once."
-    },
-    "alarm_mode": {
-      "type": "string",
-      "enum": [
-        "notification",
-        "alarm"
-      ],
-      "default": "notification",
-      "description": "The user's DEFAULT alert style for tasks that have no alert_style of their own: 'notification' (everyone's default) = the usual push reminders only; 'alarm' = each of a task's existing reminders also rings as a real full-screen alarm on the installed Android app. It changes HOW reminders arrive, never WHEN. Android-only and native: the alarm itself lives in android/, which you must not edit, and it reads the task's existing reminder times. There is no web or server version of this and none should be built \u2014 a push notification is not an alarm."
-    },
-    "alarm_sound_url": {
-      "type": "string",
-      "description": "URL of the sound the phone rings alarms with: a preset from the app's sound bucket or a file the user uploaded through UploadFile. Empty = the phone's default alarm tone. The Android app downloads it once and rings from the local copy."
-    },
-    "alarm_sound_name": {
-      "type": "string",
-      "description": "Display name for alarm_sound_url (the preset's name or the uploaded file's name)."
-    },
-    "notify_sound_url": {
-      "type": "string",
-      "description": "The sound regular notifications make on the Android app (build 46 on): a preset or uploaded file URL (the same list as alarm_sound_url), 'speak:' = the phone's voice reads the notification once, empty = the phone's usual notification sound. Native NotifySound plays it; silent, vibrate and Do Not Disturb are left to the phone, and the voice stays quiet during quiet hours."
-    },
-    "notify_sound_name": {
-      "type": "string",
-      "description": "Display name for notify_sound_url."
-    },
-    "alarm_vibrate_when_quiet": {
-      "type": "boolean",
-      "description": "Answer to 'Only vibrate when my phone is on silent, vibrate or Do Not Disturb?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while the phone is on silent, vibrate or Do Not Disturb, alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before). The Android app reads it at the moment an alarm goes off."
-    },
-    "alarm_quiet_when": {
-      "type": "string",
-      "description": "Which quiet the vibrate-only choice (alarm_vibrate_when_quiet = true) covers: 'silent' = only while the ringer is on silent or vibrate, 'dnd' = only while Do Not Disturb is on, 'both' = either. Empty = both (what a yes meant before this choice existed). Offered on phone builds from 1.3.12 (AlarmBridge.setQuietWhen); older builds treat every yes as both."
-    },
-    "alarm_quiet_during_events": {
-      "type": "boolean",
-      "description": "Answer to 'Silent alarms during events?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while an event on their calendar is happening (any event with a clock time; one with no end time counts as one hour), alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before)."
+    "onesignal_player_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "OneSignal player IDs registered for this user's devices. Used for push notification targeting."
     },
     "alarm_permissions": {
       "type": "object",
@@ -173,94 +90,79 @@
       "type": "string",
       "description": "The same check in plain words, for scanning the Users table: 'All allowed', or the switches still off, e.g. 'Battery, Full-screen'. Empty = never checked."
     },
-    "alarm_trial_started_at": {
+    "preferred_name": {
       "type": "string",
-      "format": "date-time",
-      "description": "When the user picked full-screen alarms in the one-time 'How should reminders reach you?' question or pressed 'Try it out' on the full-screen reminders introduction (alarm_mode was switched to 'alarm' at that moment; since Nov 3 2026 every pick there sets it, before that only 'Try it out'). Once the phone reports a full-screen reminder rang after this time, the app asks ONCE on the next open whether it was too loud: keep alarms, or switch to regular notifications (AlarmKeepPrompt; onboarding flag onboarding_fullscreen_keep_done). Empty = alarms were never picked from those popups."
+      "description": "What the user asked to be called, in their own words, collected in the first-run chat. Used for greetings and in notification copy \u2014 the account's full_name is often a formal legal name (or a Google account name) that nobody actually calls them."
     },
-    "device_calendar_ids": {
+    "smart_nudge_schedule_dirty": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
+    },
+    "app_build": {
+      "type": "string",
+      "description": "The phone app's build number (Android versionCode) as last opened, from the phone itself. Data only, for knowing which build each person is on. Empty for web-only accounts."
+    },
+    "app_version": {
+      "type": "string",
+      "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
+    },
+    "phone_plugins": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "default": [],
-      "description": "Ids of the calendars on the user's PHONE (Samsung Calendar, Outlook, any account Android's calendar app shows) that they chose to sync. Read by the Android app's native CalendarBridge plugin; the app sends those calendars' events to syncGoogleCalendar with source: 'device', which imports them through the same pipeline as Google. Empty = no phone calendars synced. Ids are only meaningful on that phone."
+      "description": "Which of ADHDone's own phone plugins the installed build has (AlarmBridge, RecorderBridge, CalendarBridge, ...), read on app open. Data only: says what the phone can do, e.g. whether Record Notes can show for them."
     },
-    "quiet_hours_enabled": {
-      "type": "boolean",
-      "default": true,
-      "description": "Whether quiet hours are active. Defaults to ON: a reminder is worthless at 3 AM and actively harmful to trust in the app, so overnight silence is opt-OUT, not opt-in. Users who genuinely want middle-of-the-night pushes can turn it off in Settings."
-    },
-    "quiet_hours_start": {
+    "smart_nudge_schedule_date": {
       "type": "string",
-      "default": "22:00",
-      "description": "Quiet hours start in local HH:MM. Defaults to 22:00 so a user who never opens Settings still gets overnight silence."
+      "format": "date",
+      "description": "Date (YYYY-MM-DD) the current schedule was generated for. When this doesn't match today, a new schedule is generated."
     },
-    "quiet_hours_end": {
-      "type": "string",
-      "default": "08:00",
-      "description": "Quiet hours end in local HH:MM. Defaults to 08:00; anything that would have fired overnight is delivered at this time instead."
-    },
-    "quiet_hours_review_pending": {
-      "type": "boolean",
-      "description": "Set by hand from the dashboard (never by the app) to ask this person, once, to look at their quiet hours: the next time they open the app a popup shows their current quiet hours and lets them keep or change them. Cleared as soon as they answer or close it."
-    },
-    "quiet_hours_fit": {
-      "type": "object",
-      "description": "Whether their quiet hours look like they cover when they sleep, judged by checkQuietHoursFit from what they told the app about themselves, their quiet hours and their work hours: { key (what it was judged from), fits, start and end (suggested HH:MM, or null), at, answered_key (the key they last answered the quiet-hours popup for), by ('them' once they picked hours there) }. When fits is false and answered_key isn't key, the next app open asks them to set quiet hours that match when they sleep (Anna, Oct 18 2026: night shift)."
-    },
-    "calendar_sync_in_progress_since": {
+    "smart_nudge_planned_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Heartbeat timestamp for the per-account Google Calendar sync lock. A live sync refreshes it as it works, so a long first import keeps the lock while a crashed run's lock goes stale and the next trigger can take over. MUST exist here: syncGoogleCalendar writes it before every sync, and while it was missing from this schema the write failed validation and every single sync died with a 500 right after finding the user's Google token."
+      "description": "When Smart Reminders last looked at this person's list to pick their next nudge \u2014 the moment its information was read."
     },
-    "calendar_sync_run_id": {
-      "type": "string",
-      "description": "Random id of the sync run that currently owns the calendar sync lock. Two triggers that both saw no lock both write, then the one whose id survived owns the run and the other stands down; release only clears the lock when the id still matches."
-    },
-    "focus_mode_task_id": {
-      "type": "string",
-      "description": "ID of the recurring task the user is currently focusing on (Focus Mode). Null/empty = not in Focus Mode."
-    },
-    "focus_mode_entered_at": {
+    "smart_nudge_dirty_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the user entered Focus Mode"
+      "description": "When something the smart-nudge planner reads last changed (a task added, edited, un-completed, back-burnered or brought back). A plan made from information older than this is out of date and gets redone."
     },
-    "focus_mode_offer_task_id": {
-      "type": "string",
-      "description": "Focus Mode's morning offer (Anna, Oct 14 2026): the task whose session paused for quiet hours. The end-of-quiet-hours push asks 'pick up where you left off?'; unanswered, the session ends on its own (cronRefillReminders) but this offer stands, so opening the app that day still asks. Set by setFocusMode on enter/continue; cleared on a chosen exit."
-    },
-    "focus_mode_offer_from": {
+    "smart_nudge_kick_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the morning offer opens: the end of the owner's quiet hours, when its push goes out."
+      "description": "When a change last asked the smart-nudge planner to re-plan this person right away. Limits those immediate re-plans to one every 2 minutes; anything after that waits for the next scheduled run."
     },
-    "focus_mode_offer_until": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When the morning offer lapses: the next start of the owner's quiet hours. The app asks only between from and until."
-    },
-    "first_win_demo": {
-      "type": "object",
-      "description": "The \"This is what a reminder looks like\" sample push, booked on the server by bookFirstWinDemo (once per account, new accounts only): {id, at, title, alarm, booked_at} once booked; {booking_since, at, title} while a call is booking it; {failed_at, at, title} when the phone never took the push in time."
-    },
-    "onesignal_player_ids": {
+    "smart_nudge_sent_log": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "k": {
+            "type": "string",
+            "description": "Which planned nudge (its send time, task id and title)"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it went out, or was skipped"
+          },
+          "skip": {
+            "type": "string",
+            "description": "Why it was skipped instead of sent (completed / silenced); empty when it was sent"
+          }
+        }
       },
-      "default": [],
-      "description": "OneSignal player IDs registered for this user's devices. Used for push notification targeting."
+      "description": "The last week of smart nudges sent (or skipped) for this person. Written only by the run that sends them, so a re-plan written at the same moment can never make a sent nudge look unsent and send it twice."
     },
-    "last_smart_nudge_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Timestamp of the last smart nudge sent to this user. Used by the app to open on the most recently nudged task."
+    "smart_nudge_plan_prints": {
+      "type": "object",
+      "description": "Task id \u2192 a short fingerprint of what the smart-nudge planner read on that task (and its steps) when it last made this person's plan. A task that no longer matches has changed since, however it was changed, so the plan is redone."
     },
-    "last_smart_nudge_task_id": {
-      "type": "string",
-      "description": "ID of the task the last smart nudge was about. The app opens on this task when the user opens the app after receiving a nudge."
+    "notes_can_record": {
+      "type": "boolean",
+      "description": "Recorded notes: true once this person has opened an app build that can record (36+). The reminder planner only words an appointment's reminders around recording notes for them."
     },
     "smart_nudge_schedule": {
       "type": "array",
@@ -308,42 +210,32 @@
       "default": [],
       "description": "Smart Reminders: the next nudge the AI picked (one at a time, never a day booked ahead: ONE NUDGE AT A TIME in cronSmartTaskNudge) plus the nudges sent or skipped today, as history."
     },
-    "smart_nudge_schedule_date": {
+    "smart_nudge_brief_version": {
       "type": "string",
-      "format": "date",
-      "description": "Date (YYYY-MM-DD) the current schedule was generated for. When this doesn't match today, a new schedule is generated."
+      "description": "Which copy of the Smart Reminders brief (base44/shared/reminderBrief.ts) this person's current plan was made with. Empty = made by the old prompt. When it doesn't match the current brief, the waiting nudges are dropped and a new plan is made."
     },
-    "smart_nudge_planned_at": {
+    "alarm_mode": {
       "type": "string",
-      "format": "date-time",
-      "description": "When Smart Reminders last looked at this person's list to pick their next nudge \u2014 the moment its information was read."
+      "enum": [
+        "notification",
+        "alarm"
+      ],
+      "default": "notification",
+      "description": "The user's DEFAULT alert style for tasks that have no alert_style of their own: 'notification' (everyone's default) = the usual push reminders only; 'alarm' = each of a task's existing reminders also rings as a real full-screen alarm on the installed Android app. It changes HOW reminders arrive, never WHEN. Android-only and native: the alarm itself lives in android/, which you must not edit, and it reads the task's existing reminder times. There is no web or server version of this and none should be built \u2014 a push notification is not an alarm."
     },
     "smart_nudge_look_at": {
       "type": "string",
       "format": "date-time",
       "description": "When Smart Reminders looks at this person's list again to pick the next nudge (ONE NUDGE AT A TIME in cronSmartTaskNudge): the time the AI asked for, or now once its nudge went out or was skipped. Empty = it looks again after its waiting nudge goes out. Any change to their tasks makes it look sooner."
     },
-    "smart_nudge_sent_log": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "k": {
-            "type": "string",
-            "description": "Which planned nudge (its send time, task id and title)"
-          },
-          "at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When it went out, or was skipped"
-          },
-          "skip": {
-            "type": "string",
-            "description": "Why it was skipped instead of sent (completed / silenced); empty when it was sent"
-          }
-        }
-      },
-      "description": "The last week of smart nudges sent (or skipped) for this person. Written only by the run that sends them, so a re-plan written at the same moment can never make a sent nudge look unsent and send it twice."
+    "last_smart_nudge_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last smart nudge sent to this user. Used by the app to open on the most recently nudged task."
+    },
+    "last_smart_nudge_task_id": {
+      "type": "string",
+      "description": "ID of the task the last smart nudge was about. The app opens on this task when the user opens the app after receiving a nudge."
     },
     "smart_nudge_passed": {
       "type": "array",
@@ -353,18 +245,30 @@
       },
       "description": "Smart Reminders' own record of tasks it weighed and chose NOT to nudge, with its reason: {at, task_id, title, why}. Written on every look, kept for three days (60 at most), never sent to the user. For reviewing its judgment: why didn't it remind me about X?"
     },
-    "smart_nudge_plan_prints": {
+    "app_platform": {
+      "type": "string",
+      "description": "Which phone app they last opened: 'android' or 'ios' (Capacitor's getPlatform). Empty for web-only accounts. Set by WidgetTaskSync alongside app_build."
+    },
+    "feedback_ask": {
       "type": "object",
-      "description": "Task id \u2192 a short fingerprint of what the smart-nudge planner read on that task (and its steps) when it last made this person's plan. A task that no longer matches has changed since, however it was changed, so the plan is redone."
+      "description": "The one-time \"What can we do better?\" ask. An admin sends it through broadcastAnnouncement (ask: 'feedback'), which stamps { asked_at } here and pushes a notification that just opens the app. The app shows the popup (FeedbackAskPrompt) while asked_at is set and answered_at is not, on that tap or the next time they open the app on their own. Answering overwrites this with { asked_at, answered_at, answer: yes | no | dismissed, sent_text?, email? } \u2014 never null, which the schema would reject \u2014 so it shows once."
     },
-    "smart_nudge_brief_version": {
+    "about_me": {
       "type": "string",
-      "description": "Which copy of the Smart Reminders brief (base44/shared/reminderBrief.ts) this person's current plan was made with. Empty = made by the old prompt. When it doesn't match the current brief, the waiting nudges are dropped and a new plan is made."
+      "description": "One or two sentences the user wrote about their own life in the first-run chat (e.g. 'I play violin at weddings', 'I'm a nurse on night shifts', 'two kids under 5'). Handed VERBATIM to the AI that classifies imported calendar items, parses tasks, plans reminders and writes nudges \u2014 a single title like 'Karly's Wedding' is unrankable without knowing the wedding is this person's job. Deliberately free text: a profession dropdown misses side work, caregiving and the hobbies that carry real obligation."
     },
-    "smart_nudge_cron_ran_at": {
+    "adhd_theme": {
       "type": "string",
-      "format": "date-time",
-      "description": "Owner editor account only: when the scheduled Smart Reminders run (cronSmartTaskNudge, every 10 minutes) last finished. The owner health check alerts when it is over 40 minutes old, which means Base44 stopped running the schedule (Oct 16 2026: no runs from 9:49 AM to 12:09 PM while the workflow still read active)."
+      "description": "User's chosen base theme (minimalist, dark, colorful, spicybrains)"
+    },
+    "special_mode": {
+      "type": "string",
+      "description": "Special seasonal mode (normal, christmas, halloween, etc.)"
+    },
+    "seasonal_unlocked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has unlocked seasonal themes via the easter egg"
     },
     "comeback_from": {
       "type": "string",
@@ -384,6 +288,255 @@
       "type": "integer",
       "description": "How many times a run of come-back pushes has started for this person; picks which day-3 line they get so it differs each time."
     },
+    "phone_push_state": {
+      "type": "object",
+      "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
+    },
+    "phone_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the phone app last reported in from the background (phone_push_state). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
+    },
+    "suspected_uninstall": {
+      "type": "boolean",
+      "description": "True while this account looks uninstalled (Anna, Nov 3 2026: \"add a field to the user data that says suspected uninstall\"): OneSignal says no phone on the account takes pushes any more (every push subscription off, notification_types -10: the app was uninstalled, or its notifications turned off on the phone), and that came after their last open (push_unreachable_at later than last_active_at). Kept by the hourly health check in cronRefillReminders: set when a failed push of theirs is confirmed that way or a Smart Reminders nudge was refused; back to false the hour after they open the app again."
+    },
+    "suspected_uninstall_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When suspected_uninstall last went true."
+    },
+    "alarm_vibrate_when_quiet": {
+      "type": "boolean",
+      "description": "Answer to 'Only vibrate when my phone is on silent, vibrate or Do Not Disturb?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while the phone is on silent, vibrate or Do Not Disturb, alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before). The Android app reads it at the moment an alarm goes off."
+    },
+    "alarm_quiet_during_events": {
+      "type": "boolean",
+      "description": "Answer to 'Silent alarms during events?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while an event on their calendar is happening (any event with a clock time; one with no end time counts as one hour), alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before)."
+    },
+    "push_unreachable_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When OneSignal last answered a Smart Reminders nudge with \"not subscribed\" (no phone signed in to this account takes pushes). Smart Reminders rests this account until they open the app again or a day has gone by (cronSmartTaskNudge). The hourly health check (cronRefillReminders) also sets it when a failed push of theirs leads to OneSignal confirming every push subscription on the account is off."
+    },
+    "app_update_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Every Android app update this phone reported (Android builds 48 on; Anna, Nov 6 2026: \"Keep track of when anyone's phone automatically updates\"), newest last, 30 kept: { at, build, from_build (the build their last app open reported), how }. how: 'tapped_update' = Update on the update card in the 2 hours before; 'while_using' = the app was open in the 10 minutes before (most likely updated by hand); 'auto' = neither, so Google Play updated it by itself (or, rarely, by hand in the Play Store without opening ADHDone). Written by cancelTaskNotifications (mode push_state, why 'updated')."
+    },
+    "home_lat": {
+      "type": "number",
+      "description": "Latitude of the CENTER of the ~5-mile home circle the user placed on the map. This exact point is the origin for every drive-time / 'leave now' / commute calculation \u2014 the circle's radius is visual reassurance only and is never used to fuzz the math. Never used for tracking."
+    },
+    "home_lng": {
+      "type": "number",
+      "description": "Longitude of the center of the user's home circle. See home_lat."
+    },
+    "alarm_quiet_when": {
+      "type": "string",
+      "description": "Which quiet the vibrate-only choice (alarm_vibrate_when_quiet = true) covers: 'silent' = only while the ringer is on silent or vibrate, 'dnd' = only while Do Not Disturb is on, 'both' = either. Empty = both (what a yes meant before this choice existed). Offered on phone builds from 1.3.12 (AlarmBridge.setQuietWhen); older builds treat every yes as both."
+    },
+    "quiet_hours_fit": {
+      "type": "object",
+      "description": "Whether their quiet hours look like they cover when they sleep, judged by checkQuietHoursFit from what they told the app about themselves, their quiet hours and their work hours: { key (what it was judged from), fits, start and end (suggested HH:MM, or null), at, answered_key (the key they last answered the quiet-hours popup for), by ('them' once they picked hours there) }. When fits is false and answered_key isn't key, the next app open asks them to set quiet hours that match when they sleep (Anna, Oct 18 2026: night shift)."
+    },
+    "alarm_sound_url": {
+      "type": "string",
+      "description": "URL of the sound the phone rings alarms with: a preset from the app's sound bucket or a file the user uploaded through UploadFile. Empty = the phone's default alarm tone. The Android app downloads it once and rings from the local copy."
+    },
+    "alarm_sound_name": {
+      "type": "string",
+      "description": "Display name for alarm_sound_url (the preset's name or the uploaded file's name)."
+    },
+    "task_habits": {
+      "type": "object",
+      "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit), daily (the model's one-time judgment that this kind of task is normally done every day, for the \"Every day around this time?\" offer: Task.repeat_offer) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
+    },
+    "home_zip_prompt_seen_v2": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has already been shown (and dismissed or answered) the one-time home base ask. Stored on the profile so a new device doesn't re-ask."
+    },
+    "wake_offer_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the one-time \"Notice when I wake up\" popup was shown (WakeOfferPrompt). Set once; the popup never comes back."
+    },
+    "first_win_demo": {
+      "type": "object",
+      "description": "The \"This is what a reminder looks like\" sample push, booked on the server by bookFirstWinDemo (once per account, new accounts only): {id, at, title, alarm, booked_at} once booked; {booking_since, at, title} while a call is booking it; {failed_at, at, title} when the phone never took the push in time."
+    },
+    "day_first_sign_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The first time today they did something with a reminder (snoozed, stopped, tapped Later): a sign they're up. Shown to Smart Reminders."
+    },
+    "device_calendar_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Ids of the calendars on the user's PHONE (Samsung Calendar, Outlook, any account Android's calendar app shows) that they chose to sync. Read by the Android app's native CalendarBridge plugin; the app sends those calendars' events to syncGoogleCalendar with source: 'device', which imports them through the same pipeline as Google. Empty = no phone calendars synced. Ids are only meaningful on that phone."
+    },
+    "smart_nudge_paused_reason": {
+      "type": "string",
+      "description": "Why Smart Reminders are paused (smart_nudge_paused_at, cronSmartTaskNudge). 'away' = a week with no sign of them; any sign of them (opening the app, a Done, answering an alarm) starts them again. 'not_helping' = they said the reminders weren't helping and a week of one a day still got nothing finished the same day; only opening the app starts them again (still one a day). Empty on a pause from before Oct 31 2026 = away."
+    },
+    "wake_watch": {
+      "type": "boolean",
+      "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
+    },
+    "woke_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "With wake_watch on: when the phone was first unlocked this morning (the latest report; only today's counts). Sent by the phone (cancelTaskNotifications mode woke)."
+    },
+    "alarm_trial_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the user picked full-screen alarms in the one-time 'How should reminders reach you?' question or pressed 'Try it out' on the full-screen reminders introduction (alarm_mode was switched to 'alarm' at that moment; since Nov 3 2026 every pick there sets it, before that only 'Try it out'). Once the phone reports a full-screen reminder rang after this time, the app asks ONCE on the next open whether it was too loud: keep alarms, or switch to regular notifications (AlarmKeepPrompt; onboarding flag onboarding_fullscreen_keep_done). Empty = alarms were never picked from those popups."
+    },
+    "task_sort": {
+      "type": "string",
+      "description": "How the task list is sorted (created_date, priority, due_date or energy), saved from the sort dropdown on Home and My Tasks so the choice survives a reinstall and follows the user to a new phone. The phone's own copy wins while it exists; this only fills in when the phone has none."
+    },
+    "home_tiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The Home row after Add, in order (keys from src/components/home/homeShortcuts.js: timer, notes, calendar, parkinglot, ...). \"-timer\" means Timer was taken off on purpose; a list with neither timer nor -timer was saved by the first version (Oct 27 2026) and means Timer first, then these. Same rule as task_sort: the phone's own copy wins while it exists."
+    },
+    "event_flags": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Double bookings and likely duplicates found among their events (shared/eventConflicts.ts, Anna, Oct 23 2026): { id, kind 'overlap' | 'duplicate', task_ids [a, b], why, made_at, source ('app' | 'calendar'), seen_at, resolved ('keep' | 'different' | 'moved' | 'combined' | 'gone'), resolved_at, notification_id, notify_at }. The app shows each unresolved one as a popup (EventConflictWarning); one not seen within 15 minutes goes out as a normal notification (notification_id). A settled pair is kept 30 days so it isn't asked about again."
+    },
+    "commute_avoid_tolls": {
+      "type": "boolean",
+      "description": "True when the user told us they don't take toll roads. Commute watch then measures the drive on toll-free routes only, so 'leave now' isn't timed on a toll road they won't use. Asked on the Places page when the work address goes in; unset = never answered (tolls allowed, Google's default)."
+    },
+    "work_remote": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the user works from home. There is no drive, so commute watch skips them entirely (no 'leave now' or traffic alerts) and no work address is asked for \u2014 but their work hours still count, so the 'don't notify me at work' quiet window works exactly the same."
+    },
+    "pending_feedback_prompt": {
+      "type": "object",
+      "description": "Set by an admin when something this person captured was really a request for the app itself (a feature they want) and it wrongly became a task. Holds { text, task_id, queued_at } while waiting. The app shows a one-time popup with their own words, which they can edit, offering to send it to Anna through sendSupportRequest. Once they answer, the app overwrites this with { answered_at, answer } \u2014 never null, which the schema would reject \u2014 so the popup never shows again. While it is waiting, the ways-to-add popup holds off."
+    },
+    "smart_nudge_help_asked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When Smart Reminders last asked 'Are your reminders helping?' (a push with Yes / No, cronSmartTaskNudge ARE THEY HELPING?). Not asked again within 30 days of this or of their answer."
+    },
+    "tag_colors": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Colours the user picked for their custom task tags: tag text (lower-cased, spaces collapsed) -> palette colour name (rose, orange, amber, lime, emerald, teal, sky, indigo, violet, fuchsia, pink, cyan). A tag with no entry gets a colour worked out from its letters. Saved from the tag picker on a task card."
+    },
+    "home_tile_cols": {
+      "type": "number",
+      "description": "How many Home shortcut tiles sit in a row: 2 (default), 3 or 4, from the tiny switch beside Edit shortcuts. Same rule as task_sort: the phone's own copy wins while it exists."
+    },
+    "notes_minutes_month": {
+      "type": "string",
+      "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
+    },
+    "notes_seconds_used": {
+      "type": "number",
+      "description": "Recorded notes: seconds of recording transcribed in notes_minutes_month, counted by transcribeAudioNew. The free allowance is NOTES_FREE_MINUTES in that function."
+    },
+    "notify_sound_url": {
+      "type": "string",
+      "description": "The sound regular notifications make on the Android app (build 46 on): a preset or uploaded file URL (the same list as alarm_sound_url), 'speak:' = the phone's voice reads the notification once, empty = the phone's usual notification sound. Native NotifySound plays it; silent, vibrate and Do Not Disturb are left to the phone, and the voice stays quiet during quiet hours."
+    },
+    "notify_sound_name": {
+      "type": "string",
+      "description": "Display name for notify_sound_url."
+    },
+    "quiet_hours_review_pending": {
+      "type": "boolean",
+      "description": "Set by hand from the dashboard (never by the app) to ask this person, once, to look at their quiet hours: the next time they open the app a popup shows their current quiet hours and lets them keep or change them. Cleared as soon as they answer or close it."
+    },
+    "smart_nudge_cron_ran_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Owner editor account only: when the scheduled Smart Reminders run (cronSmartTaskNudge, every 10 minutes) last finished. The owner health check alerts when it is over 40 minutes old, which means Base44 stopped running the schedule (Oct 16 2026: no runs from 9:49 AM to 12:09 PM while the workflow still read active)."
+    },
+    "calendar_use_emoji": {
+      "type": "boolean",
+      "description": "Calendar display mode: true = emoji icons, false = text titles. Saved from the Emoji/Text toggle on the Calendar page so the choice follows the user across devices."
+    },
+    "calendar_view_mode": {
+      "type": "string",
+      "description": "Calendar layout, month or week, saved from the Month/Week switch. Same rule as task_sort."
+    },
+    "account_deletion_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they asked, inside the app, for their account to be deleted (Settings > My Account > Delete Account). Anna deletes it by hand within 30 days; cronRefillReminders tells her once (Oct 30 2026, for Apple's rule 5.1.1(v): no email needed to ask)."
+    },
+    "owner_alert_marks": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Owner account only (s2kap2chick): what the owner health check (cronRefillReminders) has already told Anna about one person, so it isn't told again. 'gone:<email>' = the last_active_at the uninstall alert was sent for (once per departure); 'alarms:<email>' = when the unanswered-alarms alert last went out (at most once a week per person). Kept here because NotificationLedger rows are pruned after a few days and the alerts came back."
+    },
+    "alarm_pairs": {
+      "type": "object",
+      "description": "The model's answers to 'two alarms for different tasks at the same moment: one alarm naming both, or the second waits 10 minutes?', keyed 'taskA|taskB': { together, why, at }. Kept 30 days, at most 200."
+    },
+    "ai_consent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they tapped Allow and continue on the iPhone app's OpenAI permission popup (AiConsentDialog; App Store guideline 5.1.2(i); Anna, Nov 6 2026: required to continue). Empty on an iPhone account = the popup shows, and the welcome chat waits for it."
+    },
+    "chaos_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "The hidden 'chaos mode' ugly skin (found by tapping the version number in Settings seven times). Normally chaos mode lives only in sessionStorage so closing the app always escapes it \u2014 this flag exists so it can be switched ON for a specific account to look at. Tapping the version seven times clears it again, so nobody can be trapped in it."
+    },
+    "onboarding_replay_token": {
+      "type": "string",
+      "description": "Set to any new value to replay the first-run sequence once on this account's next app open (the app wipes its first-run flags, then clears this). Leave blank otherwise."
+    },
+    "calendar_sync_in_progress_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Heartbeat timestamp for the per-account Google Calendar sync lock. A live sync refreshes it as it works, so a long first import keeps the lock while a crashed run's lock goes stale and the next trigger can take over. MUST exist here: syncGoogleCalendar writes it before every sync, and while it was missing from this schema the write failed validation and every single sync died with a 500 right after finding the user's Google token."
+    },
+    "calendar_sync_run_id": {
+      "type": "string",
+      "description": "Random id of the sync run that currently owns the calendar sync lock. Two triggers that both saw no lock both write, then the one whose id survived owns the run and the other stands down; release only clears the lock when the id still matches."
+    },
+    "focus_mode_task_id": {
+      "type": "string",
+      "description": "ID of the recurring task the user is currently focusing on (Focus Mode). Null/empty = not in Focus Mode."
+    },
+    "focus_mode_entered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the user entered Focus Mode"
+    },
+    "focus_mode_offer_task_id": {
+      "type": "string",
+      "description": "Focus Mode's morning offer (Anna, Oct 14 2026): the task whose session paused for quiet hours. The end-of-quiet-hours push asks 'pick up where you left off?'; unanswered, the session ends on its own (cronRefillReminders) but this offer stands, so opening the app that day still asks. Set by setFocusMode on enter/continue; cleared on a chosen exit."
+    },
+    "focus_mode_offer_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the morning offer opens: the end of the owner's quiet hours, when its push goes out."
+    },
+    "focus_mode_offer_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the morning offer lapses: the next start of the owner's quiet hours. The app asks only between from and until."
+    },
     "first_task_nudge_sent_at": {
       "type": "string",
       "format": "date-time",
@@ -393,35 +546,6 @@
       "type": "string",
       "format": "date-time",
       "description": "When the one \"tell us a little about your life\" push went out (cronDailyTips, sendAboutMeNudges; Anna, Nov 4 2026). The about-you question is asked on the second app open (CatchUpDialog); a phone account that finished the welcome chat and still has no about_me 44 hours on, because the question was skipped (onboarding_catchup_done is in onboarding_flags) or never came up (no second open), gets this push once, around midday their time. Its tap opens the question again (Home?askAbout=1). Set once; never sent again."
-    },
-    "push_unreachable_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When OneSignal last answered a Smart Reminders nudge with \"not subscribed\" (no phone signed in to this account takes pushes). Smart Reminders rests this account until they open the app again or a day has gone by (cronSmartTaskNudge). The hourly health check (cronRefillReminders) also sets it when a failed push of theirs leads to OneSignal confirming every push subscription on the account is off."
-    },
-    "smart_nudge_dirty_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When something the smart-nudge planner reads last changed (a task added, edited, un-completed, back-burnered or brought back). A plan made from information older than this is out of date and gets redone."
-    },
-    "smart_nudge_kick_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When a change last asked the smart-nudge planner to re-plan this person right away. Limits those immediate re-plans to one every 2 minutes; anything after that waits for the next scheduled run."
-    },
-    "smart_nudge_schedule_dirty": {
-      "type": "boolean",
-      "default": false,
-      "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
-    },
-    "smart_nudge_paused_reason": {
-      "type": "string",
-      "description": "Why Smart Reminders are paused (smart_nudge_paused_at, cronSmartTaskNudge). 'away' = a week with no sign of them; any sign of them (opening the app, a Done, answering an alarm) starts them again. 'not_helping' = they said the reminders weren't helping and a week of one a day still got nothing finished the same day; only opening the app starts them again (still one a day). Empty on a pause from before Oct 31 2026 = away."
-    },
-    "smart_nudge_help_asked_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When Smart Reminders last asked 'Are your reminders helping?' (a push with Yes / No, cronSmartTaskNudge ARE THEY HELPING?). Not asked again within 30 days of this or of their answer."
     },
     "smart_nudge_help_reasked_at": {
       "type": "string",
@@ -446,143 +570,19 @@
       "format": "date-time",
       "description": "When the current week of one a day started: their No, or opening the app after a not-helping pause. Once a week of it has gone by, 3 or more Smart Reminders went out in the last 7 days and none of their tasks got finished the same day, Smart Reminders pause (smart_nudge_paused_reason 'not_helping')."
     },
-    "tag_colors": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Colours the user picked for their custom task tags: tag text (lower-cased, spaces collapsed) -> palette colour name (rose, orange, amber, lime, emerald, teal, sky, indigo, violet, fuchsia, pink, cyan). A tag with no entry gets a colour worked out from its letters. Saved from the tag picker on a task card."
-    },
-    "calendar_use_emoji": {
-      "type": "boolean",
-      "description": "Calendar display mode: true = emoji icons, false = text titles. Saved from the Emoji/Text toggle on the Calendar page so the choice follows the user across devices."
-    },
-    "task_sort": {
-      "type": "string",
-      "description": "How the task list is sorted (created_date, priority, due_date or energy), saved from the sort dropdown on Home and My Tasks so the choice survives a reinstall and follows the user to a new phone. The phone's own copy wins while it exists; this only fills in when the phone has none."
-    },
     "tasks_view_mode": {
       "type": "string",
       "description": "My Tasks layout, sections or days, saved from the Sections/Days switch. Same rule as task_sort."
-    },
-    "calendar_view_mode": {
-      "type": "string",
-      "description": "Calendar layout, month or week, saved from the Month/Week switch. Same rule as task_sort."
-    },
-    "home_tiles": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "The Home row after Add, in order (keys from src/components/home/homeShortcuts.js: timer, notes, calendar, parkinglot, ...). \"-timer\" means Timer was taken off on purpose; a list with neither timer nor -timer was saved by the first version (Oct 27 2026) and means Timer first, then these. Same rule as task_sort: the phone's own copy wins while it exists."
-    },
-    "account_deletion_requested_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When they asked, inside the app, for their account to be deleted (Settings > My Account > Delete Account). Anna deletes it by hand within 30 days; cronRefillReminders tells her once (Oct 30 2026, for Apple's rule 5.1.1(v): no email needed to ask)."
-    },
-    "owner_alert_marks": {
-      "type": "object",
-      "additionalProperties": true,
-      "description": "Owner account only (s2kap2chick): what the owner health check (cronRefillReminders) has already told Anna about one person, so it isn't told again. 'gone:<email>' = the last_active_at the uninstall alert was sent for (once per departure); 'alarms:<email>' = when the unanswered-alarms alert last went out (at most once a week per person). Kept here because NotificationLedger rows are pruned after a few days and the alerts came back."
-    },
-    "home_tile_cols": {
-      "type": "number",
-      "description": "How many Home shortcut tiles sit in a row: 2 (default), 3 or 4, from the tiny switch beside Edit shortcuts. Same rule as task_sort: the phone's own copy wins while it exists."
-    },
-    "notes_minutes_month": {
-      "type": "string",
-      "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
-    },
-    "notes_seconds_used": {
-      "type": "number",
-      "description": "Recorded notes: seconds of recording transcribed in notes_minutes_month, counted by transcribeAudioNew. The free allowance is NOTES_FREE_MINUTES in that function."
-    },
-    "notes_can_record": {
-      "type": "boolean",
-      "description": "Recorded notes: true once this person has opened an app build that can record (36+). The reminder planner only words an appointment's reminders around recording notes for them."
-    },
-    "app_build": {
-      "type": "string",
-      "description": "The phone app's build number (Android versionCode) as last opened, from the phone itself. Data only, for knowing which build each person is on. Empty for web-only accounts."
-    },
-    "app_version": {
-      "type": "string",
-      "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
-    },
-    "event_flags": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      },
-      "description": "Double bookings and likely duplicates found among their events (shared/eventConflicts.ts, Anna, Oct 23 2026): { id, kind 'overlap' | 'duplicate', task_ids [a, b], why, made_at, source ('app' | 'calendar'), seen_at, resolved ('keep' | 'different' | 'moved' | 'combined' | 'gone'), resolved_at, notification_id, notify_at }. The app shows each unresolved one as a popup (EventConflictWarning); one not seen within 15 minutes goes out as a normal notification (notification_id). A settled pair is kept 30 days so it isn't asked about again."
-    },
-    "app_platform": {
-      "type": "string",
-      "description": "Which phone app they last opened: 'android' or 'ios' (Capacitor's getPlatform). Empty for web-only accounts. Set by WidgetTaskSync alongside app_build."
-    },
-    "wake_watch": {
-      "type": "boolean",
-      "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
     },
     "wins_slump_shown_at": {
       "type": "string",
       "format": "date-time",
       "description": "When the \"Rough week?\" popup (WinsSlumpPopup) last appeared on screen for them: no task finished in 7 days, at least one still waiting, at least 5 wins saved, account 8+ days old. It shows at most once every 7 days, counted from this (the phone keeps a copy too). Written by the app only when the popup is actually shown."
     },
-    "wake_offer_seen_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When the one-time \"Notice when I wake up\" popup was shown (WakeOfferPrompt). Set once; the popup never comes back."
-    },
-    "woke_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "With wake_watch on: when the phone was first unlocked this morning (the latest report; only today's counts). Sent by the phone (cancelTaskNotifications mode woke)."
-    },
-    "day_first_sign_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "The first time today they did something with a reminder (snoozed, stopped, tapped Later): a sign they're up. Shown to Smart Reminders."
-    },
-    "alarm_pairs": {
-      "type": "object",
-      "description": "The model's answers to 'two alarms for different tasks at the same moment: one alarm naming both, or the second waits 10 minutes?', keyed 'taskA|taskB': { together, why, at }. Kept 30 days, at most 200."
-    },
-    "task_habits": {
-      "type": "object",
-      "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit), daily (the model's one-time judgment that this kind of task is normally done every day, for the \"Every day around this time?\" offer: Task.repeat_offer) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
-    },
-    "phone_plugins": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Which of ADHDone's own phone plugins the installed build has (AlarmBridge, RecorderBridge, CalendarBridge, ...), read on app open. Data only: says what the phone can do, e.g. whether Record Notes can show for them."
-    },
-    "phone_push_state": {
-      "type": "object",
-      "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
-    },
-    "ai_consent_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When they tapped Allow and continue on the iPhone app's OpenAI permission popup (AiConsentDialog; App Store guideline 5.1.2(i); Anna, Nov 6 2026: required to continue). Empty on an iPhone account = the popup shows, and the welcome chat waits for it."
-    },
     "app_update_tapped_at": {
       "type": "string",
       "format": "date-time",
       "description": "When they last tapped Update on the app's update card (AppUpdatePrompt). Lets the server tell an update made from the card from one Google Play made by itself (app_update_log)."
-    },
-    "app_update_log": {
-      "type": "array",
-      "items": {
-        "type": "object"
-      },
-      "description": "Every Android app update this phone reported (Android builds 48 on; Anna, Nov 6 2026: \"Keep track of when anyone's phone automatically updates\"), newest last, 30 kept: { at, build, from_build (the build their last app open reported), how }. how: 'tapped_update' = Update on the update card in the 2 hours before; 'while_using' = the app was open in the 10 minutes before (most likely updated by hand); 'auto' = neither, so Google Play updated it by itself (or, rarely, by hand in the Play Store without opening ADHDone). Written by cancelTaskNotifications (mode push_state, why 'updated')."
-    },
-    "phone_seen_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When the phone app last reported in from the background (phone_push_state). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
     }
   },
   "name": "User"
