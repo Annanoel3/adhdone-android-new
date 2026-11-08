@@ -542,11 +542,14 @@ async function notesMake(base44: any, user: any, body: any) {
   const parent = parentId ? await getRecording(base44, parentId) : null;
   if (parent && parent.id !== rec.id) {
     const merged = addNotesTo(parent.notes, notes, whenAdded(rec.started_at, user?.timezone));
-    await base44.entities.EnergyLog.update(parent.id, { notes: merged, status: parent.status === "ready" ? "ready" : parent.status });
+    // notes_made_at: new notes landed on the first recording, which lights the
+    // red dot on Record Notes in the menu (src/hooks/useNewBadges.js; Anna,
+    // Nov 8 2026: no dot "unless there are new notes that have been processed").
+    await base44.entities.EnergyLog.update(parent.id, { notes: merged, status: parent.status === "ready" ? "ready" : parent.status, notes_made_at: new Date().toISOString() });
     await base44.entities.EnergyLog.update(recordId, { notes, title, status: "merged" });
     return Response.json({ ok: true, notes: merged, title: parent.title || title, merged_into: parent.id });
   }
-  await base44.entities.EnergyLog.update(recordId, { notes, title, status: "ready" });
+  await base44.entities.EnergyLog.update(recordId, { notes, title, status: "ready", notes_made_at: new Date().toISOString() });
   return Response.json({ ok: true, notes, title });
 }
 
