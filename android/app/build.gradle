@@ -81,7 +81,13 @@ dependencies {
     // Pinned to the version this build was verified against. The previous dynamic
     // range [5.0.0, 5.99.99] let Gradle resolve a different SDK at any time, which
     // made builds non-reproducible and could change push behaviour with no commit.
-    implementation 'com.onesignal:OneSignal:5.9.9'
+    // 5.11.0 from build 49 on (Nov 7 2026): OneSignal support (Brit, on the -10
+    // "Not Subscribed" report) asked to update first. Its notes include "register
+    // push with Firebase Installation ID when the legacy FCM token API is
+    // disabled" and "retry failed operations without blocking the queue". No
+    // breaking changes listed between 5.9.9 and 5.11.0; PushHealthWorker only uses
+    // the public push-subscription API (optIn, id, token, optedIn).
+    implementation 'com.onesignal:OneSignal:5.11.0'
     // Google Play's in-app updates: the update popup's Update button opens Play's own
     // update screen inside the app (InAppUpdate).
     implementation 'com.google.android.play:app-update:2.1.0'
