@@ -11,6 +11,45 @@
       "format": "date-time",
       "description": "When the user was last active in the app"
     },
+    "app_build": {
+      "type": "string",
+      "description": "The phone app's build number (Android versionCode) as last opened, from the phone itself. Data only, for knowing which build each person is on. Empty for web-only accounts."
+    },
+    "suspected_uninstall": {
+      "type": "boolean",
+      "description": "True while this account looks uninstalled (Anna, Nov 3 2026: \"add a field to the user data that says suspected uninstall\"): OneSignal says no phone on the account takes pushes any more (every push subscription off, notification_types -10: the app was uninstalled, or its notifications turned off on the phone), and that came after their last open (push_unreachable_at later than last_active_at). Kept by the hourly health check in cronRefillReminders: set when a failed push of theirs is confirmed that way or a Smart Reminders nudge was refused; back to false the hour after they open the app again."
+    },
+    "suspected_uninstall_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When suspected_uninstall last went true."
+    },
+    "about_me": {
+      "type": "string",
+      "description": "One or two sentences the user wrote about their own life in the first-run chat (e.g. 'I play violin at weddings', 'I'm a nurse on night shifts', 'two kids under 5'). Handed VERBATIM to the AI that classifies imported calendar items, parses tasks, plans reminders and writes nudges \u2014 a single title like 'Karly's Wedding' is unrankable without knowing the wedding is this person's job. Deliberately free text: a profession dropdown misses side work, caregiving and the hobbies that carry real obligation."
+    },
+    "phone_push_state": {
+      "type": "object",
+      "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
+    },
+    "phone_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the phone app last reported in from the background (phone_push_state). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
+    },
+    "adhd_theme": {
+      "type": "string",
+      "description": "User's chosen base theme (minimalist, dark, colorful, spicybrains)"
+    },
+    "special_mode": {
+      "type": "string",
+      "description": "Special seasonal mode (normal, christmas, halloween, etc.)"
+    },
+    "seasonal_unlocked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has unlocked seasonal themes via the easter egg"
+    },
     "timezone": {
       "type": "string",
       "description": "User's IANA timezone (set once on first login) for timezone-aware quiet hours"
@@ -98,10 +137,6 @@
       "type": "boolean",
       "default": false,
       "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
-    },
-    "app_build": {
-      "type": "string",
-      "description": "The phone app's build number (Android versionCode) as last opened, from the phone itself. Data only, for knowing which build each person is on. Empty for web-only accounts."
     },
     "app_version": {
       "type": "string",
@@ -253,23 +288,6 @@
       "type": "object",
       "description": "The one-time \"What can we do better?\" ask. An admin sends it through broadcastAnnouncement (ask: 'feedback'), which stamps { asked_at } here and pushes a notification that just opens the app. The app shows the popup (FeedbackAskPrompt) while asked_at is set and answered_at is not, on that tap or the next time they open the app on their own. Answering overwrites this with { asked_at, answered_at, answer: yes | no | dismissed, sent_text?, email? } \u2014 never null, which the schema would reject \u2014 so it shows once."
     },
-    "about_me": {
-      "type": "string",
-      "description": "One or two sentences the user wrote about their own life in the first-run chat (e.g. 'I play violin at weddings', 'I'm a nurse on night shifts', 'two kids under 5'). Handed VERBATIM to the AI that classifies imported calendar items, parses tasks, plans reminders and writes nudges \u2014 a single title like 'Karly's Wedding' is unrankable without knowing the wedding is this person's job. Deliberately free text: a profession dropdown misses side work, caregiving and the hobbies that carry real obligation."
-    },
-    "adhd_theme": {
-      "type": "string",
-      "description": "User's chosen base theme (minimalist, dark, colorful, spicybrains)"
-    },
-    "special_mode": {
-      "type": "string",
-      "description": "Special seasonal mode (normal, christmas, halloween, etc.)"
-    },
-    "seasonal_unlocked": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether the user has unlocked seasonal themes via the easter egg"
-    },
     "comeback_from": {
       "type": "string",
       "format": "date-time",
@@ -287,24 +305,6 @@
     "comeback_round": {
       "type": "integer",
       "description": "How many times a run of come-back pushes has started for this person; picks which day-3 line they get so it differs each time."
-    },
-    "phone_push_state": {
-      "type": "object",
-      "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
-    },
-    "phone_seen_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When the phone app last reported in from the background (phone_push_state). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
-    },
-    "suspected_uninstall": {
-      "type": "boolean",
-      "description": "True while this account looks uninstalled (Anna, Nov 3 2026: \"add a field to the user data that says suspected uninstall\"): OneSignal says no phone on the account takes pushes any more (every push subscription off, notification_types -10: the app was uninstalled, or its notifications turned off on the phone), and that came after their last open (push_unreachable_at later than last_active_at). Kept by the hourly health check in cronRefillReminders: set when a failed push of theirs is confirmed that way or a Smart Reminders nudge was refused; back to false the hour after they open the app again."
-    },
-    "suspected_uninstall_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "When suspected_uninstall last went true."
     },
     "alarm_vibrate_when_quiet": {
       "type": "boolean",
