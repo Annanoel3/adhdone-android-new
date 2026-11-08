@@ -78,12 +78,14 @@
 	<array>
 		<string>audio</string>
 		<string>remote-notification</string>
-		<!-- The phone's calendars read with the app closed (BackgroundCalendarSync). -->
+		<!-- The phone's calendars read with the app closed (BackgroundCalendarSync),
+		     and the push sign-up kept alive with the app closed (PushHealthCheck). -->
 		<string>fetch</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.mediocreatbest.adhdone.calendar</string>
+		<string>com.mediocreatbest.adhdone.push</string>
 	</array>
 	<!-- Full-screen alarms (AlarmKit, iOS 26+; AlarmEngine). Apple shows this the
 	     first time an alarm is booked. Without the key AlarmKit refuses every alarm. -->
