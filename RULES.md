@@ -399,6 +399,10 @@ typed something" and "their phone rang", answer these in writing:
    can't go out within 15 minutes). Anna, Oct 23 2026: it "should break quiet hours if its
    actually arriving soon after they get through that onboarding part of the app".
    Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
+   Back on any ringing alarm or timer (Android build 49 on; Anna, Nov 8 2026: "Somehow I
+   clicked somewhere random on an alarm and it closed. I didnt click a button"; "Ok add to
+   build 49"): the first Back only shows "Press Back again to close"; a second Back within
+   3 seconds closes it as before (`AlarmActivity.backStopsRing`). Home is unchanged.
    A time they set also never moves for another alarm, day or night: the phone's 10-minute
    gap between two tasks' alarms (Anna, Oct 10 2026) is only for reminders the app picked.
    Every alarm list (`phoneAlarmsFor`, `alarmSetFor`) marks those alarms `theirTime: true`
