@@ -2431,7 +2431,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
       if (wish) parts.push(`reminder wish: "${wish}"`);
       if (ctx.firstWin && t.id === ctx.firstWin.taskId) {
-        parts.push(`FIRST WIN: their first task in ADHDone; setting it up they picked "${ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow'}", so your reminder for it reaches them between ${clock(ctx.firstWin.fromMs)} and ${clock(ctx.firstWin.untilMs)}, before anything else from you, at the moment in that window it's most likely to get done: a quick first win`);
+        // Only on the numbered list once its window is open (held before).
+        parts.push(`FIRST WIN: their first task in ADHDone; setting it up they picked "${ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow'}", so your next reminder is this one, before anything else from you, by ${clock(Math.min(ctx.firstWin.untilMs, nowMs + 60 * 60 * 1000))}, at the moment until then it's most likely to get done: a quick first win`);
       }
       if (recurrenceLabel(t)) parts.push(`repeats ${recurrenceLabel(t)} (this is the current one)`);
       const loc = (t.location || '').trim();
