@@ -52,19 +52,24 @@ function pickTaskOffers() {
 // words the parser reads from anyone; `said` is how the chat repeats it back.
 //
 // Anna, Nov 8 2026: "Before 7 p.m.: in 30 minutes, later today, tomorrow at 9.
-// After 7 p.m.: in 30 minutes, in an hour, tomorrow at 9." ("Later today" has
-// no clock time, so Smart Reminders picks the moment, the way "Sometime today"
-// did.) Before this, from 6 PM on it was one today and two tomorrow, and
-// before 6 PM two today and one tomorrow, with "Sometime today" underneath.
+// After 7 p.m.: in 30 minutes, in an hour, tomorrow at 9." and "9 p.m. and
+// after: in 30 minutes, tomorrow at 9, sometime tomorrow." Later today and
+// Sometime tomorrow have no clock time: Smart Reminders gives that task its
+// first reminder 1.5 to 5 hours on (FIRST WIN in cronSmartTaskNudge; `firstWin`
+// marks them, saved as User.first_win_pick). Before this, from 6 PM on it was
+// one today and two tomorrow, and before 6 PM two today and one tomorrow, with
+// "Sometime today" underneath.
+const IN_30 = { label: 'In 30 minutes', phrase: 'in 30 minutes', said: '30 minutes from now' };
+const TOMORROW_AT_9 = { label: 'Tomorrow at 9', phrase: 'tomorrow at 9am', said: 'tomorrow at 9' };
 function whenOptions(now = new Date()) {
-  const second = now.getHours() < 19
-    ? { label: 'Later today', phrase: 'later today', said: 'later today' }
+  const h = now.getHours();
+  if (h >= 21) {
+    return [IN_30, TOMORROW_AT_9, { label: 'Sometime tomorrow', phrase: 'tomorrow', said: 'tomorrow', firstWin: 'sometime_tomorrow' }];
+  }
+  const second = h < 19
+    ? { label: 'Later today', phrase: 'later today', said: 'later today', firstWin: 'later_today' }
     : { label: 'In an hour', phrase: 'in 1 hour', said: 'an hour from now' };
-  return [
-    { label: 'In 30 minutes', phrase: 'in 30 minutes', said: '30 minutes from now' },
-    second,
-    { label: 'Tomorrow at 9', phrase: 'tomorrow at 9am', said: 'tomorrow at 9' },
-  ];
+  return [IN_30, second, TOMORROW_AT_9];
 }
 
 // The notifications question used to be its own card after the chat (with the
@@ -333,6 +338,15 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const submitWhen = (opt) => {
     setWhen(opt ? opt.said : '');
     phraseRef.current = opt ? opt.phrase : '';
+    // Later today / Sometime tomorrow: Smart Reminders gives this task its
+    // first reminder 1.5 to 5 hours on (FIRST WIN in cronSmartTaskNudge). Saved
+    // now, on the tap, so it's there before the task is (the task goes in after
+    // the notifications answer) and a closed app can't lose it.
+    if (opt?.firstWin && task) {
+      base44.auth.updateMe({
+        first_win_pick: { pick: opt.firstWin, at: new Date().toISOString(), text: String(task).slice(0, 200) },
+      }).catch(() => {});
+    }
     answer(opt ? opt.label : '');
   };
 
