@@ -1,3 +1,4 @@
+// Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: event_heads_up, event_conflict and first_task_nudge count as soft pushes in the ledger.
 // Re-saved Nov 1 2026 (5 PM): picks up shared/reminderBrief.ts r41 (Judge the day, not just the ping).
