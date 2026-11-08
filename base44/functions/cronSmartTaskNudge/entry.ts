@@ -1063,6 +1063,15 @@ Deno.serve(async (req) => {
           avoidTolls: user.commute_avoid_tolls === true,
           nudgeHistory: nudgeHistoryFor(schedule, todayStr, dayOf),
           pastNudges: pastNudgesFor(schedule),
+          // FIRST WIN (top of firstWinFor). Never allowed to stop a plan.
+          firstWin: (() => {
+            try {
+              return firstWinFor(user, pool, schedule, nowMs, timeZone, startMin, endMin);
+            } catch (e) {
+              console.error(`[SMART NUDGE] first win check failed for ${email}:`, e);
+              return null;
+            }
+          })(),
           queued,
           // Nudges that went out in the last 45 minutes: new ones keep their distance.
           recentSent: schedule
@@ -1899,6 +1908,9 @@ interface PlanContext {
   nudgeHistory: Map<string, { today: number[]; lastBefore: number }>;
   // What went out about each task this past week, words included (pastNudgesFor).
   pastNudges?: Map<string, { at: number; body: string }[]>;
+  // FIRST WIN (firstWinFor): the welcome task they gave "Later today" or
+  // "Sometime tomorrow", and the window its first reminder goes out in.
+  firstWin?: { taskId: string; fromMs: number; untilMs: number; pick: string } | null;
   queued: any[];
   recentSent: number[];
   work: { lines: string[]; remote: boolean; quietAtWork: boolean };
@@ -2073,6 +2085,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // hold ends 45 minutes before bedtime at the latest (never under 30 minutes
   // after adding), so NEW HERE's day-one mention still fits.
   const holdEndOf = (t: any): number => {
+    // FIRST WIN: held until its window opens, whatever else applies.
+    if (ctx.firstWin && t.id === ctx.firstWin.taskId) return ctx.firstWin.fromMs > nowMs ? ctx.firstWin.fromMs : NaN;
     if (t.google_event_id) return NaN;
     if (String(t.reminder_wish || '').trim()) return NaN;
     const created = utcMs(t.created_date);
@@ -2416,6 +2430,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (tag) parts.push(`tag: "${tag}"`);
       const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
       if (wish) parts.push(`reminder wish: "${wish}"`);
+      if (ctx.firstWin && t.id === ctx.firstWin.taskId) {
+        parts.push(`FIRST WIN: their first task in ADHDone; setting it up they picked "${ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow'}", so your reminder for it reaches them between ${clock(ctx.firstWin.fromMs)} and ${clock(ctx.firstWin.untilMs)}, before anything else from you, at the moment in that window it's most likely to get done: a quick first win`);
+      }
       if (recurrenceLabel(t)) parts.push(`repeats ${recurrenceLabel(t)} (this is the current one)`);
       const loc = (t.location || '').trim();
       if (loc) parts.push(`location they typed: ${loc}`);
@@ -2746,6 +2763,42 @@ Return ONLY valid JSON:
       .filter((e: any) => e.task_ids.length > 0)
       .filter((e: any) => new Date(e.send_at).getTime() >= nowMs); // drop any that landed in the past
 
+    // FIRST WIN (top of firstWinFor): inside its window it's the next nudge.
+    // The planner's own words and moment for it when it picked it (the moment
+    // kept inside the window); right away, in plain words, when it didn't.
+    const fw = ctx.firstWin;
+    if (fw && nowMs >= fw.fromMs - 60 * 1000 && nowMs <= fw.untilMs) {
+      const fwTask = tasks.find((t: any) => t.id === fw.taskId);
+      if (fwTask) {
+        let mine = entries.find((e: any) => e.task_id === fw.taskId || (e.task_ids || []).includes(fw.taskId));
+        if (!mine) {
+          const full = String(fwTask.title || '').trim() || 'your first task';
+          const short = full.length > 40 ? `${full.slice(0, 37)}...` : full;
+          mine = {
+            task_id: fw.taskId,
+            task_ids: [fw.taskId],
+            send_at: new Date(nowMs).toISOString(),
+            title: `Quick win: ${short}`,
+            body: `You put "${short}" on your list earlier. Got a minute to knock it out?`,
+            type: 'initial',
+            light: false,
+            rationale: 'first win: its window is open and the planner left it out',
+            sent: false,
+            sent_at: null,
+          };
+        }
+        const lo = Math.max(nowMs, fw.fromMs);
+        const hi = Math.max(lo, fw.untilMs - 2 * 60 * 1000);
+        const atMs = Math.min(Math.max(utcMs(mine.send_at), lo), hi);
+        if (atMs !== utcMs(mine.send_at)) {
+          mine.send_at = new Date(atMs).toISOString();
+          mine.title = fixTitleTimeOfDay(mine.title, new Date(atMs), timeZone);
+        }
+        entries.length = 0;
+        entries.push(mine);
+      }
+    }
+
     // Space nudges out so two never land at (or near) the same time — each
     // other, a nudge already queued to go out, or one that just went out. The LLM sometimes gives
     // several nudges the same delay_minutes, which arrives as a stack of
@@ -2809,6 +2862,70 @@ function zoneClock(ms: number, timeZone: string, hour: number, minute: number): 
   } catch {
     return NaN;
   }
+}
+
+// ── FIRST WIN ──
+// Anna, Nov 8 2026: "anytime someone picks later today or sometime tomorrow,
+// make sure smart reminders prioritizes that reminder so they can get it
+// anywhere between 1.5-5 hours after. So it will still be a quick win, except
+// smart reminders handles it." Those two are buttons in the welcome chat
+// (WelcomeChat.whenOptions); the tap is saved as User.first_win_pick { pick,
+// at, text }. Its task is the one made from that welcome capture: created
+// after the tap, its words (original_input) containing what they typed.
+// The window: 1.5 to 5 hours after the tap for Later today; for Sometime
+// tomorrow, and for a tap made inside quiet hours, 1.5 to 5 hours after their
+// day starts (quiet hours end; 8 AM with quiet hours off). It always ends 10
+// minutes before quiet hours start. Before the window the task is held (JUST
+// ADDED); inside it, it's the next nudge, at the moment the planner picks in
+// the window, or right away if the planner left it out. Over once its first
+// nudge has gone out, the window has passed, or the task is done.
+const FIRST_WIN_FROM_MS = 90 * 60 * 1000;
+const FIRST_WIN_UNTIL_MS = 5 * 60 * 60 * 1000;
+
+// The first moment after `afterMs` that their clock reads `minuteOfDay`.
+function nextClockAfter(afterMs: number, timeZone: string, minuteOfDay: number): number {
+  const h = Math.floor(minuteOfDay / 60);
+  const m = minuteOfDay % 60;
+  for (let d = 0; d <= 2; d++) {
+    const at = zoneClock(afterMs + d * DAY_MS, timeZone, h, m);
+    if (Number.isFinite(at) && at > afterMs) return at;
+  }
+  return NaN;
+}
+
+function firstWinFor(user: any, pool: any[], schedule: any[], nowMs: number, timeZone: string, startMin: number, endMin: number): { taskId: string; fromMs: number; untilMs: number; pick: string } | null {
+  const p = user?.first_win_pick;
+  if (!p || (p.pick !== 'later_today' && p.pick !== 'sometime_tomorrow')) return null;
+  const at = utcMs(p.at);
+  if (!Number.isFinite(at) || nowMs - at > 2 * DAY_MS) return null;
+  const norm = (s: any) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const words = norm(p.text).slice(0, 60);
+  if (!words) return null;
+  const task = (pool || [])
+    .filter((t: any) => t && !t.parent_task_id && t.status === 'active'
+      && utcMs(t.created_date) >= at - 60 * 1000
+      && utcMs(t.created_date) <= at + 6 * 60 * 60 * 1000
+      && norm(t.original_input).includes(words))
+    .sort((a: any, b: any) => utcMs(a.created_date) - utcMs(b.created_date))[0];
+  if (!task) return null;
+  // Its first nudge already went out: done.
+  if ((pastNudgesFor(schedule).get(task.id) || []).some((x) => x.at >= at)) return null;
+  const noQuiet = startMin === endMin;
+  const tappedInQuiet = !noQuiet && isInQuietHours(new Date(at), startMin, endMin, timeZone);
+  const base = p.pick === 'later_today' && !tappedInQuiet
+    ? at
+    : nextClockAfter(at, timeZone, noQuiet ? 8 * 60 : endMin);
+  if (!Number.isFinite(base)) return null;
+  let fromMs = base + FIRST_WIN_FROM_MS;
+  let untilMs = base + FIRST_WIN_UNTIL_MS;
+  if (!noQuiet) {
+    const bed = nextClockAfter(base, timeZone, startMin);
+    if (Number.isFinite(bed)) untilMs = Math.min(untilMs, bed - 10 * 60 * 1000);
+  }
+  // Little of the day left (an early bedtime): the last hour before it.
+  if (untilMs - fromMs < 15 * 60 * 1000) fromMs = Math.max(base + 30 * 60 * 1000, untilMs - 60 * 60 * 1000);
+  if (!(untilMs > fromMs) || nowMs > untilMs) return null;
+  return { taskId: task.id, fromMs, untilMs, pick: p.pick };
 }
 
 // When the task's OWN reminders (the ones the app books, not Smart Reminders)
