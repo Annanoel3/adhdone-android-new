@@ -476,6 +476,8 @@ this codebase fast and nothing else will notice.
 
 ## 10. SMART REMINDERS IS ANNA'S DESIGN — DO NOT CHANGE IT UNLESS SHE ASKS
 
+Brief r43 (Nov 7 2026, Anna OK'd the wording): after "Offices keep office hours", "Errands that mean going somewhere happen when a person would actually go, in the daytime or early evening; after about 7 PM a store run waits for the next good moment the next day, unless they said tonight or it truly can't wait, and 'ASAP' means the next good moment, not late at night." ("I need to get body wash asap" got "Could you get body wash this evening?" at 9:11 PM on a Saturday.) Her doc "ADHDone Reminder Brain — The Brief" has the same sentence (doc rev 43).
+
 Added Oct 11 2026. On Aug 21 2026, the day after Smart Reminders was built, Base44's AI
 rewrote it ("Switch to daily smart nudge scheduling", commit 2f1a6ad) to save AI calls: one
 plan a day booking 3–5 nudges ahead, with the regular checks only sending what was booked.
