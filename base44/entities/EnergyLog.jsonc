@@ -1,93 +1,98 @@
 {
   "name": "EnergyLog",
-  "type": "object",
   "properties": {
+    "device_session_id": {
+      "description": "Recorded notes: the recording's id on the phone (RecorderBridge), which holds the audio until it has been transcribed.",
+      "type": "string"
+    },
+    "duration_ms": {
+      "description": "Recorded notes: how long it recorded, not counting pauses.",
+      "type": "number"
+    },
     "energy_level": {
-      "type": "string",
       "enum": [
         "low",
         "medium",
         "high"
-      ]
+      ],
+      "type": "string"
+    },
+    "kind": {
+      "description": "\"note_recording\" for a recorded-notes row; empty on the old energy check-ins. Two unrelated kinds of row share this table. Old energy check-ins (energy_level, mood_note, logged_at): nothing writes these any more. Recorded notes (kind = \"note_recording\"): one row per recording made on the Notes page, written by the person and by the transcribeAudioNew function acting as them. The table is reused because a new one can't be added from the code editor; anything reading energy check-ins must skip rows that have a kind.",
+      "type": "string"
+    },
+    "logged_at": {
+      "format": "date-time",
+      "type": "string"
     },
     "mood_note": {
       "type": "string"
     },
-    "logged_at": {
-      "type": "string",
-      "format": "date-time"
+    "notes": {
+      "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}], asked[{question, answered, answer, at}] }. \"asked\" is there when the recording had questions. \"at\" is the time mark in the transcript it came from.",
+      "type": "object"
     },
-    "kind": {
-      "type": "string",
-      "description": "\"note_recording\" for a recorded-notes row; empty on the old energy check-ins. Two unrelated kinds of row share this table. Old energy check-ins (energy_level, mood_note, logged_at): nothing writes these any more. Recorded notes (kind = \"note_recording\"): one row per recording made on the Notes page, written by the person and by the transcribeAudioNew function acting as them. The table is reused because a new one can't be added from the code editor; anything reading energy check-ins must skip rows that have a kind."
+    "notes_made_at": {
+      "description": "Recorded notes: when notes were last made from a recording (transcribeAudioNew notes_make: the recording's own notes, or a \"Record more\" follow-up added onto it). Only that sets it, never an edit, a typed change or a fill. The red dot on Record Notes in the menu (src/hooks/useNewBadges.js) lights for a recording whose notes were made after the person last had the Record Notes page open on that device (Anna, Nov 8 2026).",
+      "format": "date-time",
+      "type": "string"
     },
-    "title": {
-      "type": "string",
-      "description": "Recorded notes: what the person called it, or the title the notes gave it."
+    "parent_record_id": {
+      "description": "Set on a recording made with \"Record more\" on a finished recording's page (Oct 13 2026): the id of that first recording. Its transcript shows under the first one's, and its notes are added to the first one's notes as new sections (\"Added 12:40 PM\") without touching what was already there. Hidden from the Notes list; status \"merged\" once its notes went in.",
+      "type": "string"
     },
-    "status": {
-      "type": "string",
-      "description": "Recorded notes: recording, transcribing (parts being turned into text), ready (notes made), notes_failed (transcript saved, notes not made yet), over_limit (stopped at the monthly free minutes)."
-    },
-    "device_session_id": {
-      "type": "string",
-      "description": "Recorded notes: the recording's id on the phone (RecorderBridge), which holds the audio until it has been transcribed."
-    },
-    "task_id": {
-      "type": "string",
-      "description": "Recorded notes: the calendar event (Task) this recording was made at, when it was started from that event."
+    "parts_total": {
+      "description": "Recorded notes: how many ~10 minute parts the phone saved.",
+      "type": "number"
     },
     "questions": {
-      "type": "array",
+      "description": "Recorded notes: the questions the user wrote down for that event (Task.prep_questions), as they were when recording started. The notes' \"asked\" list answers them.",
       "items": {
         "type": "string"
       },
-      "description": "Recorded notes: the questions the user wrote down for that event (Task.prep_questions), as they were when recording started. The notes' \"asked\" list answers them."
+      "type": "array"
     },
     "started_at": {
-      "type": "string",
+      "description": "Recorded notes: when recording began.",
       "format": "date-time",
-      "description": "Recorded notes: when recording began."
+      "type": "string"
     },
-    "duration_ms": {
-      "type": "number",
-      "description": "Recorded notes: how long it recorded, not counting pauses."
+    "status": {
+      "description": "Recorded notes: recording, transcribing (parts being turned into text), ready (notes made), notes_failed (transcript saved, notes not made yet), over_limit (stopped at the monthly free minutes).",
+      "type": "string"
     },
-    "parts_total": {
-      "type": "number",
-      "description": "Recorded notes: how many ~10 minute parts the phone saved."
+    "task_id": {
+      "description": "Recorded notes: the calendar event (Task) this recording was made at, when it was started from that event.",
+      "type": "string"
+    },
+    "title": {
+      "description": "Recorded notes: what the person called it, or the title the notes gave it.",
+      "type": "string"
     },
     "transcript_parts": {
-      "type": "array",
       "description": "Recorded notes: the word-for-word transcript, one entry per part, in order.",
       "items": {
-        "type": "object",
         "properties": {
+          "end_ms": {
+            "type": "number"
+          },
           "index": {
             "type": "number"
           },
           "start_ms": {
             "type": "number"
           },
-          "end_ms": {
-            "type": "number"
-          },
           "text": {
             "type": "string"
           }
-        }
-      }
-    },
-    "parent_record_id": {
-      "type": "string",
-      "description": "Set on a recording made with \"Record more\" on a finished recording's page (Oct 13 2026): the id of that first recording. Its transcript shows under the first one's, and its notes are added to the first one's notes as new sections (\"Added 12:40 PM\") without touching what was already there. Hidden from the Notes list; status \"merged\" once its notes went in."
-    },
-    "notes": {
-      "type": "object",
-      "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}], asked[{question, answered, answer, at}] }. \"asked\" is there when the recording had questions. \"at\" is the time mark in the transcript it came from."
+        },
+        "type": "object"
+      },
+      "type": "array"
     }
   },
   "required": [],
+  "type": "object",
   "rls": {
     "read": {
       "created_by": "{{user.email}}"
