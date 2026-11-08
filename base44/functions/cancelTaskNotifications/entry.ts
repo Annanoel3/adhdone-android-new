@@ -336,7 +336,8 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   const nowIso = new Date(nowMs).toISOString();
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
 
-  // The phone's push sign-up check (PushHealthWorker, Android build after 47):
+  // The phone's push sign-up check (PushHealthWorker, Android build after 47;
+  // PushHealthCheck on the iPhone from the build after 7, platform "ios"):
   // what the phone itself saw, sent from the background with the app unopened,
   // after a Play Store update or restart and every 12 hours. phone_seen_at is
   // proof the app is still installed (Nov 6 2026: phones whose pushes went dead
@@ -354,6 +355,8 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
       nudged: b(body?.nudged),
       subscription_id: String(body?.subscription_id || '').slice(0, 64),
       build: Number(body?.build) || null,
+      // Which phone sent it: Android and iPhone build numbers are separate counts.
+      platform: body?.platform === 'ios' ? 'ios' : 'android',
       error: body?.error ? String(body.error).slice(0, 200) : null,
       // What OneSignal's server says about this phone's push sign-up right after
       // the phone's check: enabled + its code (1 = subscribed, -10 = not
