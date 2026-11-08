@@ -100,10 +100,11 @@ public final class PushHealthCheck: NSObject {
                 let optedInBefore = before.optedIn
                 let hadTokenBefore = !(before.token ?? "").isEmpty
                 let idBefore = before.id ?? ""
-                var nudged = false
-                if allowed {
+                // Only when iOS already allows ADHDone's notifications, so optIn()
+                // never tries to show the permission prompt from the background.
+                let nudged = allowed
+                if nudged {
                     before.optIn()
-                    nudged = true
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + (nudged ? Self.flushWait : 0)) {
                     let after = OneSignal.User.pushSubscription
