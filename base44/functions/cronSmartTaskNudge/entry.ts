@@ -174,7 +174,8 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     // REPLAY (preview only, owner only): { email, preview: true, as_of: ISO,
-    // last_active_at?: ISO } plans as if it were that moment: tasks made after
+    // last_active_at?: ISO, first_win_pick?: { pick, at, text } } plans as if
+    // it were that moment: tasks made after
     // it are left out, ones finished after it count as open, Smart Reminders
     // sent after it never went out, and they last opened the app at
     // last_active_at. To check the planner's judgment against a real day
@@ -247,6 +248,9 @@ Deno.serve(async (req) => {
         u.smart_nudge_schedule = (u.smart_nudge_schedule || []).filter((e: any) => !(utcMs(e?.sent_at || e?.send_at) > nowMs));
         u.smart_nudge_one_a_day = false;
         u.smart_nudge_paused_at = null;
+        // first_win_pick?: { pick, at, text } plans as if they had picked that
+        // in the welcome chat (FIRST WIN), to check it on a test account.
+        if (body?.first_win_pick && typeof body.first_win_pick === 'object') u.first_win_pick = body.first_win_pick;
       }
     }
 
