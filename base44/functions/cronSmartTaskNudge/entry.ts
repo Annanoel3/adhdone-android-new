@@ -2763,9 +2763,13 @@ Return ONLY valid JSON:
       .filter((e: any) => e.task_ids.length > 0)
       .filter((e: any) => new Date(e.send_at).getTime() >= nowMs); // drop any that landed in the past
 
-    // FIRST WIN (top of firstWinFor): inside its window it's the next nudge.
-    // The planner's own words and moment for it when it picked it (the moment
-    // kept inside the window); right away, in plain words, when it didn't.
+    // FIRST WIN (top of firstWinFor): inside its window it's the next nudge,
+    // within the hour, so nothing else waits on it for long (Anna, Nov 8 2026:
+    // "make sure that it chooses that before it chooses any other reminders.
+    // But it doesn't need to completely block out other reminders"). The
+    // planner's own words and moment for it when it picked it (kept inside the
+    // window and the hour); right away, in plain words, when it didn't. Every
+    // other task is planned as usual before the window and right after it goes.
     const fw = ctx.firstWin;
     if (fw && nowMs >= fw.fromMs - 60 * 1000 && nowMs <= fw.untilMs) {
       const fwTask = tasks.find((t: any) => t.id === fw.taskId);
@@ -2788,7 +2792,7 @@ Return ONLY valid JSON:
           };
         }
         const lo = Math.max(nowMs, fw.fromMs);
-        const hi = Math.max(lo, fw.untilMs - 2 * 60 * 1000);
+        const hi = Math.max(lo, Math.min(fw.untilMs - 2 * 60 * 1000, nowMs + 60 * 60 * 1000));
         const atMs = Math.min(Math.max(utcMs(mine.send_at), lo), hi);
         if (atMs !== utcMs(mine.send_at)) {
           mine.send_at = new Date(atMs).toISOString();
@@ -2876,9 +2880,10 @@ function zoneClock(ms: number, timeZone: string, hour: number, minute: number): 
 // tomorrow, and for a tap made inside quiet hours, 1.5 to 5 hours after their
 // day starts (quiet hours end; 8 AM with quiet hours off). It always ends 10
 // minutes before quiet hours start. Before the window the task is held (JUST
-// ADDED); inside it, it's the next nudge, at the moment the planner picks in
-// the window, or right away if the planner left it out. Over once its first
-// nudge has gone out, the window has passed, or the task is done.
+// ADDED) and everything else is planned as usual; once it opens, it's the next
+// nudge within the hour (the planner's moment, or right away if the planner
+// left it out), then everything else carries on. Over once its first nudge
+// has gone out, the window has passed, or the task is done.
 const FIRST_WIN_FROM_MS = 90 * 60 * 1000;
 const FIRST_WIN_UNTIL_MS = 5 * 60 * 60 * 1000;
 
