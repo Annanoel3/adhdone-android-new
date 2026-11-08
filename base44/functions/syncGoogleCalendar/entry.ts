@@ -159,6 +159,21 @@ function spansDays(startRaw, endRaw) {
   return e > s && e.toISOString().slice(0, 10) !== s.toISOString().slice(0, 10);
 }
 
+// An imported all-day task or payment still saved as if 9 AM were its own
+// time, with nothing booked for it and no time the person set (see
+// patchExistingTaskDates).
+function isAllDayImportTask(taskRec: any, startRaw: any): boolean {
+  if (!startRaw || !/^\d{4}-\d{2}-\d{2}$/.test(String(startRaw))) return false;
+  if (!taskRec || taskRec.status !== 'active' || taskRec.day_only_task === true) return false;
+  if (taskRec.reminder_interval !== 'once' || taskRec.deadline_style === 'by') return false;
+  if (taskRec.classification === 'event' || taskRec.classification === 'birthday') return false;
+  if (taskRec.birthday_person || taskRec.is_own_birthday) return false;
+  if (taskRec.event_time || taskRec.time_stated === true || taskRec.anchor_time) return false;
+  if (Array.isArray(taskRec.reminder_schedule) && taskRec.reminder_schedule.length > 0) return false;
+  if (Array.isArray(taskRec.onesignal_notification_ids) && taskRec.onesignal_notification_ids.length > 0) return false;
+  return true;
+}
+
 async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone, ctx: any = null) {
   const startRaw = event.start?.dateTime || event.start?.date || null;
   const endRaw = event.end?.dateTime || event.end?.date || null;
@@ -177,7 +192,17 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
   // Tasks imported before the task-level dedupe key existed get it stamped on
   // resync, so the "already have this event?" check covers legacy imports too.
   const needsKeyBackfill = !taskRec.google_event_id;
-  if (!startChanged && !endChanged && !needsEndBackfill && !needsLocationBackfill && !needsKeyBackfill) return false;
+  // An all-day calendar task or payment (not an event, not a birthday) is an
+  // all-day task, saved the way the app saves one typed in (day_only_task;
+  // 9 AM is only its anchor, see shared/captureToTasks.ts). Imports before
+  // Nov 8 2026 were saved as if 9 AM were its own time. Since Oct 12 2026 an
+  // all-day import gets nothing booked and is Smart Reminders' to nudge, but
+  // Smart Reminders read that 9 AM as "its reminder at that time is already
+  // booked", so a daily all-day item from the phone's calendar went unreminded
+  // (Nov 7 2026, the 7 PM "due today, never reminded" alert). Only ones with
+  // nothing booked and no time of their own are corrected, once.
+  const needsDayOnlyBackfill = isAllDayImportTask(taskRec, startRaw);
+  if (!startChanged && !endChanged && !needsEndBackfill && !needsLocationBackfill && !needsKeyBackfill && !needsDayOnlyBackfill) return false;
 
   // Recompute the event start the same way the create path does.
   let nextReminderDate: Date | null = null;
@@ -222,6 +247,7 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
 
   if (needsKeyBackfill) patch.google_event_id = event.id;
   if (needsLocationBackfill) patch.location = event.location;
+  if (needsDayOnlyBackfill) patch.day_only_task = true;
 
   // One-time events: the event start IS the reminder/due date, and end_date
   // records the multi-day span. Recurring tasks use now+gap for reminders, so
@@ -1179,6 +1205,13 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
+      // An all-day task or payment is an all-day task (day_only_task), the
+      // way the app saves one typed in: 9 AM is only its anchor, nothing is
+      // booked for it (planEventReminders), and Smart Reminders nudges it on
+      // its day. Saved without it, Smart Reminders read the 9 AM as "its
+      // reminder at that time is already booked" and nothing came (Nov 7
+      // 2026). Events and birthdays keep their own plans.
+      if (isOnce && isAllDay && taskRecord.classification !== 'event') taskRecord.day_only_task = true;
     }
 
     // Sync-record fields that don't depend on the task — built up front so the
