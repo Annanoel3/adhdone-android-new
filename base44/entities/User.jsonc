@@ -583,6 +583,10 @@
       "type": "string",
       "format": "date-time",
       "description": "When they last tapped Update on the app's update card (AppUpdatePrompt). Lets the server tell an update made from the card from one Google Play made by itself (app_update_log)."
+    },
+    "first_win_pick": {
+      "type": "object",
+      "description": "The welcome chat's \"When should it remind you?\" answer when it was Later today or Sometime tomorrow (Anna, Nov 8 2026): { pick: 'later_today' | 'sometime_tomorrow', at (when they tapped it), text (the task they typed or picked) }. Smart Reminders (cronSmartTaskNudge, FIRST WIN) finds that task and gives it their first reminder 1.5 to 5 hours after: after the tap for Later today, after their day starts (quiet hours end) for Sometime tomorrow, never into quiet hours. Written once by the app (WelcomeChat); read only by Smart Reminders."
     }
   },
   "name": "User"
