@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
@@ -22,6 +23,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -49,6 +51,10 @@ public class AlarmActivity extends Activity {
     // A button on this screen (or on its notification, through the service) was
     // used, or Home / Back already closed it: leaving now is not a new choice.
     private boolean answered = false;
+    /** When the first Back while ringing came (elapsedRealtime); 0 = none yet. */
+    private long firstBackAt = 0L;
+    /** A second Back within this long closes the alarm. */
+    private static final long BACK_AGAIN_MS = 3_000L;
 
     private String alarmId;
     private String taskId;
@@ -622,7 +628,23 @@ public class AlarmActivity extends Activity {
      */
     private void backStopsRing() {
         if (!answered && ringingHere()) {
-            Log.d(TAG, "AlarmActivity: Back while ringing");
+            // One Back does nothing but say how to close it; a second Back within
+            // 3 seconds closes it as before (Anna, Nov 8 2026: "Somehow I clicked
+            // somewhere random on an alarm and it closed. I didnt click a button"
+            // - her 10 AM alarm closed with Back two seconds after it started,
+            // most likely a tap near the screen edge read as the back swipe).
+            long now = SystemClock.elapsedRealtime();
+            if (firstBackAt == 0L || now - firstBackAt > BACK_AGAIN_MS) {
+                firstBackAt = now;
+                Log.d(TAG, "AlarmActivity: first Back while ringing, waiting for a second");
+                try {
+                    Toast.makeText(this, "Press Back again to close", Toast.LENGTH_SHORT).show();
+                } catch (Exception ex) {
+                    Log.w(TAG, "AlarmActivity: could not show the Back hint", ex);
+                }
+                return;
+            }
+            Log.d(TAG, "AlarmActivity: Back twice while ringing");
             leaveRinging("back");
             return;
         }
