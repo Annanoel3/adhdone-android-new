@@ -46,20 +46,36 @@ function pickTaskOffers() {
   return TASK_OFFERS;
 }
 
-// "When should it remind you?" — three taps that fit the time of day, plus a
-// looser "sometime today" underneath. (A task that already names its time
+// "When should it remind you?" — three taps that fit the time of day, plus
+// looser choices underneath (looseOptions). (A task that already names its time
 // skips the question entirely; see saysWhen in welcomeScript.) `phrase` is
 // what gets added to the capture, in the same plain words the parser reads
 // from anyone; `said` is how the chat repeats it back.
+//
+// Same day first (Anna, Nov 8 2026: "There are not enough options for today
+// since we're trying to promote same day stuff"): until 8 PM all three are
+// today; 8-9 PM the third is tomorrow at 9, today being nearly over before
+// quiet hours; from 9 PM, when the chat itself says tomorrow, all three are
+// tomorrow as before. Before this, from 6 PM on it was one today and two
+// tomorrow, and before 6 PM two today and one tomorrow.
+const TOMORROW_AT_9 = { label: 'Tomorrow at 9', phrase: 'tomorrow at 9am', said: 'tomorrow at 9' };
 function whenOptions(now = new Date()) {
   const h = now.getHours();
-  const opts = [];
-  if (h < 21) opts.push({ label: 'In an hour', phrase: 'in 1 hour', said: 'an hour from now' });
-  if (h < 18) opts.push({ label: 'Tonight at 7', phrase: 'tonight at 7pm', said: 'tonight at 7' });
-  opts.push({ label: 'Tomorrow at 9', phrase: 'tomorrow at 9am', said: 'tomorrow at 9' });
-  if (h >= 18) opts.push({ label: 'Tomorrow at 7 PM', phrase: 'tomorrow at 7pm', said: 'tomorrow at 7 PM' });
-  if (h >= 21) opts.push({ label: 'Tomorrow at noon', phrase: 'tomorrow at 12pm', said: 'tomorrow at noon' });
-  return opts.slice(0, 3);
+  if (h >= 21) {
+    return [
+      TOMORROW_AT_9,
+      { label: 'Tomorrow at 7 PM', phrase: 'tomorrow at 7pm', said: 'tomorrow at 7 PM' },
+      { label: 'Tomorrow at noon', phrase: 'tomorrow at 12pm', said: 'tomorrow at noon' },
+    ];
+  }
+  const opts = [
+    { label: 'In 30 minutes', phrase: 'in 30 minutes', said: '30 minutes from now' },
+    { label: 'In an hour', phrase: 'in 1 hour', said: 'an hour from now' },
+  ];
+  if (h < 17) opts.push({ label: 'Tonight at 7', phrase: 'tonight at 7pm', said: 'tonight at 7' });
+  else if (h < 20) opts.push({ label: 'Tonight at 9', phrase: 'tonight at 9pm', said: 'tonight at 9' });
+  else opts.push(TOMORROW_AT_9);
+  return opts;
 }
 
 // The no-exact-time choice. Late at night "sometime today" is already over,
@@ -68,6 +84,15 @@ function sometimeOption(now = new Date()) {
   return now.getHours() >= 21
     ? { label: 'Sometime tomorrow', phrase: 'tomorrow', said: 'tomorrow' }
     : { label: 'Sometime today', phrase: 'today', said: 'today' };
+}
+
+// The small choices under the three: "sometime today" (late at night,
+// tomorrow), and tomorrow at 9 whenever the three are all today, so someone
+// who means tomorrow can still pick it (Anna, Nov 2 2026, kept Nov 8 2026).
+function looseOptions(now = new Date()) {
+  const loose = [sometimeOption(now)];
+  if (!whenOptions(now).some((o) => o.phrase.startsWith('tomorrow'))) loose.push(TOMORROW_AT_9);
+  return loose;
 }
 
 // The notifications question used to be its own card after the chat (with the
@@ -457,7 +482,11 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
               </Button>
             ))}
           </div>
-          <Button variant="ghost" onClick={() => submitWhen(sometimeOption())} className="w-full text-xs">{sometimeOption().label}</Button>
+          <div className="flex gap-2">
+            {looseOptions().map((opt) => (
+              <Button key={opt.label} variant="ghost" onClick={() => submitWhen(opt)} className="flex-1 text-xs">{opt.label}</Button>
+            ))}
+          </div>
         </div>
       )}
 
