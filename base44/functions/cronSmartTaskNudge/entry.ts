@@ -2435,8 +2435,11 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
       if (wish) parts.push(`reminder wish: "${wish}"`);
       if (ctx.firstWin && t.id === ctx.firstWin.taskId) {
-        // Only on the numbered list once its window is open (held before).
-        parts.push(`FIRST WIN: their first task in ADHDone; setting it up they picked "${ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow'}", so your next reminder is this one, before anything else from you, by ${clock(Math.min(ctx.firstWin.untilMs, nowMs + 60 * 60 * 1000))}, at the moment until then it's most likely to get done: a quick first win`);
+        // Only on the numbered list once its window has opened (held before).
+        const fwPick = ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow';
+        parts.push(nowMs <= ctx.firstWin.untilMs
+          ? `FIRST WIN: their first task in ADHDone; setting it up they picked "${fwPick}". It comes first, before anything else from you: aim for between ${clock(ctx.firstWin.fromMs)} and ${clock(ctx.firstWin.untilMs)}, at the moment in that window it's most likely to get done, so it's a quick first win`
+          : `FIRST WIN: their first task in ADHDone; setting it up they picked "${fwPick}". Its window (${clock(ctx.firstWin.fromMs)} to ${clock(ctx.firstWin.untilMs)}) has passed with nothing from you about it yet, so it still comes first, before anything else from you, at the next good moment`);
       }
       if (recurrenceLabel(t)) parts.push(`repeats ${recurrenceLabel(t)} (this is the current one)`);
       const loc = (t.location || '').trim();
@@ -2768,46 +2771,6 @@ Return ONLY valid JSON:
       .filter((e: any) => e.task_ids.length > 0)
       .filter((e: any) => new Date(e.send_at).getTime() >= nowMs); // drop any that landed in the past
 
-    // FIRST WIN (top of firstWinFor): inside its window it's the next nudge,
-    // within the hour, so nothing else waits on it for long (Anna, Nov 8 2026:
-    // "make sure that it chooses that before it chooses any other reminders.
-    // But it doesn't need to completely block out other reminders"). The
-    // planner's own words and moment for it when it picked it (kept inside the
-    // window and the hour); right away, in plain words, when it didn't. Every
-    // other task is planned as usual before the window and right after it goes.
-    const fw = ctx.firstWin;
-    if (fw && nowMs >= fw.fromMs - 60 * 1000 && nowMs <= fw.untilMs) {
-      const fwTask = tasks.find((t: any) => t.id === fw.taskId);
-      if (fwTask) {
-        let mine = entries.find((e: any) => e.task_id === fw.taskId || (e.task_ids || []).includes(fw.taskId));
-        if (!mine) {
-          const full = String(fwTask.title || '').trim() || 'your first task';
-          const short = full.length > 40 ? `${full.slice(0, 37)}...` : full;
-          mine = {
-            task_id: fw.taskId,
-            task_ids: [fw.taskId],
-            send_at: new Date(nowMs).toISOString(),
-            title: `Quick win: ${short}`,
-            body: `You put "${short}" on your list earlier. Got a minute to knock it out?`,
-            type: 'initial',
-            light: false,
-            rationale: 'first win: its window is open and the planner left it out',
-            sent: false,
-            sent_at: null,
-          };
-        }
-        const lo = Math.max(nowMs, fw.fromMs);
-        const hi = Math.max(lo, Math.min(fw.untilMs - 2 * 60 * 1000, nowMs + 60 * 60 * 1000));
-        const atMs = Math.min(Math.max(utcMs(mine.send_at), lo), hi);
-        if (atMs !== utcMs(mine.send_at)) {
-          mine.send_at = new Date(atMs).toISOString();
-          mine.title = fixTitleTimeOfDay(mine.title, new Date(atMs), timeZone);
-        }
-        entries.length = 0;
-        entries.push(mine);
-      }
-    }
-
     // Space nudges out so two never land at (or near) the same time — each
     // other, a nudge already queued to go out, or one that just went out. The LLM sometimes gives
     // several nudges the same delay_minutes, which arrives as a stack of
@@ -2885,10 +2848,13 @@ function zoneClock(ms: number, timeZone: string, hour: number, minute: number): 
 // tomorrow, and for a tap made inside quiet hours, 1.5 to 5 hours after their
 // day starts (quiet hours end; 8 AM with quiet hours off). It always ends 10
 // minutes before quiet hours start. Before the window the task is held (JUST
-// ADDED) and everything else is planned as usual; once it opens, it's the next
-// nudge within the hour (the planner's moment, or right away if the planner
-// left it out), then everything else carries on. Over once its first nudge
-// has gone out, the window has passed, or the task is done.
+// ADDED). From then on the planner is told it comes first, before anything
+// else from it, aiming for that window (Anna, Nov 8 2026: "Just make sure smart
+// reminders prioritizes the quick win task's reminder"); the planner picks the
+// moment, the words, and everything else as usual. Nothing is forced in code:
+// a forced send at the window's start went out in the middle of a work
+// morning (preview, Nov 8 2026). Over once its first nudge has gone out, the
+// task is done, or 2 days after the tap.
 const FIRST_WIN_FROM_MS = 90 * 60 * 1000;
 const FIRST_WIN_UNTIL_MS = 5 * 60 * 60 * 1000;
 
@@ -2934,7 +2900,7 @@ function firstWinFor(user: any, pool: any[], schedule: any[], nowMs: number, tim
   }
   // Little of the day left (an early bedtime): the last hour before it.
   if (untilMs - fromMs < 15 * 60 * 1000) fromMs = Math.max(base + 30 * 60 * 1000, untilMs - 60 * 60 * 1000);
-  if (!(untilMs > fromMs) || nowMs > untilMs) return null;
+  if (!(untilMs > fromMs)) return null;
   return { taskId: task.id, fromMs, untilMs, pick: p.pick };
 }
 
