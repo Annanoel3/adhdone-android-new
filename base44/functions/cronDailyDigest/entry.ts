@@ -351,7 +351,10 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
       console.error(`[DIGEST] Could not claim the win ask for ${email}:`, e);
       continue;
     }
-    const line = eveningLine(dayKey, openedToday);
+    // Opened it today, counting an evening that runs past midnight as the
+    // day it started on: never a brain dump.
+    const usedToday = openedToday || localDateKey(new Date(lastActive), timeZone) === eveningDayKey(user, now, timeZone);
+    const line = eveningLine(dayKey, usedToday);
     const id = await sendWinAsk(email, line);
     if (id) {
       await ledgerRecord(base44, { email, kind: 'motivation', source: 'cronDailyDigest', notificationId: id, title: line.title });
