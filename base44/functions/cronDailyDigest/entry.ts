@@ -213,21 +213,26 @@ function pausedForAway(user: any): boolean {
 // The evening push changes every night (Anna, Nov 6 2026: "the wording for
 // 'what's one win today' should definitely differ day by day. 3 days in a row
 // of that is annoying. Maybe alternate between the come back push like
-// 'what's something you could get off your brain' etc."). That was only about
-// people who aren't using the app (Anna, Nov 9 2026: "I was 10,000% only
-// talking about people who dont use the app"); from Nov 6 to Nov 9 every
-// other night went to everyone as a brain dump, and she got "Anything you
-// don't want to forget?" while using the app every day. So:
-//  - opened the app today: the check-in (opens the mood faces + win box,
-//    data.type 'win_ask'), never a brain dump;
+// 'what's something you could get off your brain' etc."). All of that was
+// about people who need to be brought back, never active people (Anna, Nov 9
+// 2026: "I was 10,000% only talking about people who dont use the app";
+// "Those are COMEBACK MESSAGES. The entire time I talked about those with
+// you, WE were talking about PEOPLE WHO NEED TO BE BROUGHT BACK... I NEVER
+// asked for it to happen to active people"). From Nov 6 to Nov 9 it went to
+// everyone, and she got "Anything you don't want to forget?" while using the
+// app every day. So:
+//  - opened the app today: exactly what they got before Nov 6, the same
+//    check-in every night (WIN_ASK_TITLE / WIN_ASK_BODY; opens the mood
+//    faces + win box, data.type 'win_ask');
 //  - didn't open it today (this push only reaches someone like that when
-//    they were here in the past week and have finished a task): nights
-//    alternate between the check-in and a brain dump (opens Add Task,
-//    data.type 'evening_dump').
-// Each kind walks through its own lines, so no line comes back for a while.
+//    they were here in the past week and have finished a task): a different
+//    line every night, nights alternating between a check-in and a
+//    come-back-style brain dump (opens Add Task, data.type 'evening_dump').
 // Picked by their calendar day, so a second run in the hour can't pick a
 // different one. The come-back pushes (cronBackBurnerCheckIn) have their own
 // lines; these don't repeat them.
+const WIN_ASK_TITLE = 'How did you feel today?';
+const WIN_ASK_BODY = 'Tap to check in and save one win, big or small.';
 const EVENING_CHECKINS = [
   { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' },
   { title: 'Anything go right today?', body: 'Even tiny counts. Save it before it slips away.' },
@@ -246,10 +251,9 @@ function eveningLine(dayKey: string, openedToday: boolean): { title: string; bod
   const n = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
     ? Math.floor(Date.UTC(y, mo - 1, d) / (24 * 60 * 60 * 1000))
     : 0;
-  if (!openedToday && n % 2 === 1) {
-    return { ...EVENING_DUMPS[Math.floor(n / 2) % EVENING_DUMPS.length], dump: true };
-  }
-  return { ...EVENING_CHECKINS[n % EVENING_CHECKINS.length], dump: false };
+  if (openedToday) return { title: WIN_ASK_TITLE, body: WIN_ASK_BODY, dump: false };
+  const list = n % 2 === 1 ? EVENING_DUMPS : EVENING_CHECKINS;
+  return { ...list[Math.floor(n / 2) % list.length], dump: n % 2 === 1 };
 }
 
 // The day the evening card and the box stamp a win or a mood with
