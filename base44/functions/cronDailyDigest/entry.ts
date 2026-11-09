@@ -222,18 +222,21 @@ function pausedForAway(user: any): boolean {
 // asked for it to happen to active people"). From Nov 6 to Nov 9 it went to
 // everyone, and she got "Anything you don't want to forget?" while using the
 // app every day. So:
-//  - opened the app today: exactly what they got before Nov 6, the same
-//    check-in every night (WIN_ASK_TITLE / WIN_ASK_BODY; opens the mood
-//    faces + win box, data.type 'win_ask');
-//  - didn't open it today (this push only reaches someone like that when
-//    they were here in the past week and have finished a task): a different
-//    line every night, nights alternating between a check-in and a
-//    come-back-style brain dump (opens Add Task, data.type 'evening_dump').
+//  - actually used the app today, not just opened it (usedAppToday; Anna,
+//    Nov 9 2026: "People who actually used the app!!! Not just opened get
+//    the 'how did today go'"): "How did today go?" every night
+//    (USED_TODAY_LINE; opens the mood faces + win box, data.type 'win_ask');
+//  - everyone else this push reaches (here in the past week, opened the app
+//    today or has finished a task before): a different line every night,
+//    nights alternating between a check-in and a come-back-style brain dump
+//    (opens Add Task, data.type 'evening_dump');
+//  - a come-back push went out to them today: no evening push at all (Anna,
+//    Nov 9 2026: "if someone gets a midday comeback or whatever, dont do a
+//    night one").
 // Picked by their calendar day, so a second run in the hour can't pick a
 // different one. The come-back pushes (cronBackBurnerCheckIn) have their own
 // lines; these don't repeat them.
-const WIN_ASK_TITLE = 'How did you feel today?';
-const WIN_ASK_BODY = 'Tap to check in and save one win, big or small.';
+const USED_TODAY_LINE = { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' };
 const EVENING_CHECKINS = [
   { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' },
   { title: 'Anything go right today?', body: 'Even tiny counts. Save it before it slips away.' },
@@ -247,12 +250,12 @@ const EVENING_DUMPS = [
   { title: "Anything you don't want to forget?", body: "Say it or type it. We'll handle the reminding." },
   { title: 'Off your brain, onto the list', body: "One thing you'd rather not carry into tomorrow?" },
 ];
-function eveningLine(dayKey: string, openedToday: boolean): { title: string; body: string; dump: boolean } {
+function eveningLine(dayKey: string, usedToday: boolean): { title: string; body: string; dump: boolean } {
   const [y, mo, d] = String(dayKey).split('-').map(Number);
   const n = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
     ? Math.floor(Date.UTC(y, mo - 1, d) / (24 * 60 * 60 * 1000))
     : 0;
-  if (openedToday) return { title: WIN_ASK_TITLE, body: WIN_ASK_BODY, dump: false };
+  if (usedToday) return { ...USED_TODAY_LINE, dump: false };
   const list = n % 2 === 1 ? EVENING_DUMPS : EVENING_CHECKINS;
   return { ...list[Math.floor(n / 2) % list.length], dump: n % 2 === 1 };
 }
@@ -270,6 +273,47 @@ function eveningDayKey(user: any, now: Date, timeZone: string): string {
   if (localMinutesOfDay(now, timeZone) >= end) return today;
   const [y, mo, d] = today.split('-').map(Number);
   return new Date(Date.UTC(y, mo - 1, d - 1)).toISOString().slice(0, 10);
+}
+
+// Did something in the app today, not just opened it: finished a task (any
+// way, Done on an alarm included; logTaskCompletion logs every one), added
+// one (the app's add-task pipeline, or a capture from outside the app),
+// saved a Parking Lot idea, recorded notes, or ran the focus timer. A win or
+// a mood saved today already means no evening push at all. When a check
+// can't run, it counts as used, so a brain dump never goes to someone who
+// was using the app.
+async function usedAppToday(base44: any, email: string, sinceISO: string): Promise<boolean> {
+  const svc = base44.asServiceRole.entities;
+  const checks: (() => Promise<any>)[] = [
+    () => svc.AppEvent.filter({ user_email: email, event: { $in: ['task_completed', 'task_created', 'pomodoro'] }, created_date: { $gte: sinceISO } }, '-created_date', 1),
+    () => svc.Task.filter({ created_by: email, capture_id: { $ne: null }, created_date: { $gte: sinceISO } }, '-created_date', 1),
+    () => svc.ParkingLotIdea.filter({ created_by: email, created_date: { $gte: sinceISO } }, '-created_date', 1),
+    () => svc.EnergyLog.filter({ created_by: email, kind: 'note_recording', created_date: { $gte: sinceISO } }, '-created_date', 1),
+  ];
+  for (const check of checks) {
+    try {
+      const rows = await check();
+      if (Array.isArray(rows) && rows.length > 0) return true;
+    } catch (e) {
+      console.error(`[DIGEST] Used-today check failed for ${email}:`, (e as any)?.message || e);
+      return true;
+    }
+  }
+  return false;
+}
+
+// A come-back push (cronBackBurnerCheckIn, ledger source 'comeback') went
+// out to them since the start of today. When the check can't run, it counts
+// as yes (no evening push).
+async function comebackToday(base44: any, email: string, sinceISO: string): Promise<boolean> {
+  try {
+    const rows = await base44.asServiceRole.entities.NotificationLedger.filter(
+      { user_email: email, source: 'comeback', send_at: { $gte: sinceISO } }, '-send_at', 1);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    console.error(`[DIGEST] Come-back check failed for ${email}:`, (e as any)?.message || e);
+    return true;
+  }
 }
 
 async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Promise<number> {
@@ -346,6 +390,14 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     }
     if (haveOne) continue;
 
+    // Since the start of today: their calendar day, or the day an evening
+    // that runs past midnight started on.
+    let sinceMs = now.getTime() - (nowMin + 1) * 60 * 1000;
+    if (eveningDayKey(user, now, timeZone) !== localDay) sinceMs -= DAY;
+    const sinceISO = new Date(sinceMs).toISOString();
+    if (await comebackToday(base44, email, sinceISO)) continue;
+    const usedToday = await usedAppToday(base44, email, sinceISO);
+
     const gate = await ledgerCheck(base44, { email, kind: 'motivation' });
     if (!gate.allowed) continue;
 
@@ -356,9 +408,6 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
       console.error(`[DIGEST] Could not claim the win ask for ${email}:`, e);
       continue;
     }
-    // Opened it today, counting an evening that runs past midnight as the
-    // day it started on: never a brain dump.
-    const usedToday = openedToday || localDateKey(new Date(lastActive), timeZone) === eveningDayKey(user, now, timeZone);
     const line = eveningLine(dayKey, usedToday);
     const id = await sendWinAsk(email, line);
     if (id) {
