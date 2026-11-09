@@ -364,7 +364,7 @@ async function offerRepeat(base44: any, taskId: string) {
   // match means no offer. Kept on the family (repeat_asked_as) so it's
   // checked once, but only when that earlier one was answered or seen (one
   // still waiting may run out unseen).
-  const kindOf = (t: any) => lc(t.task_family) || lc(t.title).slice(0, 40);
+  const kindOf = (t: any) => lc(t.task_family) || lc(t.title).replace(/\s+/g, ' ').slice(0, 40);
   const askedKinds = [...new Set(asked
     .map(kindOf)
     .filter((k: string) => k && k !== family && !k.startsWith('_')))].slice(0, 80) as string[];
