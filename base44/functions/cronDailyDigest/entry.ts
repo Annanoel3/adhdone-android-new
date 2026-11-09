@@ -23,6 +23,7 @@ import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs, resolveQu
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { easeNow } from '../../shared/easeOff.ts';
+import { usedAppBetween } from '../../shared/usedApp.ts';
 
 const openai = lean(new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -275,33 +276,6 @@ function eveningDayKey(user: any, now: Date, timeZone: string): string {
   return new Date(Date.UTC(y, mo - 1, d - 1)).toISOString().slice(0, 10);
 }
 
-// Did something in the app today, not just opened it: finished a task (any
-// way, Done on an alarm included; logTaskCompletion logs every one), added
-// one (the app's add-task pipeline, or a capture from outside the app),
-// saved a Parking Lot idea, recorded notes, or ran the focus timer. A win or
-// a mood saved today already means no evening push at all. When a check
-// can't run, it counts as used, so a brain dump never goes to someone who
-// was using the app.
-async function usedAppToday(base44: any, email: string, sinceISO: string): Promise<boolean> {
-  const svc = base44.asServiceRole.entities;
-  const checks: (() => Promise<any>)[] = [
-    () => svc.AppEvent.filter({ user_email: email, event: { $in: ['task_completed', 'task_created', 'pomodoro'] }, created_date: { $gte: sinceISO } }, '-created_date', 1),
-    () => svc.Task.filter({ created_by: email, capture_id: { $ne: null }, created_date: { $gte: sinceISO } }, '-created_date', 1),
-    () => svc.ParkingLotIdea.filter({ created_by: email, created_date: { $gte: sinceISO } }, '-created_date', 1),
-    () => svc.EnergyLog.filter({ created_by: email, kind: 'note_recording', created_date: { $gte: sinceISO } }, '-created_date', 1),
-  ];
-  for (const check of checks) {
-    try {
-      const rows = await check();
-      if (Array.isArray(rows) && rows.length > 0) return true;
-    } catch (e) {
-      console.error(`[DIGEST] Used-today check failed for ${email}:`, (e as any)?.message || e);
-      return true;
-    }
-  }
-  return false;
-}
-
 // A come-back push (cronBackBurnerCheckIn, ledger source 'comeback') went
 // out to them since the start of today. When the check can't run, it counts
 // as yes (no evening push).
@@ -396,7 +370,9 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     if (eveningDayKey(user, now, timeZone) !== localDay) sinceMs -= DAY;
     const sinceISO = new Date(sinceMs).toISOString();
     if (await comebackToday(base44, email, sinceISO)) continue;
-    const usedToday = await usedAppToday(base44, email, sinceISO);
+    // Actually used the app today (shared/usedApp.ts). A check that can't run
+    // counts as used, so a brain dump never goes to someone using the app.
+    const usedToday = await usedAppBetween(base44, email, sinceISO, null, true);
 
     const gate = await ledgerCheck(base44, { email, kind: 'motivation' });
     if (!gate.allowed) continue;
@@ -411,7 +387,9 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     const line = eveningLine(dayKey, usedToday);
     const id = await sendWinAsk(email, line);
     if (id) {
-      await ledgerRecord(base44, { email, kind: 'motivation', source: 'cronDailyDigest', notificationId: id, title: line.title });
+      // A brain dump is recorded as its own source, so the owner alerts
+      // (cronRefillReminders check 17) can tell it from the check-in.
+      await ledgerRecord(base44, { email, kind: 'motivation', source: line.dump ? 'evening_dump' : 'cronDailyDigest', notificationId: id, title: line.title });
       sent += 1;
     } else {
       try { await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: user.win_ask_date || null }); } catch {}
