@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,12 @@ import { winLook } from "@/components/wins/winsTheme";
 // Nov 1 2026: "What about people that barely open the app and check tasks
 // done by pressing done on an alarm"; it used to wait for their next open).
 // If they've left by then, it's there on the next open. Yes adds a separate daily to-do through captureText,
-// the same parser as everything else; No or closing it means never again for
-// that kind of task. Adding a task still never asks anything.
+// the same parser as everything else. Asked once (Anna, Nov 9 2026: "make
+// sure it doesnt ask this for the same task over and over. Only once. And
+// account for different wording"): the moment it's on screen it's stamped
+// shown_at on the task (and remembered on this phone), it's never put up
+// again, and logTaskCompletion never offers that kind of task again, however
+// it's worded. Adding a task still never asks anything.
 const DAY = 24 * 60 * 60 * 1000;
 const OFFER_DAYS = 3;
 // One offer at a time, at most one every half hour.
@@ -28,6 +32,27 @@ const BETWEEN_MS = 30 * 60 * 1000;
 // After a check-off: Undo first (4 s), and logTaskCompletion asks the model.
 const AFTER_DONE_MS = [7000, 15000, 25000, 40000];
 const AD_OWED_KEY = "admgr_ad_owed";
+// Offers already on screen on this phone, in case stamping shown_at on the
+// task didn't make it (the app closed that second, no connection).
+const SHOWN_KEY = "repeat_offer_shown";
+const shownHere = new Set();
+
+function shownBefore(id) {
+  if (shownHere.has(id)) return true;
+  try {
+    const list = JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
+    return Array.isArray(list) && list.includes(id);
+  } catch { return false; }
+}
+
+function rememberShown(id) {
+  shownHere.add(id);
+  try {
+    const list = JSON.parse(localStorage.getItem(SHOWN_KEY) || "[]");
+    const next = [...(Array.isArray(list) ? list : []).filter((x) => x !== id), id].slice(-50);
+    localStorage.setItem(SHOWN_KEY, JSON.stringify(next));
+  } catch { /* the shown_at stamp still covers it */ }
+}
 
 const ms = (v) => {
   const s = String(v || "");
@@ -80,6 +105,8 @@ async function findOffer() {
   const task = (done || []).find((t) =>
     t.repeat_offer?.time &&
     !t.repeat_offer.answer &&
+    !t.repeat_offer.shown_at &&
+    !shownBefore(t.id) &&
     Date.now() - ms(t.repeat_offer.made_at) < OFFER_DAYS * DAY
   ) || null;
   if (!task) return null;
@@ -160,18 +187,39 @@ export default function RepeatOfferPopup({ user, theme, specialMode }) {
   }, [user?.email]);
 
   const shown = usePopupTurn(!!task);
+  // { id, at, saving } for the offer on screen now.
+  const stamp = useRef(null);
 
   useEffect(() => {
     upNow = !!task;
     return () => { upNow = false; };
   }, [task]);
 
+  // On screen: that counts as asked.
+  useEffect(() => {
+    if (!shown || !task || stamp.current?.id === task.id) return;
+    const at = new Date().toISOString();
+    rememberShown(task.id);
+    const saving = base44.entities.Task.update(task.id, { repeat_offer: { ...task.repeat_offer, shown_at: at } })
+      .catch((e) => console.warn("[RepeatOffer] shown not saved:", e?.message || e));
+    stamp.current = { id: task.id, at, saving };
+  }, [shown, task]);
+
   const answer = async (value, extra = {}) => {
     const t = task;
     if (!t) return;
+    const s = stamp.current?.id === t.id ? stamp.current : null;
+    // The answer goes in after the shown_at stamp, never under it.
+    if (s) await s.saving;
     try {
       await base44.entities.Task.update(t.id, {
-        repeat_offer: { ...t.repeat_offer, ...extra, answer: value, answered_at: new Date().toISOString() },
+        repeat_offer: {
+          ...t.repeat_offer,
+          ...(s ? { shown_at: s.at } : {}),
+          ...extra,
+          answer: value,
+          answered_at: new Date().toISOString(),
+        },
       });
     } catch (e) {
       console.warn("[RepeatOffer] answer not saved:", e?.message || e);
