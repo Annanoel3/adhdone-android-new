@@ -362,16 +362,18 @@ async function offerRepeat(base44: any, taskId: string) {
   // filed under another family ("do dishes" / "dishes need to be done"): the
   // model checks it against the kinds of task already asked about, and a
   // match means no offer. Kept on the family (repeat_asked_as) so it's
-  // checked once.
+  // checked once, but only when that earlier one was answered or seen (one
+  // still waiting may run out unseen).
+  const kindOf = (t: any) => lc(t.task_family) || lc(t.title).slice(0, 40);
   const askedKinds = [...new Set(asked
-    .map((t: any) => lc(t.task_family) || lc(t.title).slice(0, 40))
+    .map(kindOf)
     .filter((k: string) => k && k !== family && !k.startsWith('_')))].slice(0, 80) as string[];
   if (askedKinds.length) {
     const got = await assignTaskFamilies([{ id: task.id, title, said: task.original_input }], askedKinds);
     const same = lc(got[task.id]);
     if (same && askedKinds.includes(same)) {
       console.log(`[logTaskCompletion] no repeat offer on task ${taskId}: already asked about "${same}"`);
-      if (family) {
+      if (family && asked.some((t: any) => kindOf(t) === same && (t.repeat_offer.answer || t.repeat_offer.shown_at))) {
         h.repeat_asked_as = same;
         habits[family] = h;
         await svc.User.update(owner.id, { task_habits: habits });
