@@ -223,7 +223,7 @@ function pausedForAway(user: any): boolean {
 // asked for it to happen to active people"). From Nov 6 to Nov 9 it went to
 // everyone, and she got "Anything you don't want to forget?" while using the
 // app every day. So:
-//  - actually used the app today, not just opened it (usedAppToday; Anna,
+//  - actually used the app today, not just opened it (shared/usedApp.ts; Anna,
 //    Nov 9 2026: "People who actually used the app!!! Not just opened get
 //    the 'how did today go'"): "How did today go?" every night
 //    (USED_TODAY_LINE; opens the mood faces + win box, data.type 'win_ask');
