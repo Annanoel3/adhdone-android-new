@@ -19,6 +19,7 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
+import { usedAppBetween } from '../../shared/usedApp.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -163,7 +164,10 @@ Deno.serve(async (req) => {
     // (see ownerHealthCheck).
     if (body?.previewHealth === true) {
       const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
-      const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true });
+      // mistakeHours (1 to 168): how far back checks 15-17 look in this
+      // preview only; the hourly run always looks back one hour.
+      const mistakeHours = Math.min(168, Math.max(1, Number(body?.mistakeHours) || 1));
+      const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true, mistakeHours });
       return Response.json({ success: true, ...look });
     }
 
@@ -1914,7 +1918,31 @@ async function phoneTakesPushes(email: string): Promise<boolean | null> {
   }
 }
 
-async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean }): Promise<any> {
+// Did this OneSignal push actually go out? A booking that was cancelled (many
+// cancel paths leave the ledger row) or that OneSignal can't find never did.
+// null when OneSignal can't say: the caller then says nothing.
+async function pushWentOut(notificationId: any): Promise<boolean | null> {
+  const id = String(notificationId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !key) return null;
+  try {
+    const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+      headers: { Authorization: `Basic ${key}` },
+    });
+    if (res.status === 404) return false;
+    if (!res.ok) return null;
+    const j: any = await res.json().catch(() => null);
+    if (!j) return null;
+    if (j.canceled === true) return false;
+    return true;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean; mistakeHours?: number }): Promise<any> {
   const { allUsers, allTasks, now } = ctx;
   const nowMs = now.getTime();
   // sinceMs: told once since then (checks 9-11, about one person), instead of
@@ -2551,6 +2579,127 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     console.error('[HEALTH] missing-next-copy check failed:', e);
   }
 
+  // 15-17. The app doing the wrong thing in a way that looks normal, so no
+  //     error shows (Anna, Nov 9 2026, after the evening push sent come-back
+  //     lines to people using the app every day: "I was hoping we had
+  //     something that caught other errors immediately"; she said "Ok" to
+  //     these three). Pushes that went out in the last hour, to real people
+  //     who aren't known to be gone; a booking OneSignal shows as cancelled,
+  //     or can't find, never went out and is left out (pushWentOut), and so
+  //     is one OneSignal can't say about. One alert per check, naming up to 3,
+  //     told once per happening (sinceMs: the newest case).
+  //  15. A push inside someone's quiet hours at a time they didn't set. RULES
+  //      §9: only a time they set goes out in quiet hours (isTimeTheySet, a
+  //      reminder they added at a picked time: their_time), plus a task they
+  //      said may run through the night (quiet_hours_exempt), the first
+  //      "this is what a reminder looks like" sample, and things whose time
+  //      they picked themselves: a scheduled text, a tracker's reminder, the
+  //      end of a focus sprint they started.
+  //  16. A reminder about a task that was already checked off when it went
+  //      out (more than 2 minutes after). The follow-up "next step" push
+  //      ("Move the laundry to the dryer") is meant to come after and isn't
+  //      counted.
+  //  17. A come-back-style push (a come-back, or the evening brain dump:
+  //      ledger source 'comeback' / 'evening_dump') to someone who actually
+  //      used the app that day before it went out (shared/usedApp.ts).
+  const mistakeLook: any = { rows: 0, notSent: 0, unknown: 0 };
+  try {
+    const lookMs = Math.max(1, Math.min(168, Number(ctx.mistakeHours) || 1)) * H_HOUR;
+    const peopleByEmail: Record<string, any> = {};
+    for (const u of people) peopleByEmail[u.email] = u;
+    const rows = (await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+      send_at: { $gte: new Date(nowMs - lookMs).toISOString(), $lte: now.toISOString() },
+    })).filter((r: any) => peopleByEmail[r.user_email] && !String(r.kind || '').startsWith('owner_') && Number.isFinite(msOf(r.send_at)));
+    mistakeLook.rows = rows.length;
+    // Every task these pushes were about, finished ones too (allTasks is
+    // only the open ones).
+    const taskById: Record<string, any> = {};
+    for (const t of allTasks) if (t?.id) taskById[t.id] = t;
+    const missing = [...new Set(rows.map((r: any) => r.task_id).filter((id: any) => id && !taskById[id]))] as string[];
+    for (let i = 0; i < missing.length; i += 50) {
+      const got = await base44.asServiceRole.entities.Task.filter({ id: { $in: missing.slice(i, i + 50) } }).catch(() => []);
+      for (const t of got || []) if (t?.id) taskById[t.id] = t;
+    }
+    const QUIET_OK_KINDS = new Set(['first_win_demo', 'scheduled_text', 'tracker_reminder', 'sprint_end']);
+    const quietCases: { ms: number; line: string; id: any }[] = [];
+    const doneCases: { ms: number; line: string; id: any }[] = [];
+    const comebackCases: { ms: number; line: string; id: any }[] = [];
+    const pushName = (r: any, t: any) => `"${String(r.title || t?.title || r.kind || 'a push').slice(0, 34)}"`;
+    for (const r of rows) {
+      const u = peopleByEmail[r.user_email];
+      const ms = msOf(r.send_at);
+      const tz = userTimeZone(u);
+      const t = r.task_id ? taskById[r.task_id] : null;
+
+      // 15
+      const q = resolveQuietHours(u);
+      if (q.enabled && !QUIET_OK_KINDS.has(r.kind) && isInQuietHours(new Date(ms), q.startMin, q.endMin, tz)) {
+        const theirs = !!t && (t.quiet_hours_exempt === true || isTimeTheySet(t, ms, tz)
+          || (Array.isArray(t.reminder_schedule) && t.reminder_schedule.some((e: any) => e?.their_time === true
+            && (e.notification_id === r.notification_id || Math.abs(msOf(e.send_at) - ms) < 60 * 1000))));
+        if (!theirs) quietCases.push({ ms, id: r.notification_id, line: `${nameOf(u)}: ${pushName(r, t)} at ${theirClock(u, ms)} (quiet hours ${quietOf(u)}) ${u.email}` });
+      }
+
+      // 16
+      if (t && r.kind !== 'follow_up' && t.status === 'completed') {
+        const doneMs = Number.isFinite(msOf(t.finished_at)) ? msOf(t.finished_at) : msOf(t.completed_at);
+        if (Number.isFinite(doneMs) && ms - doneMs > 2 * 60 * 1000) {
+          doneCases.push({ ms, id: r.notification_id, line: `${nameOf(u)}: ${pushName(r, t)} at ${theirClock(u, ms)}, checked off ${theirClock(u, doneMs)} ${u.email}` });
+        }
+      }
+
+      // 17
+      if (r.source === 'comeback' || r.source === 'evening_dump') {
+        const dayStart = ms - (localMinutesOfDay(new Date(ms), tz) + 1) * 60 * 1000;
+        // A lookup that can't run counts as not used: no alert on a guess.
+        if (await usedAppBetween(base44, r.user_email, new Date(dayStart).toISOString(), new Date(ms).toISOString(), false)) {
+          comebackCases.push({ ms, id: r.notification_id, line: `${nameOf(u)}: ${pushName(r, t)} at ${theirClock(u, ms)} ${u.email}` });
+        }
+      }
+    }
+    // Only what really went out.
+    const sentOnly = async (list: { ms: number; line: string; id: any }[]) => {
+      const out: { ms: number; line: string }[] = [];
+      for (const c of list) {
+        const went = await pushWentOut(c.id);
+        if (went === true) out.push(c);
+        else if (went === false) mistakeLook.notSent += 1;
+        else mistakeLook.unknown += 1;
+      }
+      return out.sort((a, b) => a.ms - b.ms);
+    };
+    const when = lookMs > H_HOUR ? `in the last ${Math.round(lookMs / H_HOUR)} hours` : 'in the last hour';
+    const quiet = await sentOnly(quietCases);
+    const done = await sentOnly(doneCases);
+    const comeback = await sentOnly(comebackCases);
+    mistakeLook.quiet = quiet.length;
+    mistakeLook.afterDone = done.length;
+    mistakeLook.comeback = comeback.length;
+    if (quiet.length) {
+      problems.push({
+        title: '🌙 ADHDone: a push went out in quiet hours',
+        body: `${quiet.length} push${quiet.length === 1 ? '' : 'es'} ${when} landed inside someone's quiet hours at a time they didn't set (their time): ${quiet.slice(-3).map((c) => c.line).join('; ')}.`,
+        sinceMs: quiet[quiet.length - 1].ms,
+      });
+    }
+    if (done.length) {
+      problems.push({
+        title: '⚠️ ADHDone: reminded about a finished task',
+        body: `${done.length} reminder${done.length === 1 ? '' : 's'} ${when} went out after the task was already checked off (their time): ${done.slice(-3).map((c) => c.line).join('; ')}.`,
+        sinceMs: done[done.length - 1].ms,
+      });
+    }
+    if (comeback.length) {
+      problems.push({
+        title: '⚠️ ADHDone: come-back push to someone using the app',
+        body: `${comeback.length} come-back-style push${comeback.length === 1 ? '' : 'es'} ${when} went to someone who had used the app that day (their time): ${comeback.slice(-3).map((c) => c.line).join('; ')}.`,
+        sinceMs: comeback[comeback.length - 1].ms,
+      });
+    }
+  } catch (e) {
+    console.error('[HEALTH] quiet-hours / finished-task / come-back check failed:', e);
+  }
+
   // A look at what would go out, sending nothing ({ previewHealth: true }).
   if (ctx.dryRun) {
     const out: any[] = [];
@@ -2559,7 +2708,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       out.push({ ...p, sinceMs: p.sinceMs ? new Date(p.sinceMs).toISOString() : null, alreadyTold: told });
     }
     // alarmLogRows: alarm reports read for check 10 (null: that read failed).
-    return { problems: out, alarmLogRows } as any;
+    // mistakeLook: what checks 15-17 read (rows), how many cases they found,
+    // and how many were left out as never sent or unknown to OneSignal.
+    return { problems: out, alarmLogRows, mistakeLook } as any;
   }
 
   // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
