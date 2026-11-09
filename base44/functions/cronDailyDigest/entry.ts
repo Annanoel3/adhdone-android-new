@@ -210,7 +210,8 @@ function pausedForAway(user: any): boolean {
   return !(Number.isFinite(back) && back > paused);
 }
 
-// The evening push changes every night (Anna, Nov 6 2026: "the wording for
+// For people who need to be brought back, the evening push changes every
+// night (Anna, Nov 6 2026: "the wording for
 // 'what's one win today' should definitely differ day by day. 3 days in a row
 // of that is annoying. Maybe alternate between the come back push like
 // 'what's something you could get off your brain' etc."). All of that was
