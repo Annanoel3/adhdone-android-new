@@ -296,7 +296,14 @@ async function recordCompletionHabit(base44: any, task: any) {
 // and a Yes adds a daily to-do through captureText. Nothing changes on its own.
 // The model judges each kind of task (task_family) once, kept in task_habits.
 // Never offered while that kind of task already repeats, while an offer is
-// waiting, or ever again after a No or a close.
+// waiting, or ever again once they've been asked about that kind of task,
+// however it's worded (Anna, Nov 9 2026: "make sure it doesnt ask this for
+// the same task over and over. Only once. And account for different
+// wording. Like do dishes vs dishes need to be done"). Asked = answered, or
+// it was on their screen (the app stamps repeat_offer.shown_at), or it's
+// still waiting to be seen. One that ran out without ever being on screen
+// was never asked. Every offer they've ever had counts, not just recent
+// tasks.
 const REPEAT_OFFER_DAYS = 3;
 async function offerRepeat(base44: any, taskId: string) {
   const svc = base44.asServiceRole.entities;
@@ -316,19 +323,28 @@ async function offerRepeat(base44: any, taskId: string) {
   const recent: any[] = (await svc.Task.filter({ created_by: email }, '-updated_date', 300)) || [];
   const kin = recent.filter((t: any) => t.id !== task.id && !t.parent_task_id
     && (family ? lc(t.task_family) === family : lc(t.title) === lc(title)));
-  // Already repeating, already said yes, an offer still waiting, or a No / close.
+  // Already repeating.
   if (kin.some((t: any) => t.status === 'active' && t.recurrence_pattern && t.recurrence_pattern !== 'none')) return;
-  if (kin.some((t: any) => {
+  // Already asked about this kind of task: same family, same name, or the
+  // same words typed.
+  const offered: any[] = ((await svc.Task.filter({ created_by: email, repeat_offer: { $ne: null } }, '-updated_date', 500)) || [])
+    .filter((t: any) => t.id !== task.id && t.repeat_offer && typeof t.repeat_offer === 'object');
+  const asked = offered.filter((t: any) => {
     const o = t.repeat_offer;
-    if (!o) return false;
-    if (o.answer) return true;
-    return nowMs - serverMs(o.made_at) < REPEAT_OFFER_DAYS * HABIT_DAY_MS;
-  })) return;
+    return !!o.answer || !!o.shown_at || nowMs - serverMs(o.made_at) < REPEAT_OFFER_DAYS * HABIT_DAY_MS;
+  });
+  const said = lc(task.original_input);
+  if (asked.some((t: any) => (family && lc(t.task_family) === family)
+    || lc(t.title) === lc(title)
+    || (said && lc(t.original_input) === said))) return;
 
   const owner = (await svc.User.filter({ email }, '-created_date', 1))?.[0];
   if (!owner) return;
   const habits: Record<string, any> = { ...(owner.task_habits || {}) };
   const h: any = family ? { ...(habits[family] || {}) } : {};
+  // Already found (below) to be something they were asked about under
+  // another name.
+  if (h.repeat_asked_as) return;
   let daily: boolean;
   if (family && typeof h.daily === 'boolean') {
     daily = h.daily;
@@ -341,6 +357,28 @@ async function offerRepeat(base44: any, taskId: string) {
     }
   }
   if (!daily) return;
+
+  // Worded differently from something they were already asked about and
+  // filed under another family ("do dishes" / "dishes need to be done"): the
+  // model checks it against the kinds of task already asked about, and a
+  // match means no offer. Kept on the family (repeat_asked_as) so it's
+  // checked once.
+  const askedKinds = [...new Set(asked
+    .map((t: any) => lc(t.task_family) || lc(t.title).slice(0, 40))
+    .filter((k: string) => k && k !== family && !k.startsWith('_')))].slice(0, 80) as string[];
+  if (askedKinds.length) {
+    const got = await assignTaskFamilies([{ id: task.id, title, said: task.original_input }], askedKinds);
+    const same = lc(got[task.id]);
+    if (same && askedKinds.includes(same)) {
+      console.log(`[logTaskCompletion] no repeat offer on task ${taskId}: already asked about "${same}"`);
+      if (family) {
+        h.repeat_asked_as = same;
+        habits[family] = h;
+        await svc.User.update(owner.id, { task_habits: habits });
+      }
+      return;
+    }
+  }
 
   // When they finished it, on their own clock, to the nearest 5 minutes.
   const parts = new Intl.DateTimeFormat('en-GB', {
