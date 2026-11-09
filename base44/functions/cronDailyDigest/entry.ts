@@ -213,13 +213,17 @@ function pausedForAway(user: any): boolean {
 // The evening push changes every night (Anna, Nov 6 2026: "the wording for
 // 'what's one win today' should definitely differ day by day. 3 days in a row
 // of that is annoying. Maybe alternate between the come back push like
-// 'what's something you could get off your brain' etc."). Nights alternate
-// between a check-in (opens the mood faces + win box, data.type 'win_ask')
-// and a brain dump (opens Add Task, data.type 'evening_dump'), and each kind
-// walks through its own lines, so no line comes back for a while. Picked by
-// their calendar day, so a second run in the hour can't pick a different one.
-// The come-back pushes (cronBackBurnerCheckIn) have their own lines; these
-// don't repeat them.
+// 'what's something you could get off your brain' etc."). Every night is the
+// check-in (opens the mood faces + win box, data.type 'win_ask') in a
+// different line, walking through them so no line comes back for a while.
+// From Nov 6 to Nov 9 2026 every other night was a brain dump instead
+// ("Anything you don't want to forget?"), a reading of "alternate between the
+// come back push" that Anna says was a misunderstanding (Nov 9 2026, after
+// getting it while active every day: "Theres been a misunderstanding").
+// Come-back lines are for people who've been away (cronBackBurnerCheckIn);
+// this goes to people active in the past week, so it never borrows them.
+// Picked by their calendar day, so a second run in the hour can't pick a
+// different one.
 const EVENING_CHECKINS = [
   { title: 'How did today go?', body: 'Tap to check in and save one win, big or small.' },
   { title: 'Anything go right today?', body: 'Even tiny counts. Save it before it slips away.' },
@@ -227,20 +231,12 @@ const EVENING_CHECKINS = [
   { title: 'One win from today?', body: 'Made the bed, answered a text, got through it. It all counts.' },
   { title: 'How was your day, really?', body: 'Pick a face and jot down one thing that went okay.' },
 ];
-const EVENING_DUMPS = [
-  { title: "What's on your mind for tomorrow?", body: 'Get it out of your head and into ADHDone before bed.' },
-  { title: 'Brain still running?', body: 'Drop one thing here and let ADHDone hold onto it overnight.' },
-  { title: "Anything you don't want to forget?", body: "Say it or type it. We'll handle the reminding." },
-  { title: 'Off your brain, onto the list', body: "One thing you'd rather not carry into tomorrow?" },
-];
-function eveningLine(dayKey: string): { title: string; body: string; dump: boolean } {
+function eveningLine(dayKey: string): { title: string; body: string } {
   const [y, mo, d] = String(dayKey).split('-').map(Number);
   const n = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)
     ? Math.floor(Date.UTC(y, mo - 1, d) / (24 * 60 * 60 * 1000))
     : 0;
-  const dump = n % 2 === 1;
-  const list = dump ? EVENING_DUMPS : EVENING_CHECKINS;
-  return { ...list[Math.floor(n / 2) % list.length], dump };
+  return EVENING_CHECKINS[n % EVENING_CHECKINS.length];
 }
 
 // The day the evening card and the box stamp a win or a mood with
@@ -355,7 +351,7 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
   return sent;
 }
 
-async function sendWinAsk(email: string, line: { title: string; body: string; dump: boolean }): Promise<string | false> {
+async function sendWinAsk(email: string, line: { title: string; body: string }): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -369,7 +365,7 @@ async function sendWinAsk(email: string, line: { title: string; body: string; du
         channel_for_external_user_ids: 'push',
         headings: { en: line.title },
         contents: { en: line.body },
-        data: line.dump ? { type: 'evening_dump', screen: '/AddTask' } : { type: 'win_ask', screen: '/Home?win=1' },
+        data: { type: 'win_ask', screen: '/Home?win=1' },
         // An evening question: gone by the time it would be stale.
         ttl: 2 * 60 * 60,
       }),
