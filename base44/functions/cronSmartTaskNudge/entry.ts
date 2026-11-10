@@ -2980,11 +2980,19 @@ function plainSends(schedule: any[], sentLog: any[]): { at: number; taskId: stri
 // For each open task: the days (theirs, already over) a plain Smart Reminder
 // about it went out that aren't on its put_off_days yet. It's still open, so
 // it wasn't done that day. Birthdays and events have their own reminders.
+// Not a repeating task (Anna, Nov 9 2026, yes to: a reminder that just went
+// unanswered stops counting as a put-off on repeating tasks; Later, a swipe
+// or an alarm ringing out still do, from cancelTaskNotifications). One
+// reminder a day is what a daily item IS, and not checking it off in ADHDone
+// isn't pushing it away: asileamsilie's "Practice on Codecademy", a daily
+// reminder from her own calendar, got one nudge on Nov 3, 4 and 5, was
+// counted as put off three times, and went to the morning summary only.
 function silentPutOffDays(pool: any[], sends: { at: number; taskId: string }[], dayOf: (ms: number) => string, todayStr: string) {
   const out: { task: any; had: string[]; adds: string[]; days: string[] }[] = [];
   for (const t of pool || []) {
     if (!t || t.status !== 'active') continue;
     if (t.classification === 'event' || t.classification === 'birthday' || t.birthday_person) continue;
+    if (t.recurrence_pattern && t.recurrence_pattern !== 'none') continue;
     const had: string[] = Array.isArray(t.put_off_days) ? t.put_off_days.filter((d: any) => typeof d === 'string') : [];
     const adds = new Set<string>();
     for (const s of sends) {
