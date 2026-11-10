@@ -1,3 +1,4 @@
+// Nov 10 2026: says what they'll actually do (a lab order is a lab visit), what to bring, and leaves out order numbers, order dates, opening hours and fine print. Anna, on a shared lab-order screenshot whose task title carried all of it: "I wish it would have gotten rid of the extra crap in the title. Its a blood drawing."
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import OpenAI from 'npm:openai';
@@ -15,13 +16,15 @@ import { lean } from '../../shared/aiCost.ts';
 const READ_PROMPT = `Read this image and write out, in one or two plain sentences, what someone would need to remember from it.
 
 Include EXACTLY what the image says, using its own wording where possible:
-- what the thing is (the event/appointment/title)
+- what the thing is (the event/appointment/title), in plain words: what they will actually do (an order confirmation that sends them to a lab is a lab visit there; say so)
+- anything it says to bring or do beforehand
 - the date, written as it appears
 - the time or time range
 - the place — full street address if one is shown
 
 Rules:
 - Only report what is actually visible. Never invent, complete, or guess a date, time, address, or name.
+- Leave out what they won't need: order or account numbers, the date the document was sent or ordered, opening hours, and fine print, unless it's a code they'll have to show or say to get it done.
 - Do not add commentary, advice, or formatting. No bullet points, no labels, no markdown.
 - If the image shows nothing worth remembering (a selfie, a meme, a random photo), reply with exactly: NOTHING
 

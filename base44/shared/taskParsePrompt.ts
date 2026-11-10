@@ -213,7 +213,14 @@ title — the short action or plan, capitalized. Keep every person, business,
   confirmation number they typed is kept too, exactly as typed, in parentheses
   after the action ("Call propane (530-477-7854)", "Pay the water bill
   ($84.20)"): it is the thing they will need in hand when the reminder comes,
-  and dropping it loses what they wrote down. A web link is never in the
+  and dropping it loses what they wrote down. That is for a note they wrote
+  themselves. A pasted or shared email, confirmation or screenshot reading is
+  different: the title names what they will actually be doing, in a few words,
+  the way they'd write it on their own calendar ("Dental cleaning at Bright
+  Smiles", not the confirmation it came in). Its address goes in location, and
+  order or account numbers, the date it was ordered or sent, opening hours and
+  fine print stay out of the title, unless it's a code they'll have to show or
+  say to get it done. A web link is never in the
   title: it goes in notes. Neither is the time zone written with a time
   ("11:00am CDT"): that is part of the time, not the title. Never a single
   word ("Go"), never a placeholder, never a whole pasted message.
@@ -244,6 +251,10 @@ classification — what KIND of thing this is:
   "event"   something that happens at a set time whether or not the user shows
             up, and that they attend — a festival, concert, wedding, party,
             appointment, meeting, class, flight, meeting up with someone.
+            A visit for their own care or tests (a lab draw, a checkup, a
+            shot) is an appointment, even where walk-ins are taken, once it
+            has a day. With no day yet it is a task, so it keeps getting
+            reminded until it has one (an event with no day gets none).
   "task"    something the user DOES and finishes, on their own schedule —
             chores, errands, calls, paperwork, selling, fixing, buying. Going
             somewhere to get something done is an errand, i.e. a task.
