@@ -29,7 +29,7 @@
     },
     "business_hours": {
       "type": "object",
-      "description": "Opening hours of business_name, looked up once through Google Places near the user's home (name, address, place_id, periods, weekday_text, utc_offset, checked_at; not_found when Places had nothing). The Smart Reminders planner reads it so it never nudges a call to a closed office. Looked up again after 30 days."
+      "description": "Opening hours of business_name, looked up once through Google Places near the user's home, together with the task's location when that is an address they gave (shared/mapsDistance.ts businessQuery; Nov 10 2026: the name alone found the nearest branch, not theirs) (name, address, place_id, periods, weekday_text, utc_offset, query = what was searched, checked_at; not_found when Places had nothing). Looked up again when the search would differ. The Smart Reminders planner reads it so it never nudges a call to a closed office. Looked up again after 30 days."
     },
     "task_family": {
       "type": "string",
