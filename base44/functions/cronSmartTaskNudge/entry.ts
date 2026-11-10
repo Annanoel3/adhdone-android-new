@@ -47,7 +47,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeStartMs, wakeWaitMinutes } from '../../shared/quietHours.ts';
-import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
+import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, businessQuery, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -946,10 +946,14 @@ Deno.serve(async (req) => {
           for (const t of [...pool, ...(fixedByUser[email] || [])]) {
             if (looked >= 3) break;
             if (!t.business_name) continue;
+            // With the address they gave, when there is one (businessQuery);
+            // hours found with a different search are looked up again.
+            const wanted = businessQuery(t.business_name, t.location);
             const age = nowMs - (utcMs(t.business_hours?.checked_at) || 0);
-            if (t.business_hours && age < BUSINESS_HOURS_MAX_AGE_MS) continue;
+            const lookedWith = t.business_hours?.query || t.business_name;
+            if (t.business_hours && age < BUSINESS_HOURS_MAX_AGE_MS && lookedWith === wanted) continue;
             looked++;
-            const hours = await lookupBusinessHours(t.business_name, getHomeOrigin(user));
+            const hours = await lookupBusinessHours(wanted, getHomeOrigin(user));
             if (!hours) continue;
             t.business_hours = hours;
             try { await base44.asServiceRole.entities.Task.update(t.id, { business_hours: hours }); }
