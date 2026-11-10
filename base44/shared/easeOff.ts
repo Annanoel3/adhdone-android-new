@@ -19,7 +19,12 @@
 //      'alarm_then_notice' an ordinary task ("go to grocery store"): the same,
 //                          until that one alarm is put off on 2 more days, then
 //                          one regular notification a day (level 2).
-//      'digest'            low stakes: only the morning summary.
+//      'digest'            low stakes: only the morning summary. Repeating
+//                          tasks only: a one-time task never goes all the
+//                          way down to no notifications (Anna, Nov 9 2026:
+//                          "one time tasks should maybe never go all the way
+//                          down to 0 notifications unless on the back
+//                          burner"); the Back Burner is where those go.
 //  - Editing the task (its wording, priority or date) puts it back on normal
 //    reminders: that's new information (onTaskUpdate clears both fields).
 // Normal alarms keep every button; only the eased alarm is Done + Later.
@@ -89,7 +94,24 @@ export async function easeStep(task: any, owner: any, nowMs: number): Promise<an
   return {};
 }
 
-export function easePrompt(): string {
+// A task that repeats (daily, weekly...). Only these may go to 'digest'.
+export function isRepeatingTask(task: any): boolean {
+  return !!task?.recurrence_pattern && task.recurrence_pattern !== 'none';
+}
+
+export function easePrompt(allowDigest = true): string {
+  if (!allowDigest) {
+    return `You help ADHDone, a to-do app for people with ADHD, decide how to keep reminding someone about a task they keep putting off.
+
+This task's reminders were put off on several different days (they tapped Later, snoozed it, swiped it away, let the alarm ring out, or a reminder went by with nothing done) and it still isn't done. Ringing it the same way every day isn't working, and it drives people away from the app, so it moves to a lighter plan. It's a one-time task, so it always keeps at least one reminder a day. Choose the plan the way a good personal assistant would: from what they actually typed, what the task is, its priority, its date, and who else it affects. Use judgment, not keywords.
+
+- "daily_alarm": it really matters. It's high priority, it sounds like it has to be done today or very soon, or someone else is counting on them (a kid to pick up, a bill or payment, a call or message someone is waiting on, a client, a pet or person who needs care, medication). It stays in their morning summary and still gets one alarm a day.
+- "alarm_then_notice": everything else that still needs doing at some point, from going to the grocery store to a nice-to-have. It stays in their morning summary and gets one alarm later in the day; if they keep putting that off too, it becomes one regular notification a day.
+
+Priority the app assigned can be wrong; weigh what they typed over it. When it's truly unclear between the two plans, pick the one that keeps them more informed.
+
+Answer with JSON only: {"plan": "daily_alarm" | "alarm_then_notice", "why": "one short plain sentence"}`;
+  }
   return `You help ADHDone, a to-do app for people with ADHD, decide how to keep reminding someone about a task they keep putting off.
 
 This task's reminders were put off on several different days (they tapped Later, snoozed it, swiped it away, or let the alarm ring out) and it still isn't done. Ringing it the same way every day isn't working, and it drives people away from the app, so it moves to a lighter plan. Choose the plan the way a good personal assistant would: from what they actually typed, what the task is, its priority, its date, and who else it affects. Use judgment, not keywords.
@@ -124,10 +146,12 @@ export function easeFacts(task: any, owner: any, dayCount: number): string {
 export async function judgeEasePlan(task: any, owner: any, dayCount: number, timeoutMs = 25000): Promise<{ plan: EasePlanName; why: string } | null> {
   try {
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'easeOff' });
+    // One-time tasks never go to 'digest' (see the top of this file).
+    const allowDigest = isRepeatingTask(task);
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [
-        { role: 'system', content: easePrompt() },
+        { role: 'system', content: easePrompt(allowDigest) },
         { role: 'user', content: easeFacts(task, owner, dayCount) },
       ],
       response_format: { type: 'json_object' },
@@ -137,8 +161,11 @@ export async function judgeEasePlan(task: any, owner: any, dayCount: number, tim
     const res: any = await Promise.race([ask, late]);
     if (!res) return null;
     const parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}');
-    const plan = String(parsed?.plan || '') as EasePlanName;
+    let plan = String(parsed?.plan || '') as EasePlanName;
     if (!PLANS.includes(plan)) return null;
+    // Answered 'digest' for a one-time task anyway: the lighter of the two
+    // plans it may have, which still keeps one reminder a day.
+    if (plan === 'digest' && !allowDigest) plan = 'alarm_then_notice';
     return { plan, why: String(parsed?.why || '').slice(0, 300) };
   } catch (e) {
     console.error('[easeOff] plan judgment failed:', (e as any)?.message || e);
