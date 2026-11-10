@@ -1,4 +1,4 @@
-// Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set.
+// Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set. The far-out pass's plan building moved into buildPlanFor (unchanged), shared with the owner-only { planEvent } repair.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     // The two looks below show people's tasks and emails: the owner's
     // account only (Test Function in the editor).
-    if (body?.previewRepeats === true || body?.previewHealth === true || Array.isArray(body?.markTold) || Array.isArray(body?.checkPhones)) {
+    if (body?.previewRepeats === true || body?.previewHealth === true || Array.isArray(body?.markTold) || Array.isArray(body?.checkPhones) || body?.planEvent) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
     }
@@ -161,6 +161,36 @@ Deno.serve(async (req) => {
       for (const m of body.markTold) if (m?.key && m?.value) marks[String(m.key)] = String(m.value);
       await base44.asServiceRole.entities.User.update(owner.id, { owner_alert_marks: marks });
       return Response.json({ success: true, owner_alert_marks: marks });
+    }
+
+    // Owner-only repair (Test Function): { planEvent: { id, fields } } makes
+    // one task a timed event the way the app's "Event" choice does: writes the
+    // given fields, takes back what was booked for it, and builds its reminder
+    // plan exactly as the far-out pass below does (buildPlanFor). The entries
+    // are PLANNED; the next hourly run books them. Nov 10 2026: a screenshot
+    // capture of a lab visit came out as a task, and Anna, once it had her
+    // 8:30 AM time: "This should have been an event".
+    if (body?.planEvent && typeof body.planEvent === 'object') {
+      const id = String(body.planEvent.id || '');
+      const fields = body.planEvent.fields && typeof body.planEvent.fields === 'object' ? body.planEvent.fields : {};
+      const before = id ? await base44.asServiceRole.entities.Task.get(id).catch(() => null) : null;
+      if (!before || before.status !== 'active') return Response.json({ error: 'no active task with that id' }, { status: 404 });
+      const task = { ...before, ...fields };
+      if (task.classification !== 'event' || !task.event_time || task.day_only_task || !task.next_reminder) {
+        return Response.json({ error: 'planEvent is for a timed event (classification event, event_time and next_reminder set, not all-day)' }, { status: 400 });
+      }
+      const owner = allUsers.find((u: any) => u?.email === task.notification_recipient_email);
+      // Built first: if it fails, nothing has been changed.
+      const plan = await buildPlanFor(base44, task, owner);
+      const oldIds = [...new Set([
+        ...(Array.isArray(before.onesignal_notification_ids) ? before.onesignal_notification_ids : []),
+        ...(Array.isArray(before.reminder_schedule) ? before.reminder_schedule.map((r: any) => r?.notification_id) : []),
+      ].filter((x: any) => x && !String(x).startsWith('planned_')))] as string[];
+      await cancelJustBooked(base44, oldIds);
+      const patch = { ...fields, onesignal_notification_ids: [], reminder_schedule: plan, reminder_plan_built_at: new Date().toISOString(), reminder_scheduling_since: null };
+      await base44.asServiceRole.entities.Task.update(id, patch);
+      await pushPhoneAlarms({ ...task, ...patch }, owner, { before, changedAt: Date.now(), source: 'cronRefillReminders' });
+      return Response.json({ success: true, cancelled: oldIds, plan: plan.map((e: any) => ({ send_at: e.send_at, label: e.label, title: e.notification_title, body: e.notification_body })) });
     }
 
     // What the owner health check would tell Anna right now, sending nothing
@@ -1768,9 +1798,6 @@ function localHourIn(tz: string, d: Date): number {
   }
 }
 
-// Captures that were typed but never became a task: a 'captureClaimed' whose
-// last part was never made (see below) within 15 minutes, and not claimed
-// again since (a resume shows up as a later claim of the same text).
 // The reminder plan for one dated event, built the way the far-out pass builds
 // it: generateReminderSchedule's reminders (drive-time "leave now", prep note,
 // what they asked for), placed by buildEventReminderPlan around quiet hours.
@@ -1821,6 +1848,9 @@ async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> 
   return plan;
 }
 
+// Captures that were typed but never became a task: a 'captureClaimed' whose
+// last part was never made (see below) within 15 minutes, and not claimed
+// again since (a resume shows up as a later claim of the same text).
 async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Promise<{ email: string; text: string; atMs: number }[]> {
   const rows = await filterAll(base44.asServiceRole.entities.CaptureTrace, { created_date: { $gte: new Date(sinceMs).toISOString() } });
   const sorted = rows.slice().sort((a: any, b: any) => String(a.created_date).localeCompare(String(b.created_date)));
