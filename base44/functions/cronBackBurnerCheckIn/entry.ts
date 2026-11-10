@@ -70,6 +70,27 @@ const COMEBACK_STEPS = [
   { day: 14, lines: [{ title: 'Last one from us, promise', body: "Whenever something pops into your head, ADHDone's ready to hold onto it." }] },
 ];
 
+// COME BACK WITH THINGS ON THE LIST (Anna, Nov 9 2026: "sounds goood" to:
+// once Smart Reminders pauses someone after a week away, start the come-back
+// pushes for them too, 3, 7 and 14 days after the pause, with lines written
+// for someone who still has things on their list). Until then anyone with an
+// open task got none of the come-backs above, so after the day-7 pause
+// (cronSmartTaskNudge: smart_nudge_paused_reason 'away') they heard nothing
+// at all: Caterina, Julianna and Macharelo, phones still installed. Same
+// steps and spacing as COMEBACK_STEPS, counted from the pause; one line per
+// step; a tap opens their list. Never on a day their Back Burner check-in
+// went out. Her own accounts and family are left out.
+const LIST_COMEBACK_LINES = [
+  { title: 'Your list is still here', body: "Open ADHDone whenever you're ready and your reminders pick right back up." },
+  { title: 'No pressure, just a door left open', body: "Everything you saved is still on your list. Open ADHDone and we'll take it from there." },
+  { title: 'Last one from us, promise', body: 'Your list will be here if you ever want it. Open ADHDone and your reminders start again.' },
+];
+const NOT_REAL = new Set([
+  'annanoelwenballew@gmail.com', 'annanoelbusinessemail@gmail.com', 's2kap2chick@gmail.com',
+  'mediocreatbestdev@outlook.com', 'annanoelwenballew@outlook.com',
+  'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com',
+]);
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== 'POST') {
@@ -187,13 +208,25 @@ Deno.serve(async (req) => {
         for (const w of who) openFor.add(w);
       }
       const ms = (v: any) => { const n = Date.parse(String(v || '')); return Number.isFinite(n) ? n : NaN; };
+      // Back Burner check-ins sent in this run (above): never a come-back the same day.
+      const checkedInNow = new Set(results.map((r: any) => String(r.email || '').toLowerCase()));
       for (const user of allUsers) {
         const email = user?.email;
-        if (!email || openFor.has(String(email).toLowerCase())) continue;
+        if (!email) continue;
+        const lc = String(email).toLowerCase();
+        // Something still open: only once Smart Reminders has paused them for
+        // being away (LIST_COMEBACK_LINES).
+        const pausedMs = ms(user.smart_nudge_paused_at);
+        const listOpen = openFor.has(lc);
+        const pausedAway = listOpen && user.smart_nudge_paused_reason === 'away' && Number.isFinite(pausedMs);
+        if (listOpen && !pausedAway) continue;
+        if (pausedAway && NOT_REAL.has(lc)) continue;
         if (user.alarm_permissions?.notifications === false) continue;
         const seenIso = user.last_active_at || user.signed_up_at || user.created_date;
         const seen = ms(seenIso);
         if (!Number.isFinite(seen)) continue;
+        // Back since the pause (Smart Reminders clears it on its next run).
+        if (pausedAway && !(pausedMs > seen)) continue;
         // OneSignal said nothing reaches this phone (cronSmartTaskNudge), and
         // they haven't been back since.
         const unreachable = ms(user.push_unreachable_at);
@@ -208,17 +241,20 @@ Deno.serve(async (req) => {
         // Only an account's very first come-back comes early (comeback_round
         // counts absences that got one), so someone new who opens the app
         // most days without adding anything isn't pinged every next afternoon.
-        const isNew = Number.isFinite(created) && now.getTime() - created < NEW_ACCOUNT_MS
+        const isNew = !pausedAway && Number.isFinite(created) && now.getTime() - created < NEW_ACCOUNT_MS
           && !(Number(user.comeback_round) > 0);
         // New account, first push of this absence: the next day of theirs.
-        const due = step === 0 && isNew
-          ? away >= NEW_FIRST_AWAY_MS && localDayKey(now, timeZone) > localDayKey(new Date(seen), timeZone)
-          : away >= next.day * DAY_MS;
+        // Paused with things on the list: days counted from the pause.
+        const due = pausedAway
+          ? now.getTime() - pausedMs >= next.day * DAY_MS
+          : step === 0 && isNew
+            ? away >= NEW_FIRST_AWAY_MS && localDayKey(now, timeZone) > localDayKey(new Date(seen), timeZone)
+            : away >= next.day * DAY_MS;
         if (previewComeback && (due || isNew)) {
           const q = resolveQuietHours(user);
           const sw = (localMinutesOfDay(now, timeZone) - q.endMin + 24 * 60) % (24 * 60);
           preview.push({
-            email, step, newAccount: isNew, due,
+            email, step, newAccount: isNew, due, listOpen: pausedAway,
             hoursAway: Math.round(away / 3600000),
             inWindowNow: sw >= SEND_FROM_MIN_AFTER_WAKE && sw < SEND_TO_MIN_AFTER_WAKE && !(q.enabled && isInQuietHours(now, q.startMin, q.endMin, timeZone)),
             timeZone,
@@ -237,14 +273,19 @@ Deno.serve(async (req) => {
         const sinceWake = (localMinutesOfDay(now, timeZone) - quiet.endMin + 24 * 60) % (24 * 60);
         if (sinceWake < SEND_FROM_MIN_AFTER_WAKE || sinceWake >= SEND_TO_MIN_AFTER_WAKE) continue;
         if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) continue;
+        // Not on a day their Back Burner check-in went out.
+        if (pausedAway) {
+          const bb = ms(user.last_backburner_checkin_at);
+          if (checkedInNow.has(lc) || (Number.isFinite(bb) && localDayKey(new Date(bb), timeZone) === localDayKey(now, timeZone))) continue;
+        }
         const gate = await ledgerCheck(base44, { email, kind: 'general' });
         if (!gate.allowed) continue;
 
         const round = Math.max(0, Number(user.comeback_round) || 0) + (step === 0 ? 1 : 0);
         const hasBirthdays = birthdaysOnly.has(String(email).toLowerCase());
         const usable = next.lines.filter((l: any) => !(hasBirthdays && l.emptyOnly));
-        const line = usable[(round - 1 + usable.length) % usable.length];
-        const outcome = await sendComeback(email, line.title, line.body);
+        const line = pausedAway ? LIST_COMEBACK_LINES[step] : usable[(round - 1 + usable.length) % usable.length];
+        const outcome = await sendComeback(email, line.title, line.body, pausedAway ? '/Tasks' : '/AddTask');
         const fields: Record<string, any> = { comeback_from: seenIso, comeback_round: round, comeback_last_at: now.toISOString() };
         if (outcome === 'unsubscribed') {
           // Nothing reaches this phone: no more this time away.
@@ -353,7 +394,9 @@ If nothing back there is genuinely worth raising this week, return {"task_index"
 // A come-back push (see COMEBACK_STEPS): opens Add Task when tapped. Normal
 // priority, a 2-hour lifetime: nothing here is tied to a minute, and a short
 // life keeps OneSignal from putting it back on the screen later.
-async function sendComeback(email: string, title: string, body: string): Promise<string | false | 'unsubscribed'> {
+// screen: what a tap opens (OneSignalInit reads it for type 'comeback'): Add
+// Task for an empty list, their list (Tasks) for someone with things on it.
+async function sendComeback(email: string, title: string, body: string, screen = '/AddTask'): Promise<string | false | 'unsubscribed'> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -365,7 +408,7 @@ async function sendComeback(email: string, title: string, body: string): Promise
         app_id: appId,
         headings: { en: title },
         contents: { en: body },
-        data: { type: 'comeback', screen: '/AddTask' },
+        data: { type: 'comeback', screen },
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
         ttl: 2 * 60 * 60,
