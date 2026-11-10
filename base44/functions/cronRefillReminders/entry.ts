@@ -1,4 +1,4 @@
-// Re-saved Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set.
+// Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
