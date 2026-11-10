@@ -174,7 +174,21 @@ export interface BusinessHours {
   weekday_text?: string[] | null; // "Monday: 7:00 AM – 6:00 PM", Monday first
   utc_offset?: number | null;     // minutes from UTC at the business
   not_found?: boolean;
+  query?: string | null;          // what was searched (businessQuery)
   checked_at: string;
+}
+
+// What to search for. When the task's place is an address the person gave
+// (it has a street number or ZIP), that address says which branch: searching
+// the name alone near home picked the nearest one (Anna, Nov 10 2026: "Quest
+// Diagnostics" at 690 Old San Antonio Rd, Buda came back as the Quest on W
+// Ben White Blvd in Austin, and her reminder said they were open until 4:30
+// when the Buda one closes at 4).
+export function businessQuery(name: string, location?: string | null): string {
+  const n = String(name || '').trim();
+  const loc = String(location || '').trim();
+  if (!loc || !/\d/.test(loc)) return n;
+  return loc.toLowerCase().includes(n.toLowerCase()) ? loc : `${n}, ${loc}`;
 }
 
 // A match farther than this from home is not the person's business (Oct 30
@@ -203,11 +217,11 @@ export async function lookupBusinessHours(name: string, homeOrigin = ''): Promis
     const sr = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?${search.toString()}`);
     const sj: any = await sr.json().catch(() => ({}));
     const first = sj?.results?.[0];
-    if (!first?.place_id) return { name: query, not_found: true, checked_at };
+    if (!first?.place_id) return { name: query, not_found: true, query, checked_at };
     const [hLat, hLng] = homeOrigin.split(',').map(Number);
     const pLat = Number(first?.geometry?.location?.lat), pLng = Number(first?.geometry?.location?.lng);
     if ([hLat, hLng, pLat, pLng].every(Number.isFinite) && kmBetween(hLat, hLng, pLat, pLng) > BUSINESS_NEAR_HOME_KM) {
-      return { name: query, not_found: true, checked_at };
+      return { name: query, not_found: true, query, checked_at };
     }
     const details = new URLSearchParams({ place_id: first.place_id, fields: 'name,formatted_address,opening_hours,utc_offset', key: apiKey });
     const dr = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${details.toString()}`);
@@ -220,6 +234,7 @@ export async function lookupBusinessHours(name: string, homeOrigin = ''): Promis
       periods: Array.isArray(res.opening_hours?.periods) ? res.opening_hours.periods : null,
       weekday_text: Array.isArray(res.opening_hours?.weekday_text) ? res.opening_hours.weekday_text : null,
       utc_offset: Number.isFinite(res.utc_offset) ? res.utc_offset : null,
+      query,
       checked_at,
     };
   } catch (e) {
