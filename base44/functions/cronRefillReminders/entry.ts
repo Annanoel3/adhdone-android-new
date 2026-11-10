@@ -1,3 +1,4 @@
+// Re-saved Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
@@ -2212,8 +2213,30 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         if (/CLOSED right now/.test(line)) closedNudges.push(`${r.user_email}: "${String(r.title || '').slice(0, 30)}" — ${shortLine}`);
       }
     }
+    // Nov 10 2026: Jordan asked for "Shower and shave around 4 pm" and
+    // "Wash dishes every day at 4:00 PM", and both went out at 4:00 as asked.
+    // That's two times they set, not the server colliding with itself, so a
+    // minute where every push is a different task's time they set isn't
+    // counted (the same task twice in a minute still is).
+    const theirTimeRow = (r: any, ms: number) => {
+      const t = r.task_id ? taskById[r.task_id] : null;
+      if (!t) return false;
+      const tz = userTimeZone(userByEmail[r.user_email]);
+      return isTimeTheySet(t, ms, tz)
+        || (Array.isArray(t.reminder_schedule) && t.reminder_schedule.some((e: any) => e?.their_time === true
+          && (e.notification_id === r.notification_id || Math.abs(msOf(e.send_at) - ms) < 60 * 1000)));
+    };
+    const pairs = Object.values(byMinute).filter((list) => list.length >= 2);
+    const missingIds = [...new Set(pairs.flat().map((r: any) => r.task_id).filter((id: any) => id && !taskById[id]))] as string[];
+    for (let i = 0; i < missingIds.length; i += 50) {
+      const got = await base44.asServiceRole.entities.Task.filter({ id: { $in: missingIds.slice(i, i + 50) } }).catch(() => []);
+      for (const t of got || []) if (t?.id) taskById[t.id] = t;
+    }
     for (const [k, list] of Object.entries(byMinute)) {
       if (list.length < 2) continue;
+      const taskIds = list.map((r: any) => r.task_id);
+      const allDifferent = taskIds.every((id: any) => id) && new Set(taskIds).size === list.length;
+      if (allDifferent && list.every((r: any) => theirTimeRow(r, Date.parse(r.send_at || '')))) continue;
       sameMinute.push(`${k.split('|')[0]}: ${list.map((r: any) => String(r.title || r.kind).slice(0, 24)).join(' + ')}`);
     }
   } catch (e) {
