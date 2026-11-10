@@ -1200,47 +1200,7 @@ Deno.serve(async (req) => {
     plansBuilt++;
     try {
       const owner = userMap[task.notification_recipient_email];
-      const timeZone = owner && owner.timezone ? owner.timezone : null;
-      const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
-        title: task.title,
-        scheduledDateISO: task.next_reminder,
-        urgency: task.urgency,
-        dayOnly: !!task.day_only_task,
-        // No clock time: the day before and the morning of (Oct 12 2026).
-        noClockTime: !task.event_time,
-        classification: task.classification || 'event',
-        deadlineStyle: task.deadline_style,
-        timezone: timeZone || undefined,
-        // Same inputs the calendar import and quick capture pass, so a far-out
-        // task at a real place gets the same drive-time "leave now" reminder.
-        location: task.location || '',
-        homeOrigin: getHomeOrigin(owner),
-        // Measured from where they'll be (shared/leaveOrigin.ts, Nov 4 2026).
-        ownerEmail: task.notification_recipient_email,
-        taskId: task.id,
-        avoidTolls: owner?.commute_avoid_tolls === true,
-        reminderWish: task.reminder_wish || null,
-        canRecord: owner?.notes_can_record === true,
-        // An appointment with something to get ready first: the night before
-        // asks for a prep note, or every reminder carries it (shared/prepNote.ts).
-        prepWorthy: task.prep_worthy === true,
-        prepNote: task.prep_note || '',
-      });
-      const data = res?.data || res || {};
-      const plan = buildEventReminderPlan({
-        taskId: task.id,
-        rawReminders: data.reminders || [],
-        eventStartISO: task.next_reminder,
-        title: task.title,
-        // A calendar import with no event_time is an all-day item (9 AM anchor).
-        isAllDay: !!task.day_only_task || (!task.event_time && task.classification === 'event'),
-        isEvent: task.classification === 'event',
-        timeZone,
-        // Nothing the app picked lands in their quiet hours; the start itself,
-        // when it's a time they set, may (RULES.md §9 Q4).
-        quiet: task.quiet_hours_exempt === true ? undefined : resolveQuietHours(owner),
-        startIsTheirs: isTimeTheySet(task, new Date(task.next_reminder).getTime(), userTimeZone(owner)),
-      });
+      const plan = await buildPlanFor(base44, task, owner);
       if (plan.length > 0) {
         await base44.asServiceRole.entities.Task.update(task.id, {
           reminder_schedule: plan,
@@ -1811,6 +1771,56 @@ function localHourIn(tz: string, d: Date): number {
 // Captures that were typed but never became a task: a 'captureClaimed' whose
 // last part was never made (see below) within 15 minutes, and not claimed
 // again since (a resume shows up as a later claim of the same text).
+// The reminder plan for one dated event, built the way the far-out pass builds
+// it: generateReminderSchedule's reminders (drive-time "leave now", prep note,
+// what they asked for), placed by buildEventReminderPlan around quiet hours.
+// Entries come back PLANNED; the promotion loop books them. Throws on failure.
+// Shared by the far-out pass and the owner-only { planEvent } repair (Nov 10 2026).
+async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> {
+  const timeZone = owner && owner.timezone ? owner.timezone : null;
+  const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+    title: task.title,
+    scheduledDateISO: task.next_reminder,
+    urgency: task.urgency,
+    dayOnly: !!task.day_only_task,
+    // No clock time: the day before and the morning of (Oct 12 2026).
+    noClockTime: !task.event_time,
+    classification: task.classification || 'event',
+    deadlineStyle: task.deadline_style,
+    timezone: timeZone || undefined,
+    // Same inputs the calendar import and quick capture pass, so a far-out
+    // task at a real place gets the same drive-time "leave now" reminder.
+    location: task.location || '',
+    homeOrigin: getHomeOrigin(owner),
+    // Measured from where they'll be (shared/leaveOrigin.ts, Nov 4 2026).
+    ownerEmail: task.notification_recipient_email,
+    taskId: task.id,
+    avoidTolls: owner?.commute_avoid_tolls === true,
+    reminderWish: task.reminder_wish || null,
+    canRecord: owner?.notes_can_record === true,
+    // An appointment with something to get ready first: the night before
+    // asks for a prep note, or every reminder carries it (shared/prepNote.ts).
+    prepWorthy: task.prep_worthy === true,
+    prepNote: task.prep_note || '',
+  });
+  const data = res?.data || res || {};
+  const plan = buildEventReminderPlan({
+    taskId: task.id,
+    rawReminders: data.reminders || [],
+    eventStartISO: task.next_reminder,
+    title: task.title,
+    // A calendar import with no event_time is an all-day item (9 AM anchor).
+    isAllDay: !!task.day_only_task || (!task.event_time && task.classification === 'event'),
+    isEvent: task.classification === 'event',
+    timeZone,
+    // Nothing the app picked lands in their quiet hours; the start itself,
+    // when it's a time they set, may (RULES.md §9 Q4).
+    quiet: task.quiet_hours_exempt === true ? undefined : resolveQuietHours(owner),
+    startIsTheirs: isTimeTheySet(task, new Date(task.next_reminder).getTime(), userTimeZone(owner)),
+  });
+  return plan;
+}
+
 async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Promise<{ email: string; text: string; atMs: number }[]> {
   const rows = await filterAll(base44.asServiceRole.entities.CaptureTrace, { created_date: { $gte: new Date(sinceMs).toISOString() } });
   const sorted = rows.slice().sort((a: any, b: any) => String(a.created_date).localeCompare(String(b.created_date)));
