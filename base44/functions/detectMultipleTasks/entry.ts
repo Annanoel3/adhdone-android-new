@@ -1,3 +1,4 @@
+// Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 4 2026 (evening) so the bundled shared/captureToTasks.ts, shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: prep_worthy is parsed and saved; an appointment's reminders ask for and repeat its prep note (shared/prepNote.ts).
 // Re-saved Nov 4 2026 so the bundled shared/captureToTasks.ts is picked up: an event at a place has its "leave now" measured from where they'll be (shared/leaveOrigin.ts).
