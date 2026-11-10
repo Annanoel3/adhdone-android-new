@@ -2213,8 +2213,8 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         if (/CLOSED right now/.test(line)) closedNudges.push(`${r.user_email}: "${String(r.title || '').slice(0, 30)}" — ${shortLine}`);
       }
     }
-    // Nov 10 2026: Jordan asked for "Shower and shave around 4 pm" and
-    // "Wash dishes every day at 4:00 PM", and both went out at 4:00 as asked.
+    // Nov 10 2026: a user set two tasks for 4 PM, and both went out at 4:00
+    // as asked.
     // That's two times they set, not the server colliding with itself, so a
     // minute where every push is a different task's time they set isn't
     // counted (the same task twice in a minute still is).
