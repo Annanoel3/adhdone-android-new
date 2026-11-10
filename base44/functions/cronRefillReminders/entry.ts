@@ -20,6 +20,7 @@ import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
+import { easeNow } from '../../shared/easeOff.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -2253,7 +2254,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         const next = Date.parse(t.next_reminder || '');
         return Number.isFinite(next) && next > nowMs;
       };
-      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      // A task on the eased "morning summary only" plan (shared/easeOff.ts,
+      // Anna, Oct 22 2026: put off on 3 different days and low stakes) is
+      // named in the morning summary and nowhere else, by design, so that
+      // summary going out today covers it (Nov 9 2026: "Practice on
+      // Codecademy", on that plan since Nov 5, was reported at 7 PM though
+      // the 8:41 AM summary named it). No summary today (Focus Mode, a
+      // failed send): still a miss.
+      const summaryToday = rows.some((r: any) => r.kind === 'daily_digest');
+      const summaryOnly = (t: any) => easeNow(t)?.plan === 'digest';
+      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t) && !(summaryToday && summaryOnly(t))) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
     }
   } catch (e) {
     console.error('[HEALTH] due-today check failed:', e);
