@@ -539,13 +539,19 @@ How it works, and how it must keep working:
    Nov 1 2026, Anna: "how do we fix arcticwolf's experience and make sure other people
    aren't bombarded": arcticwolf444 got 8 on Fri Oct 30 and one callback was mentioned 7
    times Oct 26-30, none answered, and nothing could see it). Light mentions and roundups
-   don't count. The
+   don't count, and **neither do repeating tasks** (Nov 9 2026, Anna's yes: asileamsilie's
+   daily "Practice on Codecademy" from her own calendar got one nudge on Nov 3, 4 and 5, was
+   counted as put off three times and went to the morning summary only); on a repeating
+   task only Later, a swipe or a ring-out counts. The
    days are kept on the task (`put_off_days`). On the 3rd different day the AI judges the
    plan from what they typed, the priority and who relies on it (`shared/easeOff.ts`,
    `ease_plan`), never from keywords: `daily_alarm` (it matters: morning summary plus one
    alarm a day), `alarm_then_notice` (ordinary, like the grocery store: morning summary plus
    one alarm later in the day, and after 2 more put-off days one regular notification a
-   day), `digest` (low stakes: morning summary only). An eased alarm has only Done and
+   day), `digest` (low stakes: morning summary only; **repeating tasks only**: a one-time task is
+   never put on it, Anna, Nov 9 2026: "one time tasks should maybe never go all the way down
+   to 0 notifications unless on the back burner"; the model isn't offered it for a one-time
+   task, and an answer of `digest` anyway becomes `alarm_then_notice`). An eased alarm has only Done and
    Later (push `data.eased`, build 43+; normal alarms keep every button). Editing the task's
    wording, priority or date starts it over. The morning summary names every eased task.
    The phone's taps reach `cancelTaskNotifications` through the published app, which runs
