@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 /**
  * Cancels ALL OneSignal notifications (scheduled or sent) that reference a given
@@ -51,7 +52,11 @@ Deno.serve(async (req) => {
           `https://onesignal.com/api/v1/notifications/${n.id}?app_id=${appId}`,
           { method: 'DELETE', headers: { Authorization: `Basic ${restKey}` } }
         );
-        if (res.ok) cancelled++;
+        if (res.ok) {
+          cancelled++;
+          // Off the send ledger too, so it isn't later filed as a push that went out.
+          await ledgerCancel(base44, [n.id]);
+        }
       } catch (e) { /* ignore individual failures */ }
     }
 

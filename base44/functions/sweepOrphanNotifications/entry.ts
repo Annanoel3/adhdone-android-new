@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { filterAll } from '../../shared/listAll.ts';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 // Audits OneSignal's scheduled-notification list against what the app actually
 // tracks, and cancels anything live that no task references.
@@ -105,7 +106,8 @@ export default async function (req: Request): Promise<Response> {
           method: 'DELETE',
           headers: { Authorization: `Basic ${restKey}` },
         });
-        if (r.ok) cancelled++;
+        // Off the send ledger too, so it isn't later filed as a push that went out.
+        if (r.ok) { cancelled++; await ledgerCancel(base44, [o.id]); }
         else if (r.status === 429) { await sleep(4000); const retry = await fetch(`https://onesignal.com/api/v1/notifications/${o.id}?app_id=${appId}`, { method: 'DELETE', headers: { Authorization: `Basic ${restKey}` } }); if (retry.ok) cancelled++; else cancelErrors.push({ id: o.id, status: retry.status }); }
         else cancelErrors.push({ id: o.id, status: r.status });
         await sleep(150);
