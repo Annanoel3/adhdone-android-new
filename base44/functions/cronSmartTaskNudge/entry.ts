@@ -1,3 +1,4 @@
+// Nov 11 2026: the lowest eased plan (a low-stakes repeating task put off on 3 days) gets one regular notification every other day (Anna: "once every other day", "ok build it"). It was "morning summary only" until the summary went away.
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: with the morning summary gone, the eased plans are the one alarm or notice a day alone, and no task is put on the lowest plan until its new rhythm is decided.
 // Nov 11 2026: the morning summary is gone (Anna: "ok get rid of it"). Smart Reminders no longer wait for it in the hour after wake-up, and no longer tell the planner about it.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
@@ -60,7 +61,7 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 // mention, something that doesn't have to happen yet gets space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
-import { easeNow, easeStep } from '../../shared/easeOff.ts';
+import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { countUsage } from '../../shared/aiCost.ts';
 
 // countUsage only counts tokens per feature (shared/aiCost.ts, Nov 6 2026);
@@ -1394,17 +1395,21 @@ Deno.serve(async (req) => {
         // different days, its one mention a day rings as an alarm with only
         // Done and Later (for someone on alarms), or, once that's been put off
         // on 2 more days, comes as a regular notification. The lowest plan
-        // ('digest', once "morning summary only") gets no nudge here; no new
-        // task is put on it while its new rhythm is being decided (easeOff.ts).
+        // (a low-stakes repeating task) gets one regular notification every
+        // other day: nothing more while one went out today or yesterday
+        // (Anna, Nov 11 2026: "once every other day"; it was "morning summary
+        // only" until the summary went away that day).
         const easedNow = nudgedTask ? easeNow(nudgedTask) : null;
         if (easedNow && entry.type !== 'roundup') {
-          const sentToday = sentLog.some((l: any) => l?.task_id === entry.task_id && !l?.skip && dayOf(utcMs(l.at)) === todayStr);
-          if (easedNow.nudge === 'none' || sentToday) {
+          const mentionDays = [...sentLog, ...newLog]
+            .filter((l: any) => l?.task_id === entry.task_id && !l?.skip)
+            .map((l: any) => dayOf(utcMs(l.at)));
+          if (easeTooSoon(easedNow, mentionDays, todayStr)) {
             entry.sent = true;
             entry.sent_at = now.toISOString();
             entry.skipped_reason = 'eased';
             newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'eased' });
-            console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: on the eased plan (${easedNow.nudge === 'none' ? 'no nudges on its plan' : 'already mentioned today'})`);
+            console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: on the eased plan (${easedNow.gapDays > 1 ? 'mentioned today or yesterday, and its plan is every other day' : 'already mentioned today'})`);
             continue;
           }
           ringsOutLoud = easedNow.nudge === 'alarm' && alarmStyle;
@@ -2131,13 +2136,11 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const breakMs = utcMs(t.later_until);
     if (Number.isFinite(breakMs) && breakMs > nowMs && dayOf(breakMs) !== todayStr) return false;
     // Put off on 3 different days: the eased plan (shared/easeOff.ts, Anna,
-    // Oct 22 2026). One on the lowest plan ('digest') gets none; the
-    // others get ONE mention a day, so once it went out today, nothing more.
+    // Oct 22 2026). ONE mention a day, so once it went out today, nothing
+    // more; on the lowest plan, one every other day, so nothing while one
+    // went out today or yesterday (Anna, Nov 11 2026).
     const ease = easeNow(t);
-    if (ease) {
-      if (ease.nudge === 'none') return false;
-      if ((ctx.pastNudges?.get(t.id) || []).some((p) => dayOf(p.at) === todayStr)) return false;
-    }
+    if (ease && easeTooSoon(ease, (ctx.pastNudges?.get(t.id) || []).map((p) => dayOf(p.at)), todayStr)) return false;
     if (!t.due_date || !t.day_only_task) return true;
     if (t.deadline_style === 'by') return true; // deadlines get runway
     const days = daysTo(t.due_date);
@@ -2482,7 +2485,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const eased = easeNow(t);
       if (eased) {
         const days = Array.isArray(t.put_off_days) ? t.put_off_days.length : 0;
-        parts.push(`put off on ${days} different days, so it's on a lighter plan now: it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
+        parts.push(eased.gapDays > 1
+          ? `put off on ${days} different days and low stakes, so it's on the lightest plan now: at most ONE mention from you every other day, as a regular notification, never an alarm. Nothing went out about it today or yesterday, so today is its day. Pick the one moment it's most likely to get done; don't pile on`
+          : `put off on ${days} different days, so it's on a lighter plan now: it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
       }
       // Anna's rule (see pastNudgesFor): put off 3 or more times, it stops
       // getting the same notifications. A time they named themselves stays.
