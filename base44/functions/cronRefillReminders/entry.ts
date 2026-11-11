@@ -638,15 +638,19 @@ Deno.serve(async (req) => {
           });
           console.warn(`📵 [REFILL] Could not book "${task.title}" — will retry after ${new Date(now.getTime() + RETRY_AFTER_MS).toISOString()}`);
         } else {
-          // All notifications landed in the digest window — update last_scheduled_until
-          // to prevent infinite retry loops. The daily digest will cover these tasks.
+          // Every slot of this batch fell inside their quiet hours, so nothing
+          // was booked (a short rhythm's night pings are dropped). Move
+          // last_scheduled_until on anyway, to prevent infinite retry loops;
+          // the next batch picks the rhythm up after quiet hours. (This used
+          // to say the morning summary would cover them; it is gone since
+          // Nov 11 2026.)
           const batchEnd = new Date(batchStart.getTime() + interval * (BATCH_SIZE - 1));
           await base44.asServiceRole.entities.Task.update(task.id, {
             // The pushes already booked ahead stay live, so they stay tracked.
             onesignal_notification_ids: keptIds,
             last_scheduled_until: batchEnd.toISOString(),
           });
-          console.log(`📭 [REFILL] All notifications for "${task.title}" landed in digest window — digest will cover it`);
+          console.log(`📭 [REFILL] All notifications for "${task.title}" fell inside quiet hours — nothing booked for this batch`);
         }
       } catch (error) {
         console.error(`❌ [REFILL] Failed to refill task ${task.id}:`, error);
@@ -2802,8 +2806,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   if (!problems.length) console.log('[HEALTH] all clear');
 
   // The daily note: once a day, only when the last 24 hours had anything to
-  // say, after her first hour awake, which belongs to her morning summary
-  // (Anna, Oct 12 2026: in her 8 o'clock hour it held the summary back), and
+  // say, after her first hour awake (that hour belonged to her morning
+  // summary: Anna, Oct 12 2026, in her 8 o'clock hour it held the summary
+  // back; the summary is gone since Nov 11 2026, the timing stays), and
   // between 8 AM and 8 PM.
   const owner = userByEmail[OWNER_ALERT_EMAIL];
   const ownerTz = userTimeZone(owner) || OWNER_TZ;
