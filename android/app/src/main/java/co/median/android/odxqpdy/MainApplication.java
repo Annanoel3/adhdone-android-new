@@ -26,6 +26,10 @@ public class MainApplication extends Application {
         // The 12-hour push sign-up check (PushHealthWorker). KEEP: already set up = no-op.
         PushHealthWorker.schedulePeriodic(this);
 
+        // Every change to the push sign-up, reported the moment it happens (PushChangeWatch,
+        // build 49): a phone's pushes going dead had only been seen hours later.
+        PushChangeWatch.start(this);
+
         // NOTE: Do NOT call requestPermission() here — it causes a NullPointerException
         // due to missing coroutine context. Call it from the web app via
         // NotifyBridge.requestPermission() instead.
