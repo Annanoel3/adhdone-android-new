@@ -49,7 +49,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeStartMs, wakeWaitMinutes } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeWaitMinutes } from '../../shared/quietHours.ts';
 import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, businessQuery, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
