@@ -42,7 +42,7 @@
     "phone_seen_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the phone app last reported in from the background (phone_push_state). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
+      "description": "When the phone app last reported in from the background (phone_push_state, or a push sign-up change in phone_push_log from Android build 49 on). Proof the app is still installed even if OneSignal says no phone takes pushes: the hourly health check (cronRefillReminders) does not call an account a suspected uninstall while this is newer than push_unreachable_at, and says their pushes are broken instead."
     },
     "adhd_theme": {
       "type": "string",
