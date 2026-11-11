@@ -1,3 +1,4 @@
+// Re-saved Nov 11 2026 so the bundled shared/nextCopy.ts is picked up: a repeat whose next copy was never made is repaired up to 30 days later (was 3), and only where the repeat really stopped (no open or newer copy of it).
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Nov 11 2026: mode push_change (PushChangeWatch, Android build 49): every change to a phone's push sign-up, logged the moment it happens in User.phone_push_log.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
