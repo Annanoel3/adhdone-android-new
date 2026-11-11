@@ -370,7 +370,7 @@
     },
     "ease_plan": {
       "type": "object",
-      "description": "How Smart Reminders handles a task put off on 3 different days (shared/easeOff.ts, Anna, Oct 22 2026): { plan, level, why, since, at }. plan, judged by the model from what they typed, its priority and who relies on it: 'daily_alarm' (it matters: in the morning summary plus one alarm a day with only Done and Later), 'alarm_then_notice' (an ordinary task: the same, until that alarm is put off on 2 more days, then level 2 = one regular notification a day), 'digest' (low stakes: only the morning summary). since: the day it was eased. Cleared when they edit the task."
+      "description": "How Smart Reminders handles a task put off on 3 different days (shared/easeOff.ts, Anna, Oct 22 2026): { plan, level, why, since, at }. plan, judged by the model from what they typed, its priority and who relies on it: 'daily_alarm' (it matters: one alarm a day with only Done and Later), 'alarm_then_notice' (an ordinary task: the same, until that alarm is put off on 2 more days, then level 2 = one regular notification a day), 'digest' (low stakes, repeating tasks only: one regular notification every other day, never an alarm; Anna, Nov 11 2026. The name is from when it meant only the morning summary, which went away that day). since: the day it was eased. Cleared when they edit the task."
     },
     "notes_worthy": {
       "type": "boolean",

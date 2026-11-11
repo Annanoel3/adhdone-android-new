@@ -548,11 +548,15 @@ How it works, and how it must keep working:
    `ease_plan`), never from keywords: `daily_alarm` (it matters: one
    alarm a day), `alarm_then_notice` (ordinary, like the grocery store:
    one alarm later in the day, and after 2 more put-off days one regular notification a
-   day), `digest` (low stakes; was "morning summary only" until the summary went away on
-   Nov 11 2026. **Its new rhythm is undecided**: Anna, Nov 11 2026, "The lowest level of
-   put-off tasks should maybe be once every other day? Let me know what you think before
-   doing that." Until she decides, NO task is put on it (`OFFER_LOWEST = false` in
-   `shared/easeOff.ts`; none was on it that day), so nothing goes quiet. **Repeating tasks only**: a one-time task is
+   day), `digest` (low stakes: **one regular notification every other day, never an alarm**:
+   nothing goes out about it while a mention went out today or yesterday (`easeNow().gapDays`,
+   `easeTooSoon` in `shared/easeOff.ts`; checked when the day is planned and again right
+   before a send). Anna, Nov 11 2026: "The lowest level of put-off tasks should maybe be once
+   every other day?", then "ok build it". The name is from when it meant "morning summary
+   only"; the summary went away that day, which would have left it with no mention at all,
+   and every day would have been MORE than the old quiet mention in a list. Owner check 8
+   treats the day after a mention as its planned day off. None of the plans touch a reminder
+   at a time the person set themselves. **Repeating tasks only**: a one-time task is
    never put on it, Anna, Nov 9 2026: "one time tasks should maybe never go all the way down
    to 0 notifications unless on the back burner"; the model isn't offered it for a one-time
    task, and an answer of `digest` anyway becomes `alarm_then_notice`). An eased alarm has only Done and
