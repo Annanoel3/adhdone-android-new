@@ -1,3 +1,4 @@
+// Nov 11 2026: mode push_change (PushChangeWatch, Android build 49): every change to a phone's push sign-up, logged the moment it happens in User.phone_push_log.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
@@ -422,6 +423,59 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     return Response.json({ success: true });
   }
 
+  // Every change to the phone's push sign-up, the moment it happens
+  // (PushChangeWatch, Android build 49 on; Anna, Nov 10 2026: "yeah you can add
+  // that to v49"). OneSignal keeps no history of a subscription's tokens (their
+  // support, Nov 9 2026), and push_state above keeps only the latest 12-hour
+  // look, so a token vanishing while the app was installed was never seen when
+  // it happened. Appended to User.phone_push_log (newest last, 30 kept) with
+  // what OneSignal's server says right then. Also phone_seen_at: the app is
+  // installed. Nothing else is touched. Never the token itself.
+  if (body.mode === 'push_change') {
+    const b = (v: any) => v === true;
+    const changedMs = Number(body?.changed_at);
+    const entry: any = {
+      at: Number.isFinite(changedMs) && changedMs > 0 ? new Date(changedMs).toISOString() : nowIso,
+      got_at: nowIso,
+      had_token: b(body?.had_token),
+      was_opted_in: b(body?.was_opted_in),
+      id_before: String(body?.id_before || '').slice(0, 64),
+      has_token: b(body?.has_token),
+      opted_in: b(body?.opted_in),
+      subscription_id: String(body?.subscription_id || '').slice(0, 64),
+      allowed: b(body?.allowed),
+      on_screen: b(body?.on_screen),
+      importance: Number.isFinite(Number(body?.importance)) ? Number(body.importance) : null,
+      build: Number(body?.build) || null,
+      server_enabled: null as boolean | null,
+      server_code: null as number | null,
+    };
+    const subId = entry.subscription_id || entry.id_before;
+    try {
+      const appId = String(Deno.env.get('ONESIGNAL_APP_ID') || '').trim();
+      const restKey = String(Deno.env.get('ONESIGNAL_REST_API_KEY') || '').trim();
+      if (appId && restKey && subId) {
+        const res = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(String(me.email))}`, {
+          headers: { Authorization: `Basic ${restKey}` },
+        });
+        const os: any = res.ok ? await res.json().catch(() => null) : null;
+        const sub = (Array.isArray(os?.subscriptions) ? os.subscriptions : []).find((x: any) => x?.id === subId);
+        if (sub) {
+          entry.server_enabled = sub.enabled === true;
+          entry.server_code = Number.isFinite(Number(sub.notification_types)) ? Number(sub.notification_types) : null;
+        }
+      }
+    } catch (e) {
+      console.warn('[phoneReport] push_change OneSignal lookup failed:', (e as any)?.message || e);
+    }
+    if (owner?.id) {
+      const log = Array.isArray(owner.phone_push_log) ? owner.phone_push_log : [];
+      await svc.User.update(owner.id, { phone_push_log: [...log, entry].slice(-30), phone_seen_at: nowIso });
+    }
+    console.log(`[phoneReport] push_change ${email}: ${JSON.stringify(entry)}`);
+    return Response.json({ success: true });
+  }
+
   if (body.mode === 'woke') {
     const ms = Date.parse(String(body?.woke_at || ''));
     if (!Number.isFinite(ms) || ms > nowMs + 60 * 1000 || ms < nowMs - 24 * 60 * 60 * 1000) {
@@ -571,7 +625,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
 Deno.serve(async (req) => {
   try {
     const body = await req.json();
-    if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke' || body?.mode === 'push_state') {
+    if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke' || body?.mode === 'push_state' || body?.mode === 'push_change') {
       return await phoneReport(req, body);
     }
     const { taskId } = body || {};
