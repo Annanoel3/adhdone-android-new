@@ -35,8 +35,19 @@ import { needsPrepAskPush, sendPrepAsk } from '../../shared/prepNote.ts';
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
 // so keyword-match the title in addition to the AI's classification.
+// Money coming IN is not a payment to make. For anyone whose calendar has a
+// payday on it: "Pay Day" matched the word "pay" below, was tagged a bill, and
+// Smart Reminders told its owner "Today is Pay Day. Take care of the payment
+// this morning." (Nov 10 2026). Such an entry is never tagged a payment here,
+// whatever the keyword list or the AI says.
+function isIncomeTitle(title) {
+  if (!title) return false;
+  return /\bpay[\s-]?day\b|\bpay[\s-]?check\b|\bget(ting)? paid\b|\bdirect deposit\b/i.test(title);
+}
+
 function isPaymentTitle(title) {
   if (!title) return false;
+  if (isIncomeTitle(title)) return false;
   if (title.includes('$')) return true;
   return /\b(pay|payment|bill|rent|mortgage|invoice|loan|insurance|credit card|venmo|zelle|paypal|cash ?app|chase|wells ?fargo|discover|amex|american express|capital ?one|citi(bank)?|bank of america|us bank|navy federal|synchrony|affirm|klarna|afterpay)\b/i.test(title);
 }
@@ -1191,7 +1202,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // "birthday" from the parser on an entry that isn't a yearly birthday
         // (those were routed above) is a party or celebration: an event. It
         // used to fall through to "task".
-        classification: (ai.classification === 'payment' || isPaymentTitle(title))
+        classification: (!isIncomeTitle(title) && (ai.classification === 'payment' || isPaymentTitle(title)))
           ? 'payment'
           : (isOnce && (ai.classification === 'event' || ai.classification === 'birthday') ? 'event' : 'task'),
         // A reminder instruction written into the event ("remind me the night
