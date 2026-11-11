@@ -1,3 +1,4 @@
+// Nov 11 2026: the morning summary is gone (Anna: "ok get rid of it"). Smart Reminders no longer wait for it in the hour after wake-up, and no longer tell the planner about it.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
@@ -725,9 +726,9 @@ Deno.serve(async (req) => {
             completions: completionsByUser[email] || [],
           });
           const which: 'ask' | 'pause' | '' = mayAsk && look.would_ask ? 'ask' : mayPause && look.trial?.would_pause ? 'pause' : '';
-          const wokeAtMs = wakeStartMs(user, now, timeZone);
-          const morningHold = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf) ||
-            (wokeAtMs != null && nowMs >= wokeAtMs && nowMs < wokeAtMs + 60 * 60 * 1000 && user.last_digest_date !== todayStr);
+          // (Until Nov 11 2026 this also waited out the hour after they woke
+          // up, for the morning summary. The summary is gone.)
+          const morningHold = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf);
           if (which && !morningHold) {
             // As it is now, not as the run read it: answered, asked, put back
             // to normal or opened the app in the meantime.
@@ -1215,13 +1216,10 @@ Deno.serve(async (req) => {
       let lastSentTaskId: string | null = null;
       const holdForWake = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf);
       if (holdForWake) console.log(`[SMART NUDGE] ${email}: phone not unlocked yet this morning, holding nudges`);
-      // The hour after they wake up goes to the morning summary first (Anna,
-      // Oct 12 2026: "the summary can get first claim on the hour after I wake
-      // up"). In that hour Smart Reminders wait until it has gone out or had
-      // nothing to say (cronDailyDigest marks last_digest_date with their day
-      // either way). An urgent task's nudge doesn't wait.
-      const wokeAt = wakeStartMs(user, now, timeZone);
-      const holdForDigest = wokeAt != null && nowMs >= wokeAt && nowMs < wokeAt + 60 * 60 * 1000 && user.last_digest_date !== todayStr;
+      // Until Nov 11 2026 the hour after they woke up went to the morning
+      // summary first (Anna, Oct 12 2026) and nudges waited for it. The
+      // summary is gone (Anna, Nov 11 2026: "ok get rid of it"; "It's ok for
+      // the smart reminder wait to go away"), so nothing waits on it now.
       for (const entry of schedule) {
         if (holdForWake) break;
         if (entry.sent) continue;
@@ -1337,11 +1335,6 @@ Deno.serve(async (req) => {
           newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'held_too_long' });
           console.log(`[SMART NUDGE] Dropped "${entry.title}" for ${email}: held ${Math.round(heldPast / 60000)} min past its time (${why}); planning again`);
         };
-        if (holdForDigest && !gateUrgent) {
-          if (heldPast > HELD_STALE_MS) { dropStale('morning summary first'); continue; }
-          console.log(`[SMART NUDGE] Held nudge for ${email}: the morning summary goes first this hour`);
-          continue;
-        }
         const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', urgent: gateUrgent });
         if (!gate.allowed) {
           if (heldPast > HELD_STALE_MS) { dropStale(String(gate.reason || 'held')); continue; }
@@ -1399,8 +1392,9 @@ Deno.serve(async (req) => {
         // The eased plan (shared/easeOff.ts, Anna, Oct 22 2026): put off on 3
         // different days, its one mention a day rings as an alarm with only
         // Done and Later (for someone on alarms), or, once that's been put off
-        // on 2 more days, comes as a regular notification. Low stakes: only
-        // the morning summary, never a nudge.
+        // on 2 more days, comes as a regular notification. The lowest plan
+        // ('digest', once "morning summary only") gets no nudge here; no new
+        // task is put on it while its new rhythm is being decided (easeOff.ts).
         const easedNow = nudgedTask ? easeNow(nudgedTask) : null;
         if (easedNow && entry.type !== 'roundup') {
           const sentToday = sentLog.some((l: any) => l?.task_id === entry.task_id && !l?.skip && dayOf(utcMs(l.at)) === todayStr);
@@ -1409,7 +1403,7 @@ Deno.serve(async (req) => {
             entry.sent_at = now.toISOString();
             entry.skipped_reason = 'eased';
             newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'eased' });
-            console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: on the eased plan (${easedNow.nudge === 'none' ? 'morning summary only' : 'already mentioned today'})`);
+            console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: on the eased plan (${easedNow.nudge === 'none' ? 'no nudges on its plan' : 'already mentioned today'})`);
             continue;
           }
           ringsOutLoud = easedNow.nudge === 'alarm' && alarmStyle;
@@ -2136,7 +2130,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const breakMs = utcMs(t.later_until);
     if (Number.isFinite(breakMs) && breakMs > nowMs && dayOf(breakMs) !== todayStr) return false;
     // Put off on 3 different days: the eased plan (shared/easeOff.ts, Anna,
-    // Oct 22 2026). A low-stakes one is only in the morning summary; the
+    // Oct 22 2026). One on the lowest plan ('digest') gets none; the
     // others get ONE mention a day, so once it went out today, nothing more.
     const ease = easeNow(t);
     if (ease) {
@@ -2382,7 +2376,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // The whole day's notifications, from every part of the app.
   const pushesSent = dayPushes.filter((p) => p.at <= nowMs).length;
   const pushesBooked = dayPushes.length - pushesSent;
-  const dayBlock = `\nTHE BOSS'S DAY SO FAR — every notification the app sends them today, not only yours (the morning digest, appointment and "at" reminders, rhythms they asked for, commute alerts, your nudges):\n${
+  const dayBlock = `\nTHE BOSS'S DAY SO FAR — every notification the app sends them today, not only yours (appointment and "at" reminders, rhythms they asked for, commute alerts, your nudges):\n${
     dayPushes.length
       ? dayPushes.slice(0, 40).map((p) => `- ${clock(p.at)} ${p.title}${p.mine ? ' (your nudge)' : ''}${p.at > nowMs ? ' — booked, not sent yet' : ''}`).join('\n')
       : '- nothing yet'
@@ -2487,7 +2481,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const eased = easeNow(t);
       if (eased) {
         const days = Array.isArray(t.put_off_days) ? t.put_off_days.length : 0;
-        parts.push(`put off on ${days} different days, so it's on a lighter plan now: it's already in their morning summary, and it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
+        parts.push(`put off on ${days} different days, so it's on a lighter plan now: it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
       }
       // Anna's rule (see pastNudgesFor): put off 3 or more times, it stops
       // getting the same notifications. A time they named themselves stays.
