@@ -1,3 +1,4 @@
+// Nov 11 2026: the morning summary is gone, so owner check 8 (due today, never reminded) no longer counts a summary as the reminder.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set. The far-out pass's plan building moved into buildPlanFor (unchanged), shared with the owner-only { planEvent } repair.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
@@ -23,7 +24,6 @@ import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
-import { easeNow } from '../../shared/easeOff.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -2319,16 +2319,11 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         const next = Date.parse(t.next_reminder || '');
         return Number.isFinite(next) && next > nowMs;
       };
-      // A task on the eased "morning summary only" plan (shared/easeOff.ts,
-      // Anna, Oct 22 2026: put off on 3 different days and low stakes) is
-      // named in the morning summary and nowhere else, by design, so that
-      // summary going out today covers it (Nov 9 2026: "Practice on
-      // Codecademy", on that plan since Nov 5, was reported at 7 PM though
-      // the 8:41 AM summary named it). No summary today (Focus Mode, a
-      // failed send): still a miss.
-      const summaryToday = rows.some((r: any) => r.kind === 'daily_digest');
-      const summaryOnly = (t: any) => easeNow(t)?.plan === 'digest';
-      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t) && !(summaryToday && summaryOnly(t))) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      // (Until Nov 11 2026 a task on the eased "morning summary only" plan
+      // was covered by that morning's summary. The summary is gone, Anna:
+      // "ok get rid of it" and "Sounds good on the owner alert", so a task
+      // with no reminder of its own by 7 PM is a miss whatever its plan.)
+      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
     }
   } catch (e) {
     console.error('[HEALTH] due-today check failed:', e);
