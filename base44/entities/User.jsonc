@@ -32,6 +32,13 @@
       "type": "object",
       "description": "What the Android phone's push sign-up check last saw (PushHealthWorker, Android builds after 47; Anna, Nov 6 2026: phones whose pushes went dead looked like uninstalls). Runs in the background with the app unopened: after a Play Store update, after a restart, and every 12 hours. { at, why ('updated' | 'boot' | 'periodic'), allowed (notifications allowed for the app on the phone), opted_in_before, had_token_before, opted_in_after, has_token_after, nudged (the check re-sent the phone's push sign-up to OneSignal), subscription_id, build, error }. Never holds the token itself. Written by cancelTaskNotifications (mode push_state) only."
     },
+    "phone_push_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Every change to the Android phone's OneSignal push sign-up, reported the moment it happened (PushChangeWatch, Android build 49 on; Anna, Nov 10 2026: \"yeah you can add that to v49\", after OneSignal support said they keep no history of a subscription's tokens). Newest last, 30 kept: { at (when it changed, the phone's clock), got_at (when the server got it), had_token, was_opted_in, id_before, has_token, opted_in, subscription_id, allowed (Android allowed the app's notifications right then), on_screen (the app was in front), importance (Android's process importance then), build, server_enabled and server_code (what OneSignal's server said right after: 1 = subscribed, -10 = not subscribed; null = could not ask) }. Never holds the token itself. Written by cancelTaskNotifications (mode push_change) only."
+    },
     "phone_seen_at": {
       "type": "string",
       "format": "date-time",
