@@ -14,17 +14,26 @@
 //    the app: what they typed, what the task is, its priority, whether it needs
 //    doing today, whether someone else relies on it.
 //      'daily_alarm'       it matters (high priority, needs doing today,
-//                          someone relies on it): stays in the morning summary
-//                          and gets one alarm a day, with only Done and Later.
+//                          someone relies on it): one alarm a day, with only
+//                          Done and Later.
 //      'alarm_then_notice' an ordinary task ("go to grocery store"): the same,
 //                          until that one alarm is put off on 2 more days, then
 //                          one regular notification a day (level 2).
-//      'digest'            low stakes: only the morning summary. Repeating
-//                          tasks only: a one-time task never goes all the
-//                          way down to no notifications (Anna, Nov 9 2026:
-//                          "one time tasks should maybe never go all the way
-//                          down to 0 notifications unless on the back
-//                          burner"); the Back Burner is where those go.
+//      'digest'            low stakes. Until Nov 11 2026: only the morning
+//                          summary, repeating tasks only (a one-time task
+//                          never goes all the way down to no notifications;
+//                          Anna, Nov 9 2026: "one time tasks should maybe
+//                          never go all the way down to 0 notifications
+//                          unless on the back burner").
+//                          THE MORNING SUMMARY IS GONE (Anna, Nov 11 2026:
+//                          "ok get rid of it"), so the first two plans are
+//                          the alarm or notice alone, and this one would be
+//                          no mention at all. Its new rhythm is Anna's to
+//                          decide ("The lowest level of put-off tasks should
+//                          maybe be once every other day? Let me know what you
+//                          think before doing that"). Until she does, NO task
+//                          is put on it (judgeEasePlan: OFFER_LOWEST), so
+//                          nothing goes quiet; none was on it that day.
 //  - Editing the task (its wording, priority or date) puts it back on normal
 //    reminders: that's new information (onTaskUpdate clears both fields).
 // Normal alarms keep every button; only the eased alarm is Done + Later.
@@ -38,6 +47,9 @@ export const PUT_OFF_CHOICES = ['later', 'snooze', 'dismiss', 'closed', 'ignored
 export const EASE_AFTER_DAYS = 3;
 export const NOTICE_AFTER_DAYS = 2;
 export type EasePlanName = 'digest' | 'daily_alarm' | 'alarm_then_notice';
+// The lowest plan ('digest') is not handed out while its rhythm is undecided
+// (see the top of this file).
+const OFFER_LOWEST = false;
 const PLANS: EasePlanName[] = ['digest', 'daily_alarm', 'alarm_then_notice'];
 
 export function easeDay(ms: number, timeZone: string): string {
@@ -57,8 +69,8 @@ export function putOffFields(task: any, atMs: number, timeZone: string): any {
   return { put_off_days: [...days, day].sort().slice(-30) };
 }
 
-// What a task's eased plan means right now, for Smart Reminders and the
-// morning summary. null = normal reminders.
+// What a task's eased plan means right now, for Smart Reminders. null =
+// normal reminders.
 export function easeNow(task: any): { plan: EasePlanName; level: number; nudge: 'none' | 'alarm' | 'notice' } | null {
   const e = task?.ease_plan;
   if (!e || !PLANS.includes(e.plan)) return null;
@@ -103,10 +115,10 @@ export function easePrompt(allowDigest = true): string {
   if (!allowDigest) {
     return `You help ADHDone, a to-do app for people with ADHD, decide how to keep reminding someone about a task they keep putting off.
 
-This task's reminders were put off on several different days (they tapped Later, snoozed it, swiped it away, let the alarm ring out, or a reminder went by with nothing done) and it still isn't done. Ringing it the same way every day isn't working, and it drives people away from the app, so it moves to a lighter plan. It's a one-time task, so it always keeps at least one reminder a day. Choose the plan the way a good personal assistant would: from what they actually typed, what the task is, its priority, its date, and who else it affects. Use judgment, not keywords.
+This task's reminders were put off on several different days (they tapped Later, snoozed it, swiped it away, let the alarm ring out, or a reminder went by with nothing done) and it still isn't done. Ringing it the same way every day isn't working, and it drives people away from the app, so it moves to a lighter plan. It always keeps at least one reminder a day. Choose the plan the way a good personal assistant would: from what they actually typed, what the task is, its priority, its date, and who else it affects. Use judgment, not keywords.
 
-- "daily_alarm": it really matters. It's high priority, it sounds like it has to be done today or very soon, or someone else is counting on them (a kid to pick up, a bill or payment, a call or message someone is waiting on, a client, a pet or person who needs care, medication). It stays in their morning summary and still gets one alarm a day.
-- "alarm_then_notice": everything else that still needs doing at some point, from going to the grocery store to a nice-to-have. It stays in their morning summary and gets one alarm later in the day; if they keep putting that off too, it becomes one regular notification a day.
+- "daily_alarm": it really matters. It's high priority, it sounds like it has to be done today or very soon, or someone else is counting on them (a kid to pick up, a bill or payment, a call or message someone is waiting on, a client, a pet or person who needs care, medication). It still gets one alarm a day.
+- "alarm_then_notice": everything else that still needs doing at some point, from going to the grocery store to a nice-to-have. It gets one alarm later in the day; if they keep putting that off too, it becomes one regular notification a day.
 
 Priority the app assigned can be wrong; weigh what they typed over it. When it's truly unclear between the two plans, pick the one that keeps them more informed.
 
@@ -116,8 +128,8 @@ Answer with JSON only: {"plan": "daily_alarm" | "alarm_then_notice", "why": "one
 
 This task's reminders were put off on several different days (they tapped Later, snoozed it, swiped it away, or let the alarm ring out) and it still isn't done. Ringing it the same way every day isn't working, and it drives people away from the app, so it moves to a lighter plan. Choose the plan the way a good personal assistant would: from what they actually typed, what the task is, its priority, its date, and who else it affects. Use judgment, not keywords.
 
-- "daily_alarm": it really matters. It's high priority, it sounds like it has to be done today or very soon, or someone else is counting on them (a kid to pick up, a bill or payment, a call or message someone is waiting on, a client, a pet or person who needs care, medication). It stays in their morning summary and still gets one alarm a day.
-- "alarm_then_notice": an ordinary task that still needs doing at some point, like going to the grocery store or doing laundry. It stays in their morning summary and gets one alarm later in the day; if they keep putting that off too, it becomes one regular notification a day.
+- "daily_alarm": it really matters. It's high priority, it sounds like it has to be done today or very soon, or someone else is counting on them (a kid to pick up, a bill or payment, a call or message someone is waiting on, a client, a pet or person who needs care, medication). It still gets one alarm a day.
+- "alarm_then_notice": an ordinary task that still needs doing at some point, like going to the grocery store or doing laundry. It gets one alarm later in the day; if they keep putting that off too, it becomes one regular notification a day.
 - "digest": it doesn't sound like it matters much right now: low stakes, a nice-to-have, a someday idea. It only appears in their morning summary.
 
 Priority the app assigned can be wrong; weigh what they typed over it. When it's truly unclear between two plans, pick the one that keeps them more informed.
@@ -146,8 +158,9 @@ export function easeFacts(task: any, owner: any, dayCount: number): string {
 export async function judgeEasePlan(task: any, owner: any, dayCount: number, timeoutMs = 25000): Promise<{ plan: EasePlanName; why: string } | null> {
   try {
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'easeOff' });
-    // One-time tasks never go to 'digest' (see the top of this file).
-    const allowDigest = isRepeatingTask(task);
+    // One-time tasks never go to 'digest', and for now nothing does (see the
+    // top of this file).
+    const allowDigest = OFFER_LOWEST && isRepeatingTask(task);
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [
