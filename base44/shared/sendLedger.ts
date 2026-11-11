@@ -243,29 +243,73 @@ export async function ledgerCancel(base44: any, notificationIds: (string | null 
 }
 
 // Entries older than a few days can't conflict with anything — clear them out.
-// Before they go, each is kept as an AppEvent 'reminder_sent' (Anna, Nov 1
-// 2026: "Keep 30 days of reminder history"). Rows still here at this point are
-// pushes that actually went out: cancelled bookings, evicted ones and dead ones
-// already left the ledger. Without this, a check-off's reminder count only saw
-// the last 3 days, and a retention study read that as "no reminders at all".
+// Before they go, each is kept as an AppEvent (Anna, Nov 1 2026: "Keep 30 days
+// of reminder history"), named for what OneSignal says became of it, asked
+// right here (pushOutcome):
+//   'reminder_sent'      it went out to at least one phone, or OneSignal
+//                        couldn't say (props.outcome 'sent' | 'unknown');
+//   'reminder_unreached' OneSignal tried and reached no phone (uninstalled or
+//                        dead push sign-up): the person never saw it;
+//   not kept at all      it was cancelled before it went.
+// Until Nov 11 2026 every row still here was filed as 'reminder_sent' on the
+// assumption that cancelled bookings had already left the ledger. Not every
+// cancel path took them off (Focus Mode's didn't), and a push to a phone that
+// had already uninstalled was "sent" too. A report read that history as: a new
+// user got five Focus Mode check-ins after finishing her task, then a morning
+// question, and uninstalled 20 minutes later. OneSignal: all six were
+// cancelled the minute she finished, and the "push before she left" was the
+// first one that failed because she was already gone. Anna, Nov 11 2026: "why
+// ... am I just finding out about this". The history now says what happened,
+// not what was booked.
 // The ledger itself stays short (its readers expect only recent rows; Commute
 // Watch's late alert checks it per task). No titles in the event, by AppEvent's
-// own rule; props.send_at is when it went out (created_date is the archive time).
+// own rule; props.send_at is when it went out (created_date is the archive
+// time); props.id is the OneSignal id, so any row can be checked again later.
 const LEDGER_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
-const ARCHIVE_BATCH = 500;
+const ARCHIVE_BATCH = 150; // one OneSignal lookup each; the rest wait for the next hourly run
 const ARCHIVE_CHUNK = 100;
+const OUTCOME_AT_ONCE = 6;
+
+// What OneSignal says became of one push. null = it can't say (no id of its
+// kind, no answer, not found): filed as sent with outcome 'unknown'.
+export async function pushOutcome(notificationId: any): Promise<'sent' | 'cancelled' | 'nobody' | null> {
+  const id = String(notificationId || '');
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !key) return null;
+  try {
+    const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+      headers: { Authorization: `Basic ${key}` },
+    });
+    if (!res.ok) return null;
+    const j: any = await res.json().catch(() => null);
+    if (!j) return null;
+    if (j.canceled === true) return 'cancelled';
+    if (j.completed_at && !(Number(j.successful) > 0) && (Number(j.failed) > 0 || Number(j.errored) > 0)) return 'nobody';
+    return 'sent';
+  } catch (_) {
+    return null;
+  }
+}
+
 export async function ledgerPrune(base44: any): Promise<void> {
   const cutoff = new Date(Date.now() - LEDGER_KEEP_MS).toISOString();
   try {
     const old: any[] = (await ledger(base44).filter({ send_at: { $lt: cutoff } }, 'send_at', ARCHIVE_BATCH)) || [];
     if (!old.length) return;
+    const outcomes: ('sent' | 'cancelled' | 'nobody' | null)[] = [];
+    for (let i = 0; i < old.length; i += OUTCOME_AT_ONCE) {
+      outcomes.push(...await Promise.all(old.slice(i, i + OUTCOME_AT_ONCE).map((row: any) => pushOutcome(row.notification_id))));
+    }
+    const never = old.filter((_: any, i: number) => outcomes[i] === 'cancelled');
+    const went = old.map((row: any, i: number) => ({ row, outcome: outcomes[i] })).filter((x: any) => x.outcome !== 'cancelled');
     const kept: string[] = [];
-    let lastKeptAt = '';
-    for (let i = 0; i < old.length; i += ARCHIVE_CHUNK) {
-      const part = old.slice(i, i + ARCHIVE_CHUNK);
+    for (let i = 0; i < went.length; i += ARCHIVE_CHUNK) {
+      const part = went.slice(i, i + ARCHIVE_CHUNK);
       try {
-        await base44.asServiceRole.entities.AppEvent.bulkCreate(part.map((row: any) => ({
-          event: 'reminder_sent',
+        await base44.asServiceRole.entities.AppEvent.bulkCreate(part.map(({ row, outcome }: any) => ({
+          event: outcome === 'nobody' ? 'reminder_unreached' : 'reminder_sent',
           user_email: row.user_email || '',
           session_id: '',
           page: '',
@@ -274,22 +318,31 @@ export async function ledgerPrune(base44: any): Promise<void> {
             kind: row.kind || null,
             source: row.source || null,
             send_at: row.send_at || null,
+            outcome: outcome || 'unknown',
+            id: row.notification_id || null,
           },
         })));
-        for (const row of part) kept.push(row.id);
-        lastKeptAt = part[part.length - 1]?.send_at || lastKeptAt;
+        for (const { row } of part) kept.push(row.id);
       } catch (e) {
         // Not kept: left in the ledger for the next run to try again.
         console.error('[sendLedger] reminder history not kept:', e);
         break;
       }
     }
+    // Cancelled before they went: off the ledger, never in the history.
+    if (never.length) {
+      await ledger(base44).deleteMany({ id: { $in: never.map((r: any) => r.id) } })
+        .catch((e: any) => console.error('[sendLedger] could not clear cancelled rows:', e));
+      console.log(`[sendLedger] ${never.length} cancelled booking(s) left the ledger without being filed as sent`);
+    }
     if (!kept.length) return;
     await ledger(base44).deleteMany({ id: { $in: kept } });
     // Never archive the same rows twice: if they're somehow still here, clear
-    // the archived stretch by time instead (rows come oldest first).
+    // the stretch by time instead (rows come oldest first), but only when every
+    // row in it was dealt with this run.
     const left = (await ledger(base44).filter({ id: { $in: kept.slice(0, 50) } }, 'send_at', 1).catch(() => [])) || [];
-    if (left.length && lastKeptAt) await ledger(base44).deleteMany({ send_at: { $lte: lastKeptAt, $lt: cutoff } });
+    const lastAt = old[old.length - 1]?.send_at || '';
+    if (left.length && lastAt && kept.length === went.length) await ledger(base44).deleteMany({ send_at: { $lte: lastAt, $lt: cutoff } });
   } catch (e) {
     console.error('[sendLedger] prune failed:', e);
   }
