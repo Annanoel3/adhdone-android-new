@@ -1,3 +1,4 @@
+// Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 9 2026 (night) so the bundled shared/easeOff.ts is picked up: a one-time task is never put on the morning-summary-only plan.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).

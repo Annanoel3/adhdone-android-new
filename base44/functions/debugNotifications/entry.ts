@@ -1,3 +1,4 @@
+// Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts and shared/prepNote.ts are picked up (prepSelfTest: 36 cases).
