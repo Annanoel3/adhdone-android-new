@@ -461,7 +461,7 @@ async function makeNextCopy(task, opts = {}) {
   return { task: newTask, nextDate };
 }
 
-// A repeating task finished in the last few days whose next copy never got
+// A repeating task finished in the last 30 days (REPAIR_DAYS) whose next copy never got
 // made (the app was closed or the request failed before it landed; the copy
 // is made as the person: here, or on the server only when an Android phone on
 // build 48+ checks in from the background with the person's own sign-in,
@@ -470,22 +470,69 @@ async function makeNextCopy(task, opts = {}) {
 // looks for an existing copy first, so this never doubles one. Nov 6 2026:
 // an 8 AM daily medication checked off from its alarm at 8:08 ended there,
 // and the person only ever opens the app from that alarm.
+// How far back a broken repeat is still repaired (the server's REPAIR_DAYS,
+// base44/shared/nextCopy.ts; keep them in step). 3 days until Nov 11 2026: a
+// daily medication finished on Nov 6 whose next copy was never made was past
+// repair by Nov 9. 30 days is safe because only the NEWEST copy of a repeat is
+// ever repaired (carriesOn).
+const REPAIR_DAYS = 30;
+
+// Does this repeat already carry on without a new copy? Yes when another task
+// of the same name, rhythm and named time is still open (whatever its day: an
+// overdue one counts), or was made after this one (the chain moved on, or the
+// person deleted the rest on purpose and this isn't its last link). Returns
+// that task, or null when this finished task really is where the repeat stopped.
+async function carriesOn(task, families) {
+  const key = String(task.recurrence_pattern);
+  if (!families.has(key)) {
+    families.set(key, (await base44.entities.Task.filter({ recurrence_pattern: task.recurrence_pattern }, '-created_date', 200)) || []);
+  }
+  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const ms = (v) => { const n = new Date(v || 0).getTime(); return Number.isFinite(n) ? n : 0; };
+  const same = (families.get(key) || []).filter((t) =>
+    t?.id && t.id !== task.id && !t.parent_task_id &&
+    norm(t.title) === norm(task.title) &&
+    (t.anchor_time || null) === (task.anchor_time || null));
+  const open = same.find((t) => t.status === 'active' || t.status === 'snoozed');
+  if (open) return open;
+  const later = same.filter((t) => ms(t.created_date) > ms(task.created_date))
+    .sort((a, b) => ms(a.created_date) - ms(b.created_date));
+  return later[0] || null;
+}
+
 let repairedThisOpen = false;
 export async function repairMissingRepeats() {
   if (repairedThisOpen) return 0;
   repairedThisOpen = true;
   let rows = [];
+  const DAY = 24 * 60 * 60 * 1000;
   try {
-    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    rows = await base44.entities.Task.filter({ status: 'completed', completed_at: { $gte: since } }, '-completed_at', 50);
+    // Repeating tasks only, so 30 days of them fit (a plain list of everything
+    // finished would be cut off at its newest rows for someone busy).
+    rows = await base44.entities.Task.filter(
+      { status: 'completed', completed_at: { $gte: new Date(Date.now() - REPAIR_DAYS * DAY).toISOString() }, recurrence_pattern: { $ne: 'none' } },
+      '-completed_at', 200);
   } catch (e) {
-    return 0;
+    // That list failed: the last 3 days, the way it was read before.
+    try {
+      rows = await base44.entities.Task.filter({ status: 'completed', completed_at: { $gte: new Date(Date.now() - 3 * DAY).toISOString() } }, '-completed_at', 50);
+    } catch (e2) {
+      return 0;
+    }
   }
   let made = 0;
+  const families = new Map();
   for (const t of rows || []) {
     if (!t?.id || t.parent_task_id || !t.recurrence_pattern || t.recurrence_pattern === 'none') continue;
     if (isBirthday(t) || t.next_occurrence_id) continue;
     try {
+      // Only where the repeat really stopped: one that carries on (an open
+      // copy, or a newer one) is linked to it and left alone.
+      const onward = await carriesOn(t, families);
+      if (onward?.id) {
+        await base44.entities.Task.update(t.id, { next_occurrence_id: onward.id }).catch(() => {});
+        continue;
+      }
       const result = await createNextRecurrence(t, { finishedAt: t.completed_at });
       if (result?.task?.id) {
         made++;

@@ -252,28 +252,65 @@ async function findNextCopyAs(base44: any, task: any, nextDate: number, tz: stri
   }) || null;
 }
 
-// Every repeating task the person finished in the last 3 days whose next copy
-// was never made: linked to a copy already there, or made now and its
-// at-the-time reminder booked (schedulePush, as the person, the same booking
-// the app makes) and sent to the phone's alarm list.
+// How far back a broken repeat is still repaired. 3 days until Nov 11 2026: a
+// daily medication finished on Nov 6 whose next copy was never made was past
+// repair by Nov 9, on a phone that had no way to check in sooner. 30 days is
+// safe because only the NEWEST copy of a repeat is ever repaired (carriesOn).
+export const REPAIR_DAYS = 30;
+
+// Does this repeat already carry on without a new copy? Yes when another task
+// of the same name, rhythm and named time is still open (whatever its day: an
+// overdue one counts), or was made after this one (the chain moved on, or the
+// person deleted the rest on purpose and this isn't its last link). Returns
+// that task, or null when this finished task really is where the repeat stopped.
+async function carriesOnAs(base44: any, task: any, families: Map<string, any[]>): Promise<any | null> {
+  const key = String(task.recurrence_pattern);
+  if (!families.has(key)) {
+    families.set(key, (await base44.entities.Task.filter({ recurrence_pattern: task.recurrence_pattern }, '-created_date', 200)) || []);
+  }
+  const madeMs = validMs(task.created_date) ?? 0;
+  const same = (families.get(key) || []).filter((t: any) =>
+    t?.id && t.id !== task.id && !t.parent_task_id &&
+    norm(t.title) === norm(task.title) &&
+    (t.anchor_time || null) === (task.anchor_time || null));
+  const open = same.find((t: any) => t.status === 'active' || t.status === 'snoozed');
+  if (open) return open;
+  const later = same.filter((t: any) => (validMs(t.created_date) ?? 0) > madeMs)
+    .sort((a: any, b: any) => (validMs(a.created_date) ?? 0) - (validMs(b.created_date) ?? 0));
+  return later[0] || null;
+}
+
+// Every repeating task the person finished in the last 30 days (REPAIR_DAYS)
+// whose next copy was never made: linked to a copy already there, or made now
+// and its at-the-time reminder booked (schedulePush, as the person, the same
+// booking the app makes) and sent to the phone's alarm list.
 export async function repairMissingRepeatsAs(
   base44: any,
   opts: { email: string; owner: any; nowMs?: number },
 ): Promise<{ made: string[]; linked: string[]; booked: number; errors: string[] }> {
   const out = { made: [] as string[], linked: [] as string[], booked: 0, errors: [] as string[] };
   const nowMs = opts.nowMs ?? Date.now();
-  const since = new Date(nowMs - 3 * DAY_MS).toISOString();
+  const since = new Date(nowMs - REPAIR_DAYS * DAY_MS).toISOString();
   let rows: any[] = [];
   try {
-    rows = await base44.entities.Task.filter({ status: 'completed', completed_at: { $gte: since } }, '-completed_at', 50);
+    // Repeating tasks only, so 30 days of them fit (a plain list of everything
+    // finished would be cut off at its newest rows for someone busy).
+    rows = await base44.entities.Task.filter({ status: 'completed', completed_at: { $gte: since }, recurrence_pattern: { $ne: 'none' } }, '-completed_at', 200);
   } catch (e) {
     out.errors.push(`list: ${(e as any)?.message || e}`);
     return out;
   }
+  const families = new Map<string, any[]>();
   for (const t of rows || []) {
     if (!t?.id || t.parent_task_id || !t.recurrence_pattern || t.recurrence_pattern === 'none') continue;
     if (isBirthday(t) || t.next_occurrence_id) continue;
     try {
+      const onward = await carriesOnAs(base44, t, families);
+      if (onward?.id) {
+        await base44.entities.Task.update(t.id, { next_occurrence_id: onward.id }).catch(() => {});
+        out.linked.push(t.id);
+        continue;
+      }
       const plan = planNextCopy(t, opts.owner, opts.email, nowMs, t.completed_at);
       const existing = await findNextCopyAs(base44, t, plan.nextDate, plan.tz);
       if (existing?.id) {
