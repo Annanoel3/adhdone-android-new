@@ -1,3 +1,4 @@
+// Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: the lowest eased plan is one regular notification every other day.
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: with the morning summary gone, the eased plans are the one alarm or notice a day alone, and no task is put on the lowest plan until its new rhythm is decided.
 // Re-saved Nov 11 2026 so the bundled shared/nextCopy.ts is picked up: a repeat whose next copy was never made is repaired up to 30 days later (was 3), and only where the repeat really stopped (no open or newer copy of it).
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).

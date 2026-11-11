@@ -1,3 +1,4 @@
+// Nov 11 2026: owner check 8 treats the day after a mention as the planned day off for a task on the every-other-day plan.
 // Nov 11 2026: the morning summary is gone, so owner check 8 (due today, never reminded) no longer counts a summary as the reminder.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Nov 10 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different task at a time the person set. The far-out pass's plan building moved into buildPlanFor (unchanged), shared with the owner-only { planEvent } repair.
@@ -19,6 +20,7 @@ import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
+import { easeNow } from '../../shared/easeOff.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
@@ -2315,19 +2317,27 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         && (t.notification_recipient_email || t.created_by) === u.email
         && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
       if (!dueToday.length) continue;
+      // Since local midnight for "today"; the 24 hours before that too, for
+      // the every-other-day plan below.
+      const sinceToday = nowMs - 19 * H_HOUR;
       const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
-        user_email: u.email, send_at: { $gte: new Date(nowMs - 19 * H_HOUR).toISOString() },
+        user_email: u.email, send_at: { $gte: new Date(sinceToday - 24 * H_HOUR).toISOString() },
       });
-      const mentioned = new Set(rows.map((r: any) => r.task_id).filter(Boolean));
+      const atMs = (r: any) => Date.parse(r?.send_at || '');
+      const mentioned = new Set(rows.filter((r: any) => atMs(r) >= sinceToday).map((r: any) => r.task_id).filter(Boolean));
+      const mentionedYesterday = new Set(rows.filter((r: any) => atMs(r) < sinceToday).map((r: any) => r.task_id).filter(Boolean));
       const stillAhead = (t: any) => {
         const next = Date.parse(t.next_reminder || '');
         return Number.isFinite(next) && next > nowMs;
       };
-      // (Until Nov 11 2026 a task on the eased "morning summary only" plan
-      // was covered by that morning's summary. The summary is gone, Anna:
-      // "ok get rid of it" and "Sounds good on the owner alert", so a task
-      // with no reminder of its own by 7 PM is a miss whatever its plan.)
-      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      // A task on the lowest eased plan (shared/easeOff.ts: a low-stakes
+      // repeating task put off on 3 different days) gets one mention every
+      // other day, by design (Anna, Nov 11 2026: "once every other day"; it
+      // was "morning summary only" until the summary went away that day, and
+      // "Sounds good on the owner alert"). So the day after a mention is its
+      // planned day off, not a miss. Two days running with nothing is a miss.
+      const dayOff = (t: any) => easeNow(t)?.gapDays === 2 && mentionedYesterday.has(t.id);
+      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t) && !dayOff(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
     }
   } catch (e) {
     console.error('[HEALTH] due-today check failed:', e);
