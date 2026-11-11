@@ -1,6 +1,8 @@
+// Nov 11 2026: a push cancelled by Focus Mode (the session's check-ins and morning question on exit, the other repeating reminders on enter) now also comes off the send ledger.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { isInQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from '../../shared/focusMode.ts';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -10,8 +12,18 @@ const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
 // and Focus Mode must never turn it into one.
 const RECURRING = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
 
+// Every push cancelled here also comes off the send ledger (the bookings
+// still ahead; one that already went out stays, sendLedger.ledgerCancel).
+// Until Nov 11 2026 it didn't: the pushes were cancelled at OneSignal and
+// their ledger rows stayed, so Smart Reminders and the 20-minute spacing rule
+// counted pushes that were never coming, and three days later ledgerPrune
+// filed them as reminders that "went out". Liz finished her focus task on Nov
+// 2 2026; OneSignal shows the five check-ins after it and the next morning's
+// question cancelled, and the app's own history said she got all six.
+let ledgerClient: any = null;
 async function cancelOneSignal(ids: string[]) {
   if (!ids.length) return;
+  if (ledgerClient) await ledgerCancel(ledgerClient, ids);
   await Promise.allSettled(ids.map(id =>
     fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${ONESIGNAL_APP_ID}`, {
       method: 'DELETE',
@@ -288,6 +300,7 @@ async function exitFocus(base44: any, user: any, keepOffer: boolean) {
 export default async function(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
+    ledgerClient = base44;
     const body = await req.json().catch(() => ({}));
     const { action, taskId } = body;
 
