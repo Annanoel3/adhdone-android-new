@@ -567,6 +567,11 @@ How it works, and how it must keep working:
    the copy of each function from the last Publish; scheduled jobs and automations run the
    newest copy at once. A change to how taps are counted takes effect only after Publish
    (seen Oct 22 2026: a ring-out at 2:40 PM CDT was saved by the old copy).
+   One outside timer also uses the published copy: Anna's cron-job.org account calls
+   `cronRefillReminders` every 15 minutes on the quarter hour (found Nov 11 2026 from its
+   emails and the published copy's log), next to Base44's own hourly run of the newest
+   copy. So a change to that job is only half live until Publish. The same account had a
+   timer for `cronTaskReminders`, a function that no longer exists.
 7. **A new account hears from it the first day (Anna, Oct 22 2026).** Someone who joined in
    the last day and has had nothing from Smart Reminders gets a "NEW HERE" line, so one of
    their first tasks is mentioned that same day even with no date or a low priority. The
