@@ -31,6 +31,35 @@ import { resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { flagConflicts } from '../../shared/eventConflicts.ts';
 import { needsPrepAskPush, sendPrepAsk } from '../../shared/prepNote.ts';
+import { seriesPattern, seriesEvery, seriesUnit, dayEntryKind, clockOf } from '../../shared/calendarEntry.ts';
+
+// The next date of a calendar series after `afterMs`, counted from one of its
+// dates and honoring "every N" (shared/calendarEntry.ts). Until Nov 12 2026
+// the N was dropped: "every 2 weeks" was stepped a week at a time.
+function nextSeriesOccurrence(start: Date, rule: string, afterMs: number, timeZone: any): Date {
+  const unit = seriesUnit(rule);
+  const every = seriesEvery(rule);
+  if (every <= 1) return nextLocalOccurrence(start, unit, afterMs, timeZone);
+  let d = start;
+  for (let guard = 0; guard < 4000 && d.getTime() <= afterMs; guard++) {
+    for (let i = 0; i < every; i++) d = nextLocalOccurrence(d, unit, d.getTime(), timeZone);
+  }
+  return d;
+}
+
+// The clock time of a moment on their clock.
+function clockIn(iso: any, timeZone: any): { hh: number; mm: number } | null {
+  const ms = Date.parse(String(iso || ''));
+  if (isNaN(ms)) return null;
+  try {
+    const p = new Intl.DateTimeFormat('en-US', { timeZone: timeZone || undefined, hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(ms));
+    const hh = Number(p.find((x) => x.type === 'hour')?.value);
+    const mm = Number(p.find((x) => x.type === 'minute')?.value);
+    return Number.isFinite(hh) && Number.isFinite(mm) ? { hh, mm } : null;
+  } catch (_) {
+    return null;
+  }
+}
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -245,9 +274,7 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
       // Whole calendar days / weeks / months on the USER'S clock. Fixed day
       // steps on the server's UTC clock moved a weekly 9 AM meeting to 8 AM
       // after daylight saving ended, and "monthly" was +30 days.
-      const unit = rrule.includes('FREQ=WEEKLY') ? 'week'
-        : rrule.includes('FREQ=MONTHLY') ? 'month' : 'day';
-      nextReminderDate = nextLocalOccurrence(nextReminderDate, unit, Date.now(), timeZone);
+      nextReminderDate = nextSeriesOccurrence(nextReminderDate, rrule, Date.now(), timeZone);
     }
   }
 
@@ -267,6 +294,18 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
   // only refresh due_date/end_date from the calendar date.
   if (taskRec.reminder_interval === 'once') {
     if (startChanged && nextReminderDate) {
+      // An all-day entry whose time came from its own title ("10:30am eye
+      // appt", see the create path) keeps that clock time on its new day.
+      if (!event.start?.dateTime && !isBday && taskRec.event_time && taskRec.time_stated === true && /^\d{4}-\d{2}-\d{2}$/.test(String(startRaw || ''))) {
+        const clock = clockIn(taskRec.event_time, timeZone);
+        if (clock) {
+          const dayAt = nextReminderDate;
+          const key = new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(dayAt);
+          const [y, m, d] = key.split('-').map((n) => parseInt(n, 10));
+          nextReminderDate = wallClockToUtc(y, m, d, clock.hh, clock.mm, timeZone);
+          patch.event_time = nextReminderDate.toISOString();
+        }
+      }
       patch.next_reminder = nextReminderDate.toISOString();
       patch.due_date = nextReminderDate.toISOString();
       // Timed events also carry the actual event time — this is what the
@@ -310,7 +349,11 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
     : String(syncRec.start_time || '') !== String(startRaw || ''));
   const oldPlan = Array.isArray(taskRec.reminder_schedule) ? taskRec.reminder_schedule : [];
   if (ctx?.user && moved && patch.next_reminder && taskRec.reminder_interval === 'once' && taskRec.status === 'active'
-    && taskRec.classification !== 'birthday' && !(event.recurrence || []).length
+    && taskRec.classification !== 'birthday'
+    // A series the app has no repeat for (every 6 weeks, every 30 days;
+    // shared/calendarEntry.ts) is kept by the calendar: each new date of it
+    // arrives here as a move, and is planned like one.
+    && (!(event.recurrence || []).length || seriesPattern((event.recurrence || []).join(';')) === 'none')
     && (!taskRec.recurrence_pattern || taskRec.recurrence_pattern === 'none')
     && oldPlan.length > 0 && new Date(patch.next_reminder).getTime() > Date.now()) {
     const nowMs = Date.now();
@@ -325,7 +368,10 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
     }
     const fresh = await planEventReminders(base44, ctx.user, { ...taskRec, ...patch }, {
       title: taskRec.title || event.summary || 'Untitled event',
-      isAllDay: !event.start?.dateTime,
+      isAllDay: !event.start?.dateTime && !(patch.event_time || taskRec.event_time),
+      dayEntry: !event.start?.dateTime && !(patch.event_time || taskRec.event_time)
+        ? await dayEntryKind(String(taskRec.title || event.summary || ''), String(taskRec.notes || ''), 'syncGoogleCalendar')
+        : 'attend',
       location: taskRec.location || event.location || '',
       startIsTheirs: !!event.start?.dateTime || taskRec.time_stated === true,
       budget: ctx.budget,
@@ -394,7 +440,7 @@ function deviceRowToEvent(row: any) {
 // and this run still has push budget, the rest left planned for the hourly
 // job. Returns the fields to save on the task (none when planning failed).
 // Used when an item is imported, and when its start moves in the calendar.
-async function planEventReminders(base44: any, user: any, task: any, opts: { title: string; isAllDay: boolean; location: string; startIsTheirs: boolean; budget: { n: number } }): Promise<any> {
+async function planEventReminders(base44: any, user: any, task: any, opts: { title: string; isAllDay: boolean; location: string; startIsTheirs: boolean; budget: { n: number }; dayEntry?: string }): Promise<any> {
   const out: any = {};
   const { title, isAllDay, budget } = opts;
   try {
@@ -406,7 +452,14 @@ async function planEventReminders(base44: any, user: any, task: any, opts: { tit
     // Oct 12 2026: "smart reminders and events and birthdays ... and tasks
     // that the user gave a specific time to"). No AI plan is asked for it.
     const importedEvent = task.classification === 'event';
-    if (importedEvent) try {
+    // An all-day entry there is nothing to do about (a day off, a holiday, a
+    // payday) or that is private health tracking gets no reminder at all, and
+    // that is saved as its plan. Their work hours for the day get the
+    // night-before heads-up only. Judged in shared/calendarEntry.ts (Nov 12
+    // 2026: one new account had 34 of its next 52 pushes booked for shift
+    // times and days off).
+    const silentDay = importedEvent && isAllDay && (opts.dayEntry === 'none' || opts.dayEntry === 'private');
+    if (importedEvent && !silentDay) try {
       const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
         title,
         scheduledDateISO: task.next_reminder,
@@ -456,6 +509,9 @@ async function planEventReminders(base44: any, user: any, task: any, opts: { tit
       quiet: resolveQuietHours(user),
       startIsTheirs: opts.startIsTheirs,
     });
+
+    if (silentDay) plan = [];
+    else if (importedEvent && isAllDay && opts.dayEntry === 'shift') plan = plan.filter((e: any) => /night before/i.test(String(e?.label || '')));
 
     if (!importedEvent) {
       const startMs = new Date(task.next_reminder).getTime();
@@ -507,6 +563,12 @@ async function planEventReminders(base44: any, user: any, task: any, opts: { tit
       }
     }
 
+    if (silentDay) {
+      // No reminder is its plan: marked built, so nothing plans one later.
+      out.reminder_schedule = [];
+      out.reminder_plan_built_at = new Date().toISOString();
+      out.onesignal_notification_ids = [];
+    }
     if (plan.length > 0) {
       out.reminder_schedule = plan;
       // Tells cronRefillReminders this task already has its server-written
@@ -999,13 +1061,20 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     // recurring reminders for something we couldn't classify.
     const plainEvent = { urgency: 'medium', energy_required: 'medium', reminder_interval: 'once', needs_date_pick: false, target_date: null };
     let ai = plainEvent;
+    // What an all-day entry is (shared/calendarEntry.ts): asked alongside the
+    // classification, so the import takes no longer for it.
+    let dayKind = 'attend';
     if (!isBirthday) {
+      const kindAsk: Promise<string> = isAllDay
+        ? dayEntryKind(title, String(event.description || '').replace(/<[^>]+>/g, ' '), 'syncGoogleCalendar')
+        : Promise.resolve('attend');
       try {
         ai = await classifyEventWithAI(base44, event, user);
       } catch (e) {
         console.log('[syncGoogleCalendar] parseTask failed, defaulting to event:', e.message);
         ai = plainEvent;
       }
+      dayKind = await kindAsk;
     }
     const routedAs = isBirthday ? 'birthday' : 'task';
 
@@ -1058,9 +1127,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // Whole calendar days / weeks / months on the USER'S clock. Fixed day
         // steps on the server's UTC clock moved a weekly 9 AM meeting to 8 AM
         // after daylight saving ended, and "monthly" was +30 days.
-        const unit = recurrenceRule.includes('FREQ=WEEKLY') ? 'week'
-          : recurrenceRule.includes('FREQ=MONTHLY') ? 'month' : 'day';
-        nextReminderDate = nextLocalOccurrence(nextReminderDate, unit, Date.now(), userTz);
+        nextReminderDate = nextSeriesOccurrence(nextReminderDate, recurrenceRule, Date.now(), userTz);
       }
     }
 
@@ -1075,6 +1142,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
     let taskRecord;
     let reminderInterval = 'once';
+    // An all-day entry given the clock time typed into its own title (below).
+    let titleTimed = false;
     if (isBirthday) {
       const birthdayPerson = extractBirthdayPerson(title);
       const ownBirthday = isOwnBirthday(title, birthdayPerson, user);
@@ -1125,6 +1194,25 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // Timed (non-all-day) events: store the actual event time so the
         // task detail view shows the event's date & time from the calendar.
         if (event.start?.dateTime) eventTimeISO = nextReminderDate.toISOString();
+        // An all-day entry with its time typed into the title ("10:30am eye
+        // appt"): that is the event's time. Before Nov 12 2026 the calendar's
+        // "all day" won, so an appointment written that way got a night-before
+        // and a 9 AM "today" and nothing near its real time. Only an event
+        // they attend, a clock time their own words gave (the parser's
+        // time_stated), one day long, and still ahead.
+        const titleClock = isAllDay && dayKind === 'attend' && (ai as any).classification === 'event' && (ai as any).time_stated === true && !isPaymentTitle(title)
+          ? clockOf((ai as any).target_time) : null;
+        if (titleClock && startRaw && /^\d{4}-\d{2}-\d{2}$/.test(startRaw) && !(endRaw && spansDays(startRaw, endRaw))) {
+          const [ty, tm, td] = startRaw.split('-').map((n) => parseInt(n, 10));
+          const at = wallClockToUtc(ty, tm, td, titleClock.hh, titleClock.mm, userTz);
+          if (at.getTime() > Date.now()) {
+            nextReminderDate = at;
+            nextReminderISO = at.toISOString();
+            dueDateISO = at.toISOString();
+            eventTimeISO = at.toISOString();
+            titleTimed = true;
+          }
+        }
         // Multi-day events: record the last day so the app shows the full
         // span (calendar grid + Home "Today" + event detail). For all-day
         // events Google's end date is exclusive, so the last day is one
@@ -1216,7 +1304,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // says; one without is the parser's call (a video call stays home).
         goes_somewhere: ai?.goes_somewhere === true,
         notification_recipient_email: user.email,
-        recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
+        // The calendar's rule with its number read: "every 2 weeks" is every
+        // other week, and a step the app has no repeat for (every 6 weeks,
+        // every 30 days) is 'none', kept by the calendar (shared/calendarEntry.ts).
+        recurrence_pattern: seriesPattern(recurrenceRule)
       };
       // An all-day task or payment is an all-day task (day_only_task), the
       // way the app saves one typed in: 9 AM is only its anchor, nothing is
@@ -1293,11 +1384,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (!isBirthday && reminderInterval === 'once' && createdTask.next_reminder) {
       Object.assign(finalPatch, await planEventReminders(base44, user, createdTask, {
         title,
-        isAllDay,
+        isAllDay: isAllDay && !titleTimed,
+        dayEntry: dayKind,
         location: (createdTask as any).location || (taskRecord as any).location || '',
         // Nothing the app picked lands in their quiet hours; the event's own
         // start, a time they set, may (RULES.md §9 Q4).
-        startIsTheirs: !isAllDay && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
+        startIsTheirs: (!isAllDay || titleTimed) && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
         budget,
       }));
     }
