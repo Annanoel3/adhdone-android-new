@@ -107,11 +107,16 @@ export function planRenameChanges(task, added, parsed, now = new Date()) {
   // with no day, or one whose day is behind it, takes the parser's day for a
   // bare time (today, or tomorrow when that time has gone by).
   let day = wantsDay ? parsed.target_date : (hasDay && hasDay >= today ? hasDay : parsedDay);
-  const time = wantsTime ? parsed.target_time : hasTime;
+  let time = wantsTime ? parsed.target_time : hasTime;
   if (!day) return plan;
   if (time && momentOf(day, time).getTime() <= floor) {
     if (!wantsDay && parsedDay && parsedDay !== day && momentOf(parsedDay, time).getTime() > floor) {
       day = parsedDay;
+    } else if (wantsDay && !wantsTime && day >= today) {
+      // Only the day is new, and the clock time the task had has already gone
+      // by on it ("today", typed at 2:30 on a task that was Friday at 2): the
+      // day is taken, with no time.
+      time = null;
     } else {
       // A moment already behind us: the task keeps what it has (RULES.md §9 Q3).
       return plan;
