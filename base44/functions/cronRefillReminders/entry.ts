@@ -26,6 +26,7 @@ import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
+import { seriesPattern, oldSeriesPattern, dayEntryKind } from '../../shared/calendarEntry.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -179,8 +180,10 @@ Deno.serve(async (req) => {
       const before = id ? await base44.asServiceRole.entities.Task.get(id).catch(() => null) : null;
       if (!before || before.status !== 'active') return Response.json({ error: 'no active task with that id' }, { status: 404 });
       const task = { ...before, ...fields };
-      if (task.classification !== 'event' || !task.event_time || task.day_only_task || !task.next_reminder) {
-        return Response.json({ error: 'planEvent is for a timed event (classification event, event_time and next_reminder set, not all-day)' }, { status: 400 });
+      // Nov 12 2026: an all-day event too (no event_time), so an all-day
+      // calendar entry can be planned again by what it is (buildPlanFor).
+      if (task.classification !== 'event' || task.day_only_task || !task.next_reminder) {
+        return Response.json({ error: 'planEvent is for an event (classification event, next_reminder set, not an all-day task)' }, { status: 400 });
       }
       const owner = allUsers.find((u: any) => u?.email === task.notification_recipient_email);
       // Built first: if it fails, nothing has been changed.
@@ -1142,6 +1145,31 @@ Deno.serve(async (req) => {
   // promotion pass below books them, in this same run) and the phone gets
   // the new alarm. The record itself moves on, like the birthday rollover
   // above: a copy made by the server wouldn't belong to them.
+  // A calendar series saved with the wrong repeat (shared/calendarEntry.ts):
+  // until Nov 12 2026 the import dropped the number in "every 2 weeks" or
+  // "every 30 days", so the pass below moved the entry on by one week or one
+  // day. Each one still carrying what the import gave it is set right here,
+  // before anything is moved (a repeat the person changed themselves no
+  // longer matches and is left alone). The calendar's own rule is on the
+  // import's record of the entry (CalendarSyncedEvent.recurrence_rule).
+  try {
+    const series = await filterAll(base44.asServiceRole.entities.CalendarSyncedEvent, { recurrence_rule: { $regex: 'INTERVAL=' } });
+    const ruleOf = new Map<string, string>();
+    for (const s of series) if (s?.adhd_task_id && s?.recurrence_rule) ruleOf.set(String(s.adhd_task_id), String(s.recurrence_rule));
+    for (const t of allTasks) {
+      const rule = t && t.status === 'active' ? ruleOf.get(String(t.id)) : null;
+      if (!rule) continue;
+      const want = seriesPattern(rule);
+      const was = oldSeriesPattern(rule);
+      if (want === was || t.recurrence_pattern !== was) continue;
+      await base44.asServiceRole.entities.Task.update(t.id, { recurrence_pattern: want });
+      t.recurrence_pattern = want;
+      console.log(`🔁 [REFILL] "${t.title}" (${t.created_by}) repeats ${want === 'none' ? 'on the calendar\'s own dates' : want.replace(/_/g, ' ')}, not ${was} (${rule})`);
+    }
+  } catch (e) {
+    console.error('[REFILL] Calendar series repeat check failed:', e);
+  }
+
   let repeatsRolled = 0;
   {
     const { rolls, twins } = repeatRollPlan(allTasks, userMap, now.getTime());
@@ -1812,6 +1840,15 @@ function localHourIn(tz: string, d: Date): number {
 // Shared by the far-out pass and the owner-only { planEvent } repair (Nov 10 2026).
 async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> {
   const timeZone = owner && owner.timezone ? owner.timezone : null;
+  // An all-day entry that came from their calendar: what it is decides
+  // whether it speaks up at all (shared/calendarEntry.ts, Nov 12 2026). A day
+  // off, a holiday, a payday or a private health-tracking entry gets no
+  // reminder; their work hours for the day get the night-before heads-up
+  // only. Anything they typed into the app, or gave a reminder instruction
+  // for, is planned as before.
+  const allDayImport = task.classification === 'event' && !task.event_time && !!task.google_event_id && !task.reminder_wish;
+  const dayKind = allDayImport ? await dayEntryKind(String(task.title || ''), String(task.notes || ''), 'cronRefillReminders') : 'attend';
+  if (dayKind === 'none' || dayKind === 'private') return [];
   const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
     title: task.title,
     scheduledDateISO: task.next_reminder,
@@ -1852,7 +1889,7 @@ async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> 
     quiet: task.quiet_hours_exempt === true ? undefined : resolveQuietHours(owner),
     startIsTheirs: isTimeTheySet(task, new Date(task.next_reminder).getTime(), userTimeZone(owner)),
   });
-  return plan;
+  return dayKind === 'shift' ? plan.filter((e: any) => /night before/i.test(String(e?.label || ''))) : plan;
 }
 
 // Captures that were typed but never became a task: a 'captureClaimed' whose
