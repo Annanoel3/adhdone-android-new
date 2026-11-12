@@ -10,7 +10,7 @@
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
 // Re-saved Oct 13 2026 so the bundled shared/eventReminderPlan.ts is picked up: the reminder at an event's start is never the one the per-event cap drops.
-// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a series the calendar keeps (every 6 weeks, every 30 days) comes back as a new entry on its next date after its entry is checked off.
+// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a series the calendar keeps (every 6 weeks, every 30 days) comes back as a new entry on its next date after its entry is checked off; a nameless birthday on a day that isn't the person's own (a second Google account on the phone) is not brought in.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
@@ -993,6 +993,48 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     .filter(Boolean)));
   const animalBirthdays = await judgeAnimalBirthdays(newBirthdayNames, otherTitles);
 
+  // One person has one birthday. A phone signed in to a second Google account
+  // (a partner's, a shared family one) carries that account's nameless "Happy
+  // birthday!" entry as well, and it came in as a second "Your Birthday" that
+  // would have greeted the person by name on a day that isn't theirs (Nov 12
+  // 2026, six weeks before her real one). Their day is the one already in the
+  // app; with none there, the entry that carries their name; with none of
+  // those, the first nameless one. A nameless birthday on any other day is
+  // someone else's and has no name to show, so it is not brought in.
+  const monthDayOf = (raw: any): string => {
+    const v = String(raw || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v.slice(5);
+    const ms = Date.parse(v);
+    if (isNaN(ms)) return '';
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: userTz || undefined, month: '2-digit', day: '2-digit' }).format(new Date(ms));
+    } catch (_) {
+      return new Date(ms).toISOString().slice(5, 10);
+    }
+  };
+  const ownDays = new Set<string>();
+  {
+    const newBirthdays = newEvents.filter((e: any) => isBirthdayEvent(e.summary || '', (e.recurrence || []).join(';')));
+    const nameless = newBirthdays.filter((e: any) => !extractBirthdayPerson(e.summary || ''));
+    if (nameless.length) {
+      const mine = await base44.asServiceRole.entities.Task.filter({ created_by: user.email, is_own_birthday: true, status: 'active' }, '-created_date', 20).catch(() => []);
+      for (const t of mine || []) {
+        const k = monthDayOf(t?.next_reminder);
+        if (k) ownDays.add(k);
+      }
+      if (ownDays.size === 0) {
+        const named = newBirthdays.filter((e: any) => {
+          const who = extractBirthdayPerson(e.summary || '');
+          return !!who && isOwnBirthday(e.summary || '', who, user);
+        });
+        for (const e of (named.length ? named : nameless.slice(0, 1))) {
+          const k = monthDayOf(e.start?.dateTime || e.start?.date);
+          if (k) ownDays.add(k);
+        }
+      }
+    }
+  }
+
   let processedNew = 0;
   // New entries this run didn't get to (IMPORT_BUDGET_MS).
   let left = 0;
@@ -1097,6 +1139,13 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     }
 
     const isBirthday = isBirthdayEvent(title, recurrenceRule);
+    // A nameless birthday on a day that isn't theirs (ownDays, above).
+    if (isBirthday && !extractBirthdayPerson(title) && ownDays.size > 0 && !ownDays.has(monthDayOf(startRaw))) {
+      console.log('[syncGoogleCalendar] a nameless birthday on a day that is not theirs (another account on the phone), not importing:', googleId);
+      await base44.asServiceRole.entities.CalendarSyncedEvent.delete(claim.id).catch(() => {});
+      skipped++;
+      continue;
+    }
 
     // Run AI classification — not for a birthday. Everything about a birthday
     // (its title, yearly repeat, its own reminder rules) is fixed below and

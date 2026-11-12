@@ -15,7 +15,7 @@
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
-// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders).
+// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
@@ -805,6 +805,22 @@ Deno.serve(async (req) => {
   // `kind` isn't kept on saved entries; the label is.
   const isDayOfEntry = (e: any) => e?.kind === 'day_of' || (String(e?.label || '').toLowerCase() === 'day of' && e?.kind !== 'own_day_of');
 
+  // The name a person's own birthday greeting uses: the one they gave the app
+  // (the welcome chat's "Your name", Settings) before the sign-in's. A Google
+  // or email sign-up often has only the address's handle as its name, and the
+  // greeting was planned as "Happy Birthday, kimmeesnotes90688!" for someone
+  // who had told the app her name (Anna, Nov 12 2026: "fix all of the issues
+  // on kimmeesnotes account and make sure it doesn't keep happening"; five of
+  // the seven planned greetings used a handle). A sign-in name that is just
+  // the handle is no name: the greeting goes without one.
+  function ownGreetingName(u: any): string {
+    const given = String(u?.preferred_name || u?.display_name || '').trim();
+    if (given) return given;
+    const full = String(u?.full_name || '').trim();
+    const handle = String(u?.email || '').split('@')[0].trim().toLowerCase();
+    return full && full.toLowerCase() !== handle ? full : '';
+  }
+
   // Build the 3 planned reminder entries for a birthday (mirrors the client scheduler).
   function buildBirthdaySchedule(task: any, birthdayIso: string, ownerName?: string): any[] {
     const person = task.birthday_person || 'Someone';
@@ -882,7 +898,7 @@ Deno.serve(async (req) => {
   );
 
   for (const task of birthdayTasks) {
-    const ownerName = userMap[task.notification_recipient_email]?.full_name || '';
+    const ownerName = ownGreetingName(userMap[task.notification_recipient_email]);
     const isOwn = !!task.is_own_birthday || !task.birthday_person;
     let nextReminderIso = task.next_reminder;
     let schedule = Array.isArray(task.reminder_schedule) ? [...task.reminder_schedule] : [];
@@ -928,6 +944,17 @@ Deno.serve(async (req) => {
       // filling OneSignal with hundreds of cancelled notifications.
       schedule = buildBirthdaySchedule(task, nextReminderIso, ownerName);
       dirty = true;
+    } else if (isOwn && schedule.length === 1 && String(schedule[0]?.notification_id || '').startsWith('planned_')) {
+      // A greeting not booked yet that was written with another name (the
+      // sign-in's handle, or a name they have changed since): written again
+      // with theirs (ownGreetingName). Compared by the words themselves, so
+      // once they match nothing is rewritten.
+      const fresh = buildBirthdaySchedule(task, nextReminderIso, ownerName);
+      if (fresh.length === 1 && fresh[0].notification_title !== schedule[0].notification_title) {
+        schedule = fresh;
+        dirty = true;
+        console.log(`🎂 [REFILL] Own-birthday greeting for ${task.notification_recipient_email} now uses the name they gave`);
+      }
     }
 
     // The plain day-of reminder goes when the day's text reminders cover it
