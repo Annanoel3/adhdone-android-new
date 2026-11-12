@@ -230,5 +230,7 @@ export function renameSummary(plan) {
   }
   if (parts.length === 0) return '';
   const line = parts.join(', ');
-  return plan?.when ? `Set for ${line}` : `Now ${line}`;
+  if (!plan?.when) return `Now ${line}`;
+  const deadline = plan.when.fields?.deadline_style === 'by' && plan.when.fields?.classification !== 'event';
+  return `${deadline ? 'Due by' : 'Set for'} ${line}`;
 }
