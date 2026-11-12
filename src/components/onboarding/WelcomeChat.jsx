@@ -425,7 +425,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         <div ref={endRef} />
       </div>
 
-      {done && beat?.input === 'name' && (
+      {done && beat?.input === 'name' && !beat.skippable && (
         <div className="flex gap-2">
           <Input
             autoFocus
@@ -435,7 +435,24 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             placeholder="Your name"
           />
           <Button onClick={submitName} disabled={!draft.trim()}>Send</Button>
-          {beat.skippable && <Button variant="ghost" onClick={skipName}>Skip</Button>}
+        </div>
+      )}
+
+      {/* The first-run chat's name question: the same box, with Skip beside
+          Send, laid out like the task question that follows it. */}
+      {done && beat?.input === 'name' && beat.skippable && (
+        <div className="space-y-2">
+          <Input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitName()}
+            placeholder="Your name"
+          />
+          <div className="flex gap-2">
+            <Button onClick={submitName} disabled={!draft.trim()} className="flex-1">Send</Button>
+            <Button variant="ghost" onClick={skipName}>Skip</Button>
+          </div>
         </div>
       )}
 
