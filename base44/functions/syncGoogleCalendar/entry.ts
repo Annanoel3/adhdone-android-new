@@ -10,6 +10,7 @@
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
 // Re-saved Oct 13 2026 so the bundled shared/eventReminderPlan.ts is picked up: the reminder at an event's start is never the one the per-event cap drops.
+// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
