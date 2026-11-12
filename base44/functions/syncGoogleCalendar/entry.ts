@@ -697,8 +697,18 @@ async function acquireSyncLock(base44, user) {
 // look like a Google event (src/lib/calendarSync.js deviceRowToEvent) and posts
 // them here, so every rule below — AI classification, reminder plans, dedupe,
 // date patches — is shared with Google imports. Ids are "device:<cal>:<id>".
+// How long one request keeps taking in new entries. A big first import (110
+// entries on 16 calendars, Nov 11 2026) ran past what the platform gives one
+// request, about five minutes, and the phone got "Request failed with status
+// code 504" with half the calendar in; the rest arrived 25 minutes later. Now
+// a run stops taking new entries here and says how many are left (`more`);
+// the app asks again right away (runDeviceCalendarSync in calendarSync.js),
+// and anything still left comes in on the next sync.
+const IMPORT_BUDGET_MS = 150 * 1000;
+
 async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}, device = null) {
   const runId = crypto.randomUUID().slice(0, 8);
+  const runStartedMs = Date.now();
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
   // USER'S timezone. Without this the server's UTC clock made that 9 AM UTC,
   // i.e. 4 AM local — and its "1 hour before" nudge landed at 3 AM.
@@ -951,7 +961,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   const animalBirthdays = await judgeAnimalBirthdays(newBirthdayNames, otherTitles);
 
   let processedNew = 0;
+  // New entries this run didn't get to (IMPORT_BUDGET_MS).
+  let left = 0;
   for (const event of newEvents) {
+    if (Date.now() - runStartedMs > IMPORT_BUDGET_MS) { left = newEvents.length - processedNew; break; }
     if (++processedNew % HEARTBEAT_EVERY === 0) await heartbeat();
     const googleId = event.id;
     const title = event.summary || 'Untitled event';
@@ -1425,7 +1438,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (conflicts.flags?.length) console.log('[syncGoogleCalendar] flagged', conflicts.flags.length, 'overlap/duplicate pair(s)');
   }
 
-  return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail, conflicts: { flags: conflicts.flags || [], items: conflicts.items || {} } };
+  return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail, more: left, conflicts: { flags: conflicts.flags || [], items: conflicts.items || {} } };
 }
 
 Deno.serve(async (req) => {
