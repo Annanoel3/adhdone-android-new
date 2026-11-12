@@ -17,9 +17,11 @@
 //
 // RULES.md §9: the name is saved before any of this, so closing the app
 // halfway loses nothing; the words are read the moment they were typed; a
-// moment already gone by is not applied; a time the parser picked from
-// "tonight" stays out of quiet hours (time_stated false); and the fields are
-// the ones every date edit writes, so older builds read them the same.
+// day already behind us is not applied, and a time that has gone by today is
+// saved the way a new task's is (due then, nothing booked: overdue, not
+// undated); a time the parser picked from "tonight" stays out of quiet hours
+// (time_stated false); and the fields are the ones every date edit writes,
+// so older builds read them the same.
 
 import { base44 } from '@/api/base44Client';
 import { toast } from '@/components/ui/use-toast';
