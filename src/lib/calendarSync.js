@@ -316,7 +316,28 @@ export function runDeviceCalendarSync(calendarIds, { background = false, onEvent
       calendarIds: ids,
       events,
     });
-    const data = res?.data || res;
+    let data = res?.data || res;
+    // A big calendar comes in over several requests: the import stops taking
+    // new entries before the platform would cut it off and says how many are
+    // left (`more`), and the same rows are sent again until none are (what is
+    // already in is skipped). Nov 11 2026: 110 entries in one request ended
+    // in "Request failed with status code 504" with half of them in.
+    for (let round = 0; round < 12 && Number(data?.more) > 0; round++) {
+      const again = await base44.functions.invoke('syncGoogleCalendar', {
+        source: 'device',
+        calendarIds: ids,
+        events,
+      });
+      const next = again?.data || again;
+      data = {
+        ...next,
+        created: (Number(data?.created) || 0) + (Number(next?.created) || 0),
+        conflicts: {
+          flags: [...(data?.conflicts?.flags || []), ...(next?.conflicts?.flags || [])],
+          items: { ...(data?.conflicts?.items || {}), ...(next?.conflicts?.items || {}) },
+        },
+      };
+    }
     trackFire('device_calendar_synced', {
       props: { background, calendars: ids.length, events: events.length, created: data?.created ?? null },
     });
