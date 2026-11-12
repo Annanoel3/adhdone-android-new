@@ -383,3 +383,5 @@ Deno.serve(async (req) => {
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).
+
+// Re-saved Nov 12 2026: shared/reminderTitle.ts (the alarm of their own young child's birthday has no "Write a text" button; birthday_no_text).
