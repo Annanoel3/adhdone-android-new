@@ -70,8 +70,8 @@ const RENAME_SCHEMA = {
 const RENAME_PROMPT = `Someone renamed a to-do in their task app. Compare the OLD name with the NEW name and say whether the NEW name tells the app something about WHEN this happens, or HOW OFTEN it repeats, that the old name did not already say.
 
 Answer:
-- added_day: true when the new name names the day or date it happens or is due (tomorrow, Friday, the 15th, Nov 20, next week; "every Monday" names Mondays) and the old name did not name that same day.
-- added_time: true when the new name gives a clock time or a part of the day for it (2pm, at 10:30, noon, tonight, in the morning, after work) and the old name did not give that same time.
+- added_day: true when the new name names the day or date it happens or is due (today, tomorrow, Friday, the 15th, Nov 20, next week; "every Monday" names Mondays; "tonight", "this morning", "this afternoon", "this evening" and "in an hour" all name today) and the old name did not name that same day.
+- added_time: true when the new name gives a clock time or a part of the day for it (2pm, at 10:30, noon, tonight, in the morning, after work, in an hour) and the old name did not give that same time. "Tonight" is both a day and a time: both true.
 - added_repeat: true when the new name says the thing itself repeats (weekly, every day, every other week, every Monday, monthly, on the 1st of every month, yearly) and the old name did not say that same repeat.
 - added_words: the exact words from the new name that carry it, copied letter for letter; null when all three are false.
 
