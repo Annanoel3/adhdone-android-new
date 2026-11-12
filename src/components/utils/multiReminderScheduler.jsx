@@ -476,10 +476,40 @@ export async function moveRemindersToDate(task, whenISO, updates = {}) {
 // nothing below can lose it. A rhythm task ("every hour") is re-booked by
 // onTaskUpdate when its title changes. `taskIn` is the task as it was before
 // the rename (its old name is what gets swapped out of the reminders' words).
-export async function saveTaskTitle(taskIn, newTitle) {
+//
+// `opts.reread` (a rename the person made by hand on a card or the details
+// sheet): the new name is also READ, and a day, a time or a repeat it adds is
+// put on the task (renameReread.js; Anna, Nov 12 2026: "any change to a task
+// whether it be date, time, name etc should initiate a relook"). Until then
+// a rename changed the words of the reminders and had Smart Reminders plan
+// again, and "weekly" typed onto a chore's name left it a one-time task. The
+// asking starts at once (it saves nothing) and is applied only after the
+// re-booking below has finished, so the two never write over each other.
+// Returns { task, summary } when the reading changed the task, else null.
+// A rename the app makes itself (a goal's step moving on) is not read.
+export async function saveTaskTitle(taskIn, newTitle, opts = {}) {
   const title = String(newTitle || '').trim();
-  if (!taskIn?.id || !title) return;
+  if (!taskIn?.id || !title) return null;
   await base44.entities.Task.update(taskIn.id, { title });
+  const reading = opts?.reread === true
+    ? import('./renameReread')
+      .then((m) => m.readRename(taskIn, title))
+      .catch((e) => { console.error('[saveTaskTitle] could not read the new name:', e); return null; })
+    : null;
+  await rebookUnderNewName(taskIn, title);
+  if (!reading) return null;
+  try {
+    const found = await reading;
+    if (!found) return null;
+    const { applyRenameReading } = await import('./renameReread');
+    return await applyRenameReading(taskIn.id, title, found);
+  } catch (e) {
+    console.error('[saveTaskTitle] could not apply what the new name says:', e);
+    return null;
+  }
+}
+
+async function rebookUnderNewName(taskIn, title) {
   if (taskIn.reminder_interval && taskIn.reminder_interval !== 'once') return;
   // A birthday's reminders are the birthday scheduler's (cronRefillReminders
   // / birthdayScheduler) and name the person from birthday_person, not the
