@@ -1,3 +1,4 @@
+// Nov 12 2026: { renamed: { from, to } } reads a task's new name after a rename. A short look on gpt-6-astra says whether the new name adds a day, a time or a repeat the old one didn't have; only then is the new name parsed, as of now, by the same parser as a new task. Nothing is saved here (the app applies it: renameReread.js). Admin check of several at once: { renameTry: [{ from, to }] }.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 1 2026 so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: worth_breaking_down, a several-steps job, so the card offers "Break it into steps" right on the row.
@@ -16,6 +17,8 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 import { buildTaskParsePrompt } from "../../shared/taskParsePrompt.ts";
 import { resolveQuietHours } from "../../shared/quietHours.ts";
+import OpenAI from "npm:openai";
+import { lean } from "../../shared/aiCost.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy, Oct 12 2026:
@@ -40,6 +43,78 @@ async function whoIsAsking(base44: any) {
     }
   }
   return null;
+}
+
+// ── A renamed task: does the new name say something new? ─────────────────────
+// Anna, Nov 12 2026: "any change to a task whether it be date, time, name etc
+// should initiate a relook". Until then a rename only re-booked the pushes
+// under the new name and had Smart Reminders plan again; nothing read the new
+// name, so "weekly" typed onto the end of a chore's name left it a one-time
+// task (two of a first-week user's chores). The model answers one narrow
+// question, the way a person's assistant would: does the NEW name tell the app
+// a day, a time or a repeat the OLD name didn't? Only what it says was added
+// is taken from the parse (renameRereadPlan.js), so fixing a typo, rewording,
+// or a day that was already in the name changes nothing on the task.
+const RENAME_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    added_day: { type: "boolean" },
+    added_time: { type: "boolean" },
+    added_repeat: { type: "boolean" },
+    added_words: { type: ["string", "null"] },
+  },
+  required: ["added_day", "added_time", "added_repeat", "added_words"],
+};
+
+const RENAME_PROMPT = `Someone renamed a to-do in their task app. Compare the OLD name with the NEW name and say whether the NEW name tells the app something about WHEN this happens, or HOW OFTEN it repeats, that the old name did not already say.
+
+Answer:
+- added_day: true when the new name names the day or date it happens or is due (tomorrow, Friday, the 15th, Nov 20, next week; "every Monday" names Mondays) and the old name did not name that same day.
+- added_time: true when the new name gives a clock time or a part of the day for it (2pm, at 10:30, noon, tonight, in the morning, after work) and the old name did not give that same time.
+- added_repeat: true when the new name says the thing itself repeats (weekly, every day, every other week, every Monday, monthly, on the 1st of every month, yearly) and the old name did not say that same repeat.
+- added_words: the exact words from the new name that carry it, copied letter for letter; null when all three are false.
+
+Judge it the way the person's own assistant would:
+- Only what the new name itself says counts. Never guess a day, a time or a repeat from what kind of thing it is.
+- A day, time or pace that is part of WHAT the thing is, not when to do it, does not count: "Call mom about Sunday dinner", "Buy Friday night pizza supplies", "Black Friday shopping list", "Monday meeting notes", "Order the 2 pm class textbook", "Refill daily planner", "Finish the weekly report", "Renew monthly bus pass".
+- If the old name already said the same day, time or repeat, it is not new. A typo fixed, clearer wording, a person, a place, an amount or any other detail added: all false.
+- If the new name's day, time or repeat is DIFFERENT from the old name's (weekly became monthly, Friday became Saturday, 2pm became 4pm), that is new: true.
+- Words about how to be reminded ("remind me every hour", "keep reminding me") are not a repeat of the thing itself: added_repeat false for those.
+- When you are not sure, answer false.`;
+
+async function judgeRename(from: string, to: string) {
+  const none = { day: false, time: false, repeat: false, words: null as string | null };
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: "parseTask.rename" });
+  const completion = await openai.chat.completions.create({
+    model: "gpt-6-astra",
+    reasoning_effort: "low",
+    messages: [
+      { role: "system", content: RENAME_PROMPT },
+      { role: "user", content: `OLD name: ${JSON.stringify(from)}\nNEW name: ${JSON.stringify(to)}` },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "rename_look", strict: true, schema: RENAME_SCHEMA } },
+  });
+  const a = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  const words = String(a?.added_words || "").trim();
+  // The words it points at have to be in the new name, letter for letter.
+  // An answer that quotes something else is treated as nothing added.
+  const flat = (v: string) => v.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!words || !flat(to).includes(flat(words))) return none;
+  return { day: a.added_day === true, time: a.added_time === true, repeat: a.added_repeat === true, words };
+}
+
+// The look and, only when it found something, the parse of the new name as of
+// now (the rename is when the words were written; RULES.md §8.3).
+async function rereadRename(base44: any, user: any, fromRaw: any, toRaw: any) {
+  const from = String(fromRaw || "").trim().slice(0, 300);
+  const to = String(toRaw || "").trim().slice(0, 300);
+  if (!to || from.toLowerCase() === to.toLowerCase()) return { added: null, parsed: null };
+  const added = await judgeRename(from, to);
+  if (!added.day && !added.time && !added.repeat) return { added, parsed: null };
+  const parsed = await runTaskParse(base44, to, user?.timezone, user?.about_me, undefined,
+    user ? resolveQuietHours(user) : undefined);
+  return { added, parsed };
 }
 
 Deno.serve(async (req) => {
@@ -74,6 +149,37 @@ Deno.serve(async (req) => {
           return { text, ...(await runTaskParse(base44, text, tz, aboutMe)) };
         } catch (e) {
           return { text, error: String(e?.message || e) };
+        }
+      }));
+      return Response.json({ results });
+    }
+
+    // A task was renamed: what the new name adds, and its parse. Signed-in
+    // people only (it reads their time zone, about-me and quiet hours).
+    // Nothing is saved here. { renamed: { from, to } }
+    if (body?.renamed && typeof body.renamed === "object") {
+      if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return Response.json({ reread: await rereadRename(base44, user, body.renamed.from, body.renamed.to) });
+    }
+    // Admin check of several renames at once; nothing is saved.
+    // { renameTry: [{ from, to }] }
+    if (Array.isArray(body?.renameTry)) {
+      if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
+      const results = await Promise.all(body.renameTry.slice(0, 30).map(async (r: any) => {
+        try {
+          const out = await rereadRename(base44, user, r?.from, r?.to);
+          const p: any = out.parsed;
+          return {
+            from: r?.from, to: r?.to, added: out.added,
+            parsed: p ? {
+              title: p.title, classification: p.classification, target_date: p.target_date, target_time: p.target_time,
+              time_stated: p.time_stated, end_date: p.end_date, deadline_style: p.deadline_style, day_only_task: p.day_only_task,
+              recurrence_pattern: p.recurrence_pattern, recurrence_days: p.recurrence_days, reminder_interval: p.reminder_interval,
+              reminder_wish: p.reminder_wish,
+            } : null,
+          };
+        } catch (e) {
+          return { from: r?.from, to: r?.to, error: String((e as any)?.message || e) };
         }
       }));
       return Response.json({ results });
