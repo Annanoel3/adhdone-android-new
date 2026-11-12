@@ -24,6 +24,11 @@ export const ONBOARDING_STEPS = {
   // gets a dot out of nowhere — and guideSeen when the guide opens.
   guideNudge: 'onboarding_guide_nudge',
   guideSeen: 'onboarding_guide_seen',
+  // They tapped Skip on the welcome chat's name question (Anna, Nov 12 2026:
+  // "I guess we can skip the name"). The question counts as answered: the
+  // chat picks up after it if they close the app partway, and nothing asks
+  // for the name again (Settings has the field).
+  nameSkipped: 'onboarding_name_skipped',
 };
 
 const EVENT = 'adhd_onboarding_step';

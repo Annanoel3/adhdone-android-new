@@ -46,8 +46,8 @@ export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
       "Welcome back! ADHDone is still a pretty new app, so new things are always rolling out.",
   },
   {
-    text: (name) =>
-      `One quick question that makes this app a lot better at helping *you*, ${name}.`,
+    text: (name, handle, about, task, when, notify, ctx) =>
+      `One quick question that makes this app a lot better at helping *you*${ctx?.named === false ? '' : `, ${name}`}.`,
   },
   {
     text: () =>
@@ -89,7 +89,7 @@ export const FIRST_DONE_SCRIPT = [
 // usual case): just the about-you question.
 export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
   {
-    text: (name) => `First one done — nice work, ${name}. One quick question now that you've seen how this works.`,
+    text: (name, handle, about, task, when, notify, ctx) => `First one done — nice work${ctx?.named === false ? '' : `, ${name}`}. One quick question now that you've seen how this works.`,
   },
   {
     text: () =>
@@ -136,7 +136,7 @@ export const ABOUT_NOW_SCRIPT = [
 // Same, for an account that already gave its name (the usual case).
 export const ABOUT_NOW_ABOUT_ONLY_SCRIPT = [
   {
-    text: (name) => `Quick one, ${name}, that makes ADHDone a lot better at helping *you*.`,
+    text: (name, handle, about, task, when, notify, ctx) => `Quick one${ctx?.named === false ? '' : `, ${name},`} that makes ADHDone a lot better at helping *you*.`,
   },
   {
     text: () =>

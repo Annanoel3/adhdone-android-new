@@ -107,6 +107,8 @@ export default function CatchUpDialog({ user }) {
     // it's missing) has been: leave them alone.
     if (isStepDone(NAME_RETRY_STEP) || isStepDone(ONBOARDING_STEPS.catchUp)) return;
     if ((user.preferred_name || user.display_name || '').trim()) return;
+    // They tapped Skip on the name question: that was their answer.
+    if (isStepDone(ONBOARDING_STEPS.nameSkipped)) return;
     // The welcome was closed in THIS sitting: not now, a later open.
     try { if (sessionStorage.getItem(NAME_RETRY_HOLD) === '1') return; } catch (e) {}
     nameChecked.current = true;
@@ -160,15 +162,18 @@ export default function CatchUpDialog({ user }) {
   // hasn't; an older one gets the welcome-back.
   const NEW_FLOW_SINCE = Date.parse('2026-09-29T00:00:00Z');
   const newFlow = Date.parse(user?.created_date || '') >= NEW_FLOW_SINCE;
+  // A name they have, or a name question they skipped: either way it isn't
+  // asked with the about-you question.
+  const nameSettled = !!knownName || isStepDone(ONBOARDING_STEPS.nameSkipped);
   const script = kind === 'rewelcome'
     ? REWELCOME_SCRIPT
     : kind === 'name'
     ? NAME_ONLY_SCRIPT
     : newFlow
       ? (doneOne
-        ? (knownName ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
-        : (knownName ? ABOUT_NOW_ABOUT_ONLY_SCRIPT : ABOUT_NOW_SCRIPT))
-      : (knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT);
+        ? (nameSettled ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
+        : (nameSettled ? ABOUT_NOW_ABOUT_ONLY_SCRIPT : ABOUT_NOW_SCRIPT))
+      : (nameSettled ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT);
 
   useEffect(() => {
     if (!open) return;

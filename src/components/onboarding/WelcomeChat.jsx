@@ -181,7 +181,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   }, [idx, script]);
 
   const beat = script[idx];
-  const line = beat ? beat.text(name || 'you', handle, about, task, when, notify) : '';
+  // The last argument says whether there is a name to say (they can skip the
+  // name question); lines that greet by name drop it when there isn't.
+  const line = beat ? beat.text(name || 'you', handle, about, task, when, notify, { named: !!name }) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
 
   // Where someone is in the chat: one event each time a question (or the
@@ -254,6 +256,15 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     setHistory((h) => [...h, { from: 'app', text: line }, { from: 'user', text: value }]);
     setDraft('');
     setIdx((i) => i + 1);
+  };
+
+  // Skip on the name (only where the script allows it: the first-run chat).
+  // Nothing is saved as their name; the question counts as answered so it
+  // isn't asked again (ONBOARDING_STEPS.nameSkipped).
+  const skipName = () => {
+    markStepDone(ONBOARDING_STEPS.nameSkipped);
+    trackFire('welcome_name_skip', {});
+    answer('');
   };
 
   const submitAbout = () => {
@@ -424,6 +435,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             placeholder="Your name"
           />
           <Button onClick={submitName} disabled={!draft.trim()}>Send</Button>
+          {beat.skippable && <Button variant="ghost" onClick={skipName}>Skip</Button>}
         </div>
       )}
 

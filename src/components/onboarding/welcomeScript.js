@@ -46,6 +46,12 @@ const SCRIPT = [
   {
     text: () => "First things first: what should we call you? You can change it in Settings anytime.",
     input: 'name',
+    // The one question that used to have no way past it. Nov 11 2026 a new
+    // account left 14 seconds in, right as this question finished appearing
+    // (another did the same Oct 4); Anna, Nov 12 2026: "I guess we can skip
+    // the name". Skip moves straight on to the first task; lines that would
+    // say their name go without it (`ctx.named`).
+    skippable: true,
   },
   {
     // The first win comes right after the name. One real thing on the list
@@ -60,7 +66,7 @@ const SCRIPT = [
     // (In an hour from 7 PM), then Tomorrow at 9 (Anna, Nov 8 2026), so
     // someone who means tomorrow can still pick it (Anna, Nov 2 2026, after
     // Connie and Caterina's first reminders were both the next morning).
-    text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting that you could knock out ${new Date().getHours() >= 21 ? 'tomorrow' : 'today'}? Type it in and it's on your list.`,
+    text: (name, handle, about, task, when, notify, ctx) => `${ctx?.named === false ? '' : `Nice to meet you, ${name}! `}What's one thing you keep forgetting that you could knock out ${new Date().getHours() >= 21 ? 'tomorrow' : 'today'}? Type it in and it's on your list.`,
     input: 'task',
   },
   {
@@ -125,7 +131,7 @@ export function resumeScript({ hasTask = false, notifyAnswered = false } = {}) {
     return beat;
   });
   return [
-    { text: (name) => `Welcome back, ${name}! Let's pick up where we left off.` },
+    { text: (name, handle, about, task, when, notify, ctx) => `Welcome back${ctx?.named === false ? '' : `, ${name}`}! Let's pick up where we left off.` },
     ...rest,
   ];
 }

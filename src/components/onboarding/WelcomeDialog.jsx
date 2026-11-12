@@ -90,13 +90,15 @@ export default function WelcomeDialog({ user }) {
     // An about-me means they got past the chat (it asked that question until
     // Nov 4 2026, and the catch-up asks it only once the chat is done). An
     // account older than a few days with a name is done too, as before.
-    if (user.about_me || (user.preferred_name && accountIsOld(user))) {
+    // Past the name question: they gave one, or tapped Skip on it.
+    const pastName = !!user.preferred_name || isStepDone(ONBOARDING_STEPS.nameSkipped);
+    if (user.about_me || (pastName && accountIsOld(user))) {
       markStepDone(ONBOARDING_STEPS.welcome);
       return undefined;
     }
     let cancelled = false;
-    // A new account with a name and no finished chat: pick it back up.
-    if (user.preferred_name && !wasReplayedThisSession()) {
+    // A new account past the name question with no finished chat: pick it back up.
+    if (pastName && !wasReplayedThisSession()) {
       accountHasTasks(user).then((hasTask) => {
         if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
         const notifyAnswered = isStepDone(ONBOARDING_STEPS.permissions);
