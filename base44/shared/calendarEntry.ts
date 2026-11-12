@@ -90,7 +90,7 @@ Which one is it?
 - "shift": only their work hours for that day, written as times or a time range ("9-5", "2pm-10pm", "Closing shift", "Work 8-4").
 - "none": there is nothing to do and nowhere to be because of it: a day off work, a public holiday or observance (even one people celebrate), a payday or other money coming in, a school-closed note, daylight saving time, a label for the day.
 - "private": personal body or health tracking they would not want shown on a lock screen (a cycle or fertility tracker entry, for example).
-- "attend": anything else: something they go to, do, prepare for or must not miss (an appointment, a class, a party or anniversary of their own, a trip, a deadline, a bill, a child's early dismissal, a visit). When in doubt, "attend".
+- "attend": anything else: something they go to, do, prepare for or must not miss (an appointment, a class, a party, a trip, a deadline, a bill, a child's early dismissal, a visit), and any occasion that belongs to a person, theirs or someone else's (an anniversary, a birthday, a graduation, a memorial date): they will want to mark it or reach out. When in doubt, "attend".
 
 Return {"kind": "shift"} or {"kind": "none"} or {"kind": "private"} or {"kind": "attend"}.` },
       ],
