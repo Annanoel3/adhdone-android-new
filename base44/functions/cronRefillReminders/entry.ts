@@ -15,7 +15,7 @@
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
-// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName).
+// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName). The owner alert for notifications off says so when the person left before being asked.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
@@ -2631,9 +2631,17 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const offTold = msOf(marks[offKey]);
     const offRested = !(Number.isFinite(offTold) && nowMs - offTold < ALARM_ALERT_REST_MS);
     if (perm?.notifications === false && !settingUp && offRested && Number.isFinite(permMs) && nowMs - permMs < 2 * H_DAY) {
+      // Someone who left during the welcome chat was never asked: the chat
+      // asks for notifications after the first task. Said as that, not as
+      // "has notifications off", which reads like a choice they made (Anna,
+      // Nov 12 2026, about an account that left 14 seconds in: "does she have
+      // the popup on screen telling her to turn notifications on?").
+      const wasAsked = Array.isArray(u.onboarding_flags) && u.onboarding_flags.includes('onboarding_permissions_done_v2');
       problems.push({
-        title: `📵 ADHDone: ${nameOf(u)} has notifications off`,
-        body: `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`,
+        title: wasAsked ? `📵 ADHDone: ${nameOf(u)} has notifications off` : `📵 ADHDone: ${nameOf(u)} left before the notification question`,
+        body: wasAsked
+          ? `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`
+          : `They opened the app ${theirClock(u, permMs)} (their time) and left during the welcome chat, before it asked about notifications. The app was never allowed to send any, so nothing can reach them, and nothing is on their screen about it. ${u.email}`,
         sinceMs: nowMs - 7 * H_DAY,
         mark: { key: offKey, value: new Date(nowMs).toISOString() },
       });
