@@ -709,8 +709,22 @@ async function notesAsk(base44: any, user: any, body: any) {
   const openai = lean(new OpenAI({ apiKey: privateOpenAiKey("transcribeAudioNew") }), { name: 'transcribeAudioNew' });
   const SYSTEM = "You help someone with ADHD find things in recordings they made of meetings, appointments, classes and conversations. Answer with JSON only.";
 
+  // The question's own words that were said in each recording. The pick below
+  // reads the notes, and notes can leave out a detail the transcript has: a
+  // question about one got "I couldn't find that in your recordings" with the
+  // answer sitting in a transcript nobody looked at (Anna, Nov 12 2026: "make
+  // sure our feature to search notes works. I tried it one time and it
+  // didn't", asking what the doctor said about something).
+  const ASK_FILLER = new Set(["what", "when", "where", "which", "about", "again", "that", "this", "with", "have", "from", "they", "them", "were", "would", "could", "should", "said", "says", "tell", "told", "does", "there", "their", "your", "mine", "like", "just", "been", "will", "some", "something", "anything", "remember", "mention", "mentioned"]);
+  const askWords = [...new Set(question.toLowerCase().replace(/[^a-z0-9\s'-]/g, " ").split(/\s+/).filter((w) => w.length >= 4 && !ASK_FILLER.has(w)))].slice(0, 12);
+  const heardIn = new Map<any, string[]>();
+  for (const r of recs) {
+    const said = transcriptOf(r, 600000).toLowerCase();
+    heardIn.set(r, askWords.filter((w) => said.includes(w)));
+  }
+
   // 1. Which recordings could answer it.
-  let index = recs.map((r, i) => JSON.stringify({ n: i + 1, ...brief(r) })).join("\n");
+  let index = recs.map((r, i) => JSON.stringify({ n: i + 1, ...brief(r), said_in_transcript: heardIn.get(r) || [] })).join("\n");
   if (index.length > 120000) index = index.slice(0, 120000);
   let picks: number[] = [];
   try {
@@ -719,14 +733,21 @@ async function notesAsk(base44: any, user: any, body: any) {
 Their recordings, newest first, each with its notes:
 ${index}
 
-Which recordings could hold the answer? Think about what the question is really about, not just its words: "my boss" may be a manager named in the notes, "the report" may be called something else there. Pick up to 3, most likely first; none if no recording could.
+Which recordings could hold the answer? Think about what the question is really about, not just its words: "my boss" may be a manager named in the notes, "the report" may be called something else there. "said_in_transcript" lists the question's own words that were spoken in that recording, even where its notes leave them out; a recording that has them is worth picking. Pick up to 3, most likely first; none if no recording could.
 
 Return JSON: { "picks": [recording n, ...] }`, 2000);
     picks = (Array.isArray(got?.picks) ? got.picks : []).map((x: any) => Number(x)).filter((x: number) => x >= 1 && x <= recs.length);
   } catch (_) {
     return Response.json({ ok: false, error: "ask_failed" }, { status: 502 });
   }
-  const picked = [...new Set(picks)].slice(0, 3).map((n) => recs[n - 1]);
+  let picked = [...new Set(picks)].slice(0, 3).map((n) => recs[n - 1]);
+  // None picked from the notes: the recordings where the most of the
+  // question's words were said are read anyway, and the answer step says so
+  // plainly if it isn't in them.
+  if (!picked.length) {
+    picked = recs.map((r) => ({ r, n: (heardIn.get(r) || []).length }))
+      .filter((x) => x.n > 0).sort((a, b) => b.n - a.n).slice(0, 3).map((x) => x.r);
+  }
   if (!picked.length) {
     return Response.json({ ok: true, answer: "I couldn't find that in your recordings.", sources: [] });
   }
@@ -747,7 +768,7 @@ Return JSON: { "picks": [recording n, ...] }`, 2000);
 Notes: ${JSON.stringify(brief(r))}
 Transcript:
 """
-${transcriptOf(r, 50000) || "(no transcript)"}
+${transcriptOf(r, 120000) || "(no transcript)"}
 """`).join("\n\n");
   let out: any;
   try {
@@ -896,6 +917,20 @@ async function notesTry(user: any, body: any) {
   const started = Date.now();
   // { question } instead: the one-recording ask (notes_ask_one) run on this
   // transcript, quotes checked the same way, nothing saved.
+  // { question, recordings: [{ title, started_at, transcript, notes }] }: the
+  // ask across recordings (notes_ask) run on these made-up recordings, nothing
+  // read from anyone's account and nothing saved.
+  if (body?.question && Array.isArray(body?.recordings)) {
+    const fakes = body.recordings.slice(0, 20).map((r: any, i: number) => ({
+      id: `try${i + 1}`, kind: "note_recording", title: String(r?.title || `Test recording ${i + 1}`),
+      started_at: r?.started_at || new Date().toISOString(), notes: r?.notes || null,
+      transcript_parts: [{ index: 0, start_ms: 0, text: String(r?.transcript || "") }],
+    }));
+    const stub = { entities: { EnergyLog: { filter: async () => fakes }, Task: { filter: async () => [] } } };
+    const res = await notesAsk(stub, user, { question: body.question });
+    const out = await res.json();
+    return Response.json({ model: NOTES_MODEL, seconds: Math.round((Date.now() - started) / 100) / 10, ...out });
+  }
   if (body?.question) {
     const fake = { id: "try", title: String(body?.title || "Test recording"), started_at: body?.started_at || new Date().toISOString(),
       transcript_parts: [{ index: 0, start_ms: 0, text: transcript }] };

@@ -263,12 +263,23 @@ function searchLines(r) {
   add("title", r?.title || n.title);
   (n.gist || []).forEach((g) => add("gist", g));
   (n.todos || []).forEach((t) => add("to-do", t?.text));
-  (n.details || []).forEach((d) => add("details", typeof d === "string" ? d : [d?.label, d?.text].filter(Boolean).join(": ")));
+  // A detail is saved as { label, value } ("Dose": "20 mg"). This read .text,
+  // which no detail has, so a word that was only in a detail's value was
+  // never found (fixed Nov 12 2026).
+  (n.details || []).forEach((d) => add("details", typeof d === "string" ? d : [d?.label, d?.value ?? d?.text].filter(Boolean).join(": ")));
   (n.sections || []).forEach((s) => { add("topic", s?.heading); (s?.points || []).forEach((p) => add(s?.heading || "topic", p)); });
   (n.decisions || []).forEach((d) => add("decided", d?.text));
   (n.questions || []).forEach((q) => add("open question", q?.text));
   (r?.transcript_parts || []).slice().sort((a, b) => (a?.index || 0) - (b?.index || 0)).forEach((p) => add("transcript", p?.text));
   return out;
+}
+
+// Typed as a question ("what did the doctor say about the dose again?"), not
+// as words to find.
+function looksLikeQuestion(text) {
+  const q = String(text || "").trim();
+  return /\?$/.test(q)
+    || /^(what|when|where|who|whom|whose|why|how|which|did|does|do|is|are|was|were|can|could|should|would|will|has|have|had)\b/i.test(q);
 }
 
 function searchMatch(r, query) {
@@ -1640,6 +1651,13 @@ export default function NotesPage() {
               // A question asked: the answer above is the result, not "nothing has these words".
               if (search.trim().length >= 2 && hits.length === 0) {
                 if (asked && asked.question === search.trim()) return null;
+                // A question typed here is not a failed word search. It used to
+                // read "Nothing in your notes or transcripts has (the whole
+                // question)", which looks like the answer is no (Anna, Nov 12
+                // 2026: "I tried it one time and it didn't").
+                if (looksLikeQuestion(search)) {
+                  return <p className={`text-sm ${soft}`}>Tap Ask and ADHDone will look through your recordings for the answer.</p>;
+                }
                 return <p className={`text-sm ${soft}`}>Nothing in your notes or transcripts has "{search.trim()}". Tap Ask to ask it as a question.</p>;
               }
               return hits.map(({ r, m }) => {
