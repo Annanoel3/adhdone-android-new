@@ -10,7 +10,7 @@
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
 // Re-saved Oct 13 2026 so the bundled shared/eventReminderPlan.ts is picked up: the reminder at an event's start is never the one the per-event cap drops.
-// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders).
+// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a series the calendar keeps (every 6 weeks, every 30 days) comes back as a new entry on its next date after its entry is checked off.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
@@ -906,12 +906,42 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   // single occurrence of it that was later moved in the calendar (it arrives
   // with its own id, "<series>_<time>") doesn't sneak back in as a new task.
   const deletedSeries = new Set<string>();
+  // A series the calendar keeps (every 6 weeks, every 30 days: no repeat of
+  // the app's own, shared/calendarEntry.ts) whose entry they checked off, and
+  // the calendar has since moved on to its next date: that date comes in as a
+  // new entry, through the same import as any new event. Without this the
+  // finished entry only had its date changed and stayed finished, so the
+  // series was never seen again once its first entry was checked off. The
+  // finished entry and its import record keep the calendar's id with the day
+  // they were for, so neither is taken for the new one.
+  const nextRounds: any[] = [];
+  const startAtMs = (raw: any) => {
+    const v = String(raw || '');
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? Date.parse(`${v}T23:59:59Z`) : Date.parse(v);
+  };
   const PARALLEL = 10;
   for (let i = 0; i < alreadySynced.length; i += PARALLEL) {
     await Promise.all(alreadySynced.slice(i, i + PARALLEL).map(async (event) => {
       const existing = existingByGoogleId[event.id];
       const existingTask = tasksById[existing.adhd_task_id];
       if (existingTask) {
+        const seriesRule = (event.recurrence || []).join(';');
+        const wasMs = startAtMs(existing.start_time);
+        const nowAtMs = startAtMs(event.start?.dateTime || event.start?.date);
+        if (existingTask.status === 'completed' && /FREQ=/i.test(seriesRule) && seriesPattern(seriesRule) === 'none'
+          && Number.isFinite(wasMs) && Number.isFinite(nowAtMs) && nowAtMs > wasMs && nowAtMs > Date.now()) {
+          try {
+            const doneId = `${event.id}#done:${String(existing.start_time).slice(0, 10)}`;
+            await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, { google_event_id: doneId, last_synced_at: new Date().toISOString() });
+            await base44.asServiceRole.entities.Task.update(existingTask.id, { google_event_id: doneId }).catch(() => {});
+            delete existingByGoogleId[event.id];
+            nextRounds.push(event);
+            console.log('[syncGoogleCalendar] a finished entry of a series the calendar keeps: its next date comes in as a new entry:', event.id);
+            return;
+          } catch (e) {
+            console.log('[syncGoogleCalendar] could not set up the next date of a calendar-kept series, left as it is:', event.id, (e as any)?.message || e);
+          }
+        }
         const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event, userTz, { user, budget, toCheck });
         if (didUpdate) { updated++; } else { skipped++; }
         return;
@@ -926,6 +956,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       skipped++;
     }));
   }
+  // Their next dates join what is new this run.
+  for (const e of nextRounds) newEvents.push(e);
 
   // The same event saved in two calendars (an invite in both a work and a
   // personal calendar, a birthday in both Google and Samsung) arrives with two
