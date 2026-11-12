@@ -1507,6 +1507,9 @@ Deno.serve(async (req) => {
         skipped: dresult.skipped,
         cancelled_removed: dresult.cancelledRemoved,
         results: dresult.results,
+        // New entries this request didn't get to (IMPORT_BUDGET_MS): the app
+        // sends the rows again.
+        more: Number(dresult.more) || 0,
         conflicts: dresult.conflicts || { flags: [], items: {} },
       });
     }
