@@ -1184,6 +1184,17 @@ async function handleTaskEvent(req: Request): Promise<Response> {
 
       const currentTask = task[0];
 
+      // It became a one-time reminder while this ran (Nov 12 2026: a rename
+      // whose new name the app then read a day or a time from,
+      // renameReread.js, a few seconds after the title was saved). The app
+      // books those itself, and "once" has no interval to count from: the
+      // loop below would have booked one stray push and then failed on an
+      // invalid date.
+      if (currentTask.reminder_interval === 'once') {
+        console.log('[onTaskUpdate] One-time reminder by now, the app books it: not rescheduling');
+        return finish({ success: true, skipped: true, reason: 'one_time_reminder_now' });
+      }
+
       // We just cancelled every live notification. From here the task MUST end up
       // with either a fresh batch or a genuinely empty list — never the stale IDs
       // of the notifications we just deleted. A stale non-empty list makes the
