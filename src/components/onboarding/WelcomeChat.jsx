@@ -184,6 +184,17 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const line = beat ? beat.text(name || 'you', handle, about, task, when, notify) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
 
+  // Where someone is in the chat: one event each time a question (or the
+  // closing "Let's go") is fully on screen. Nov 12 2026: a new account left 14
+  // seconds in, and nothing recorded which line it was on (Anna: "find out
+  // why ... This is too strong of a trend for there not to be a reason").
+  // Only the step is kept, never what anyone typed.
+  const beatKind = beat ? (beat.final ? 'done' : beat.input || '') : '';
+  useEffect(() => {
+    if (!done || !beatKind) return;
+    trackFire('welcome_chat', { props: { beat: beatKind, step: idx } });
+  }, [done, beatKind, idx]);
+
   // Anna, Nov 6 2026 (iPhone): "The chat scrolls really slowly down while
   // it's sending things". This was a smooth scrollIntoView on every typed
   // letter (every 28 ms): each one restarted the last one's animation, so the
