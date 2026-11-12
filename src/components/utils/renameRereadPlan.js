@@ -109,6 +109,8 @@ export function planRenameChanges(task, added, parsed, now = new Date()) {
   let day = wantsDay ? parsed.target_date : (hasDay && hasDay >= today ? hasDay : parsedDay);
   let time = wantsTime ? parsed.target_time : hasTime;
   if (!day) return plan;
+  // A day already behind us is not put on a task by a rename.
+  if (day < today) return plan;
   if (time && momentOf(day, time).getTime() <= floor) {
     if (!wantsDay && parsedDay && parsedDay !== day && momentOf(parsedDay, time).getTime() > floor) {
       day = parsedDay;
@@ -117,12 +119,12 @@ export function planRenameChanges(task, added, parsed, now = new Date()) {
       // by on it ("today", typed at 2:30 on a task that was Friday at 2): the
       // day is taken, with no time.
       time = null;
-    } else {
-      // A moment already behind us: the task keeps what it has (RULES.md §9 Q3).
-      return plan;
     }
+    // Otherwise it is today, at a time that has just gone by ("this
+    // afternoon", read as 2:00 at 2:30): saved as that, the way the same
+    // words are on a new task. It is due then and nothing is booked, so it
+    // reads as overdue, not undated (RULES.md §9 Q3).
   }
-  if (!time && day < today) return plan;
   // The name now says what the task already has.
   if (day === hasDay && (time || null) === (hasTime || null)) return plan;
 
