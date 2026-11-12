@@ -15,6 +15,7 @@
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
+// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
