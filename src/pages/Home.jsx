@@ -312,9 +312,11 @@ export default function Home() {
   const handleEditTitle = async (taskId, newTitle) => {
     const before = tasks.find(t => t.id === taskId) || { id: taskId };
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle } : t));
-    // Booked pushes go out under the new name too (saveTaskTitle).
+    // Booked pushes go out under the new name too (saveTaskTitle), and the
+    // new name is read: a day, a time or a repeat typed into it goes on the
+    // task (renameReread.js; the list reloads on its 'tasks-changed').
     import("../components/utils/multiReminderScheduler")
-      .then(({ saveTaskTitle }) => saveTaskTitle(before, newTitle))
+      .then(({ saveTaskTitle }) => saveTaskTitle(before, newTitle, { reread: true }))
       .catch(error => {
         console.error("Failed to update title:", error);
         loadTasks();
