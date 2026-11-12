@@ -492,8 +492,11 @@ Return JSON:
     try {
       // Saved, and every push still ahead re-booked under the new name
       // (multiReminderScheduler.saveTaskTitle; the card's rename uses it too).
+      // The new name is read as well: a day, a time or a repeat typed into it
+      // goes on the task (renameReread.js), and the sheet shows it.
       const { saveTaskTitle } = await import('../utils/multiReminderScheduler');
-      await saveTaskTitle(task, newTitle);
+      const reread = await saveTaskTitle(task, newTitle, { reread: true });
+      if (reread?.task) onUpdate(reread.task);
     } catch (error) {
       console.error("Error saving title:", error);
     }
