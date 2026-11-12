@@ -104,12 +104,14 @@ export async function scheduleBirthdayReminders(task) {
   // (cronRefillReminders), so the plain "It's X's birthday today!" is left out
   // for a person's birthday (Anna, Oct 29 2026). Kept for a pet, your own
   // birthday, and a text already sent. Same rule as textCoversTheDay there.
-  const textCoversTheDay = !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && task.birthday_text_sent !== true;
+  const textCoversTheDay = !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && !task.birthday_no_text && task.birthday_text_sent !== true;
 
   for (const { key, kind, label } of kinds) {
     if (!toggles[key]) continue;
     if (key === "day_of" && textCoversTheDay) continue;
-    const content = reminderContent(person, kind, birthdayIso, task.birthday_animal);
+    // Their own young child's birthday (birthday_no_text) is worded like a
+    // pet's: nothing about a text. Same as cronRefillReminders.
+    const content = reminderContent(person, kind, birthdayIso, task.birthday_animal || (task.birthday_no_text ? 'child' : null));
     const sendAt = new Date(birthdayDate);
     sendAt.setDate(sendAt.getDate() + content.offsetDays);
     if (sendAt <= now) continue; // skip reminders that would fire in the past
@@ -176,6 +178,22 @@ export async function scheduleBirthdayReminders(task) {
  * the ones already booked were worded for a person ("time to sort a gift or
  * message", "don't forget to reach out"). Returns the updated task.
  */
+// Texts back on for a birthday the import took for their young child's
+// (birthday_no_text): its reminders are booked again in a person's words.
+// Returns the updated task.
+export async function allowBirthdayText(taskIn) {
+  const task = (await base44.entities.Task.get(taskIn.id).catch(() => null)) || taskIn;
+  const booked = Array.from(new Set([
+    ...(Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : []),
+    ...(Array.isArray(task.reminder_schedule) ? task.reminder_schedule.map((r) => r?.notification_id) : []),
+  ])).filter((id) => id && !String(id).startsWith("planned_"));
+  if (booked.length) await cancelScheduledReminder(booked).catch(() => {});
+  const updated = { ...task, birthday_no_text: false, onesignal_notification_ids: [], reminder_schedule: [] };
+  await base44.entities.Task.update(task.id, { birthday_no_text: false, onesignal_notification_ids: [], reminder_schedule: [] });
+  await scheduleBirthdayReminders(updated);
+  return (await base44.entities.Task.get(task.id).catch(() => null)) || updated;
+}
+
 export async function setBirthdayAnimal(taskIn, animal) {
   const clean = animal ? String(animal).trim().toLowerCase().slice(0, 40) : null;
   // The birthday as saved now. The copy handed in can be the one made before

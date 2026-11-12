@@ -87,7 +87,7 @@ export default function BirthdayStrip({ tasks, theme, specialMode, onWriteText, 
           <Send className="w-3.5 h-3.5 sm:mr-1" />
           <span className="hidden sm:inline">Send</span>
         </Button>
-      ) : !hasText && !next.birthday_animal ? (
+      ) : !hasText && !next.birthday_animal && !next.birthday_no_text ? (
         <Button
           size="sm"
           variant="outline"

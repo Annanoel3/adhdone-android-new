@@ -107,7 +107,7 @@ export default function Home() {
     const handleBirthdayCreated = (e) => {
       // A pet's birthday has no text to write (Anna, Oct 12 2026).
       const t = e.detail?.task || null;
-      setBirthdayTextTask(t && !t.birthday_animal ? t : null);
+      setBirthdayTextTask(t && !t.birthday_animal && !t.birthday_no_text ? t : null);
     };
     // A task just saved goes straight onto the list — the reload that follows
     // ('tasks-changed', once the capture is fully done) only confirms it.

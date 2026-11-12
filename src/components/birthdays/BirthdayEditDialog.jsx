@@ -18,6 +18,7 @@ import {
   scheduleBirthdayReminders,
   computeNextBirthdayDate,
   setBirthdayAnimal,
+  allowBirthdayText,
 } from "../utils/birthdayScheduler";
 import { cancelScheduledReminder } from "../utils/reminderScheduler";
 import SmartReminderEditor from "../tasks/SmartReminderEditor";
@@ -39,6 +40,9 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   // A pet's birthday (birthday_animal): no text. Kept here so "Not a pet?"
   // takes effect at once, before the list reloads.
   const [animal, setAnimal] = useState(null);
+  // Their own young child's birthday (birthday_no_text): no text either,
+  // until they say they want one after all.
+  const [noText, setNoText] = useState(false);
   const [current, setCurrent] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -55,6 +59,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       setNotifIds(birthday.onesignal_notification_ids || []);
       setPhone(birthday.birthday_phone_number || "");
       setAnimal(birthday.birthday_animal || null);
+      setNoText(birthday.birthday_no_text === true);
       setCurrent(birthday);
     }
   }, [birthday]);
@@ -72,6 +77,24 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       setShowTextDialog(true);
     } catch (e) {
       console.error("Failed to change the birthday back to a person's", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // A text after all, for a birthday taken for their young child's.
+  const handleWantText = async () => {
+    setSaving(true);
+    try {
+      const fresh = await allowBirthdayText(current || birthday);
+      setNoText(false);
+      setCurrent(fresh);
+      setSchedule(fresh.reminder_schedule || []);
+      setNotifIds(fresh.onesignal_notification_ids || []);
+      onSaved?.();
+      setShowTextDialog(true);
+    } catch (e) {
+      console.error("Failed to turn birthday texts back on", e);
     } finally {
       setSaving(false);
     }
@@ -130,7 +153,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       await base44.entities.Task.update(birthday.id, updates);
 
       if (reschedule) {
-        await scheduleBirthdayReminders({ ...birthday, birthday_animal: animal, ...updates });
+        await scheduleBirthdayReminders({ ...birthday, birthday_animal: animal, birthday_no_text: noText, ...updates });
       }
 
       onSaved?.();
@@ -278,6 +301,16 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             </p>
             <Button variant="outline" onClick={handleNotAPet} disabled={saving} className="w-full">
               Not a pet? Write a text instead
+            </Button>
+          </div>
+          ) : noText ? (
+          <div className="space-y-2">
+            <Label>Birthday text</Label>
+            <p className="text-xs text-gray-500">
+              No text reminders for this one. The reminders just say it's {name || "their"}{name ? "'s" : ""} birthday.
+            </p>
+            <Button variant="outline" onClick={handleWantText} disabled={saving} className="w-full">
+              Write a text instead
             </Button>
           </div>
           ) : (

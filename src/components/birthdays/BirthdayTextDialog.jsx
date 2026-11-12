@@ -43,7 +43,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
   useEffect(() => {
     if (!isOpen || !birthdayTask) return;
     // A pet's birthday has no text (Anna, Oct 12 2026).
-    if (birthdayTask.birthday_animal) {
+    if (birthdayTask.birthday_animal || birthdayTask.birthday_no_text) {
       onClose?.();
       return;
     }

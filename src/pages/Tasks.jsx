@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { isOverDayLabel } from "../components/utils/todayTasks";
 import { Task } from "@/entities/Task";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -118,7 +119,7 @@ export default function Tasks() {
 
   // Effect to update active and completed tasks whenever allTasks changes
   useEffect(() => {
-    setActiveTasks(allTasks.filter(t => t.status === 'active' && !t.parent_task_id && !t.birthday_person));
+    setActiveTasks(allTasks.filter(t => t.status === 'active' && !t.parent_task_id && !t.birthday_person && !isOverDayLabel(t)));
     
     // Calculate tasks completed this week
     const now = new Date();
@@ -144,6 +145,9 @@ export default function Tasks() {
     // has passed (cancelledStillListed): it isn't done and it isn't gone.
     let filtered = topLevelTasks.filter(t => t.status === statusFilter
       || (statusFilter === 'active' && t.classification === 'event' && cancelledStillListed(t)));
+    // A past day label from their calendar (work hours, a day off, a holiday)
+    // is off the list once its day is over (todayTasks.isOverDayLabel).
+    if (statusFilter === 'active') filtered = filtered.filter(t => !isOverDayLabel(t));
     
     if (urgencyFilter !== 'all') {
       filtered = filtered.filter(t => t.urgency === urgencyFilter);

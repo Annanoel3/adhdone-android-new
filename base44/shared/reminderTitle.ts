@@ -340,8 +340,9 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     // Which repeated thing it is: two alarms of one family at the same moment
     // ring as one (the phone's PairDecisions, build 39 on).
     if (task.task_family) alarm.family = String(task.task_family).slice(0, 40);
-    // A pet's birthday has no text (Oct 12 2026): plain "Got it".
-    if (task.birthday_person && !task.is_own_birthday && !task.birthday_animal) {
+    // A pet's birthday has no text (Oct 12 2026): plain "Got it". Nor has
+    // their own young child's (birthday_no_text, Nov 12 2026).
+    if (task.birthday_person && !task.is_own_birthday && !task.birthday_animal && !task.birthday_no_text) {
       alarm.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
     }
     // An event (an appointment, Bike Night): the phone (build 42 on) shows

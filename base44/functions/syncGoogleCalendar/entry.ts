@@ -10,7 +10,7 @@
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
 // Re-saved Oct 13 2026 so the bundled shared/eventReminderPlan.ts is picked up: the reminder at an event's start is never the one the per-event cap drops.
-// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a series the calendar keeps (every 6 weeks, every 30 days) comes back as a new entry on its next date after its entry is checked off; a nameless birthday on a day that isn't the person's own (a second Google account on the phone) is not brought in.
+// Nov 12 2026: the number in a calendar rule is read (every 2 weeks is not weekly); an all-day entry is planned by what it is and takes a clock time typed into its title; a big import comes in over several requests (IMPORT_BUDGET_MS, `more`). Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a series the calendar keeps (every 6 weeks, every 30 days) comes back as a new entry on its next date after its entry is checked off; a nameless birthday on a day that isn't the person's own (a second Google account on the phone) is not brought in. Evening: their own young child's birthday comes in with no text reminders (judgeYoungChildBirthdays, birthday_no_text), and an all-day entry's kind is kept on it (day_entry_kind).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
@@ -130,6 +130,49 @@ async function judgeAnimalBirthdays(names: string[], otherTitles: string[]): Pro
     }
   } catch (e) {
     console.log('[syncGoogleCalendar] animal birthday check failed:', (e as any)?.message || e);
+  }
+  return out;
+}
+
+// Which birthdays on a calendar are their own young child's (Anna, Nov 12
+// 2026: "Yes, like pets"). A parent whose calendar held her almost-4-year-old's
+// birthday, next to his therapy and class entries, was set to be pushed "Write
+// a text for (him)" a week before, the day before, and every 3 hours on the
+// day. The model reads what they wrote about themselves and the rest of the
+// calendar the way a friend would; anyone it isn't sure about stays a person
+// to text. One call per sync, only when birthdays are being imported for the
+// first time. Returns the lowercased names. Never throws: no answer = nobody.
+export const YOUNG_CHILD_BIRTHDAY_PROMPT = `Someone's calendar is being brought into ADHDone, a reminder app for people with ADHD. For a person's birthday the app reminds them to write that person a birthday text. That makes no sense for their own young child who lives with them and is too young to have a phone: a baby, a toddler, a preschooler, a child in the first years of school.
+
+For each birthday listed, decide whether it is such a child's. Read it the way a friend who knows them would: what they wrote about themselves (their kids and their ages), the same name on daycare, preschool, pediatrician, speech or therapy visits and classes a parent takes a small child to, the birthday's own wording, and whether the date fits an age they gave ("almost 4" with a birthday coming up soon). An older child or a teenager who could read a text is NOT one. Neither is an adult, a relative's or friend's child, a godchild, or anyone you aren't sure about: leave those out.
+
+Answer with JSON only, listing just the young children who live with them, each name exactly as given: {"young_children": ["..."]}`;
+async function judgeYoungChildBirthdays(birthdays: { name: string; day: string }[], otherTitles: string[], aboutMe: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!birthdays.length) return out;
+  try {
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'syncGoogleCalendar' });
+    const today = new Date().toISOString().slice(0, 10);
+    const ask = openai.chat.completions.create({
+      model: 'gpt-6-astra',
+      messages: [
+        { role: 'system', content: YOUNG_CHILD_BIRTHDAY_PROMPT },
+        { role: 'user', content: `Today is ${today}.\n\nWhat they wrote about themselves: ${aboutMe.trim().slice(0, 600) || '(nothing)'}\n\nBirthdays:\n${birthdays.map((b) => `- ${b.name}${b.day ? ` (${b.day})` : ''}`).join('\n')}\n\nEverything else on their calendar:\n${otherTitles.slice(0, 300).map((t) => `- ${t}`).join('\n') || '- (nothing else)'}` },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 3000,
+    });
+    const late = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000));
+    const res: any = await Promise.race([ask, late]);
+    if (!res) return out;
+    const parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}');
+    const wanted = new Set(birthdays.map((b) => b.name.toLowerCase()));
+    for (const n of Array.isArray(parsed?.young_children) ? parsed.young_children : []) {
+      const name = String(n || '').trim().toLowerCase();
+      if (name && wanted.has(name)) out.add(name);
+    }
+  } catch (e) {
+    console.log('[syncGoogleCalendar] young child birthday check failed:', (e as any)?.message || e);
   }
   return out;
 }
@@ -367,12 +410,15 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
     for (const id of booked) {
       await base44.asServiceRole.functions.invoke('cancelScheduled', { notificationId: id }).catch(() => {});
     }
+    const allDayNow = !event.start?.dateTime && !(patch.event_time || taskRec.event_time);
+    const kindNow = allDayNow
+      ? await dayEntryKind(String(taskRec.title || event.summary || ''), String(taskRec.notes || ''), 'syncGoogleCalendar')
+      : 'attend';
+    if (allDayNow && taskRec.classification === 'event') patch.day_entry_kind = kindNow;
     const fresh = await planEventReminders(base44, ctx.user, { ...taskRec, ...patch }, {
       title: taskRec.title || event.summary || 'Untitled event',
-      isAllDay: !event.start?.dateTime && !(patch.event_time || taskRec.event_time),
-      dayEntry: !event.start?.dateTime && !(patch.event_time || taskRec.event_time)
-        ? await dayEntryKind(String(taskRec.title || event.summary || ''), String(taskRec.notes || ''), 'syncGoogleCalendar')
-        : 'attend',
+      isAllDay: allDayNow,
+      dayEntry: kindNow,
       location: taskRec.location || event.location || '',
       startIsTheirs: !!event.start?.dateTime || taskRec.time_stated === true,
       budget: ctx.budget,
@@ -991,7 +1037,20 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     .filter((e: any) => !isBirthdayEvent(e.summary || '', (e.recurrence || []).join(';')))
     .map((e: any) => String(e.summary || '').trim())
     .filter(Boolean)));
-  const animalBirthdays = await judgeAnimalBirthdays(newBirthdayNames, otherTitles);
+  // Each new birthday with the day it falls on (month and day), for the
+  // young-child check ("almost 4" with a birthday two weeks out).
+  const birthdayDayOf = new Map<string, string>();
+  for (const e of newEvents as any[]) {
+    if (!isBirthdayEvent(e.summary || '', (e.recurrence || []).join(';'))) continue;
+    const who = extractBirthdayPerson(e.summary || '');
+    const raw = String(e.start?.dateTime || e.start?.date || '');
+    const ms = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? Date.parse(`${raw}T12:00:00Z`) : Date.parse(raw);
+    if (who && !isNaN(ms) && !birthdayDayOf.has(who)) birthdayDayOf.set(who, new Date(ms).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' }));
+  }
+  const [animalBirthdays, youngChildBirthdays] = await Promise.all([
+    judgeAnimalBirthdays(newBirthdayNames, otherTitles),
+    judgeYoungChildBirthdays(newBirthdayNames.map((n: string) => ({ name: n, day: birthdayDayOf.get(n) || '' })), otherTitles, String((user as any)?.about_me || '')),
+  ]);
 
   // One person has one birthday. A phone signed in to a second Google account
   // (a partner's, a shared family one) carries that account's nameless "Happy
@@ -1258,6 +1317,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         birthday_person: ownBirthday ? null : birthdayPerson,
         // A pet's birthday: the same reminders, never a word about a text.
         birthday_animal: ownBirthday ? null : (animalBirthdays[String(birthdayPerson || '').toLowerCase()] || null),
+        // Their own young child's birthday: the same reminders, never a word
+        // about a text (judgeYoungChildBirthdays).
+        birthday_no_text: !ownBirthday && !animalBirthdays[String(birthdayPerson || '').toLowerCase()] && youngChildBirthdays.has(String(birthdayPerson || '').toLowerCase()),
         birthday_remind_week_before: !ownBirthday,
         birthday_remind_day_before: !ownBirthday,
         birthday_remind_day_of: true,
@@ -1411,6 +1473,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       // reminder at that time is already booked" and nothing came (Nov 7
       // 2026). Events and birthdays keep their own plans.
       if (isOnce && isAllDay && taskRecord.classification !== 'event') taskRecord.day_only_task = true;
+      // What kind of all-day entry it is (dayEntryKind), kept on the entry: a
+      // day label (their work hours, a day off, a holiday) leaves Today on
+      // its own once its day is over (todayTasks.isOverDayLabel in the app).
+      if (isOnce && isAllDay && !titleTimed && taskRecord.classification === 'event') taskRecord.day_entry_kind = dayKind;
     }
 
     // Sync-record fields that don't depend on the task — built up front so the
@@ -1545,6 +1611,20 @@ Deno.serve(async (req) => {
     // the only source, so the answer is always no.
     if (body.probe) {
       return Response.json({ connected: false, retired: true });
+    }
+
+    // Admin check of the birthday judgments, nothing saved: which of these
+    // names the import would take for a pet and which for their own young
+    // child. { judgeBirthdays: { birthdays: [{ name, day }], titles: [...], about } }
+    if (body.judgeBirthdays && (user as any)?.role === 'admin') {
+      const j = body.judgeBirthdays || {};
+      const list = (Array.isArray(j.birthdays) ? j.birthdays : []).slice(0, 80).map((b: any) => ({ name: String(b?.name || '').trim(), day: String(b?.day || '').trim() })).filter((b: any) => b.name);
+      const titles = (Array.isArray(j.titles) ? j.titles : []).slice(0, 300).map((t: any) => String(t || ''));
+      const [animals, kids] = await Promise.all([
+        judgeAnimalBirthdays(list.map((b: any) => b.name), titles),
+        judgeYoungChildBirthdays(list, titles, String(j.about || '')),
+      ]);
+      return Response.json({ animals, young_children: [...kids] });
     }
 
     // Phone calendars: the app already read the events on the device and sends

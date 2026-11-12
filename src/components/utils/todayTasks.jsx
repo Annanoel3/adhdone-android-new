@@ -70,6 +70,22 @@ export const getTaskEndLocalDate = (task) => {
   return null;
 };
 
+// A day label from their calendar whose day is over: their work hours for a
+// day, a day off, a holiday, a payday (day_entry_kind 'shift' / 'none' /
+// 'private', judged when the calendar is brought in; shared/calendarEntry.ts
+// on the server). There is nothing to check off, so it leaves Today and the
+// Tasks list on its own once its day (or its last day) has passed, and stays
+// on the calendar. Anna, Nov 12 2026: "Yes, clear them", for a calendar with
+// one of these almost every day. Real appointments, tasks and anything not
+// judged keep the rule below: nothing disappears until it's checked off.
+const DAY_LABEL_KINDS = ['shift', 'none', 'private'];
+export const isOverDayLabel = (task, now = new Date()) => {
+  if (!task || !DAY_LABEL_KINDS.includes(task.day_entry_kind)) return false;
+  if (task.classification !== 'event' || task.event_time) return false;
+  const last = getTaskEndLocalDate(task) || getTaskDueLocalDate(task);
+  return !!last && last < theirDayKey(now);
+};
+
 // A task counts as "today" when its start has arrived (today >= start), and
 // stays "today" until it's completed or deleted — overdue tasks and events
 // whose day (or last day) has passed remain in Today. Tasks with no effective
@@ -78,6 +94,7 @@ export const isTodayTask = (task, todayStr = getLocalDateString()) => {
   // Back Burner: silenced tasks drop out of Today's Tasks — they're intentionally
   // out of sight (and silent) until the user reactivates them.
   if (task.silenced) return false;
+  if (isOverDayLabel(task)) return false;
   const start = getTaskDueLocalDate(task);
   if (!start) return true;
   if (start > todayStr) return false;

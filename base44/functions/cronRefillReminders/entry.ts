@@ -15,7 +15,7 @@
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
-// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName). The owner alert for notifications off says so when the person left before being asked.
+// Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName). The owner alert for notifications off says so when the person left before being asked. A young child's birthday (birthday_no_text) gets no text reminders, and an all-day calendar entry's kind is kept on it (day_entry_kind).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
@@ -800,7 +800,7 @@ Deno.serve(async (req) => {
   // text), for your own birthday, and when the text was already sent.
   // Same rule in the client's birthdayScheduler.
   function textCoversTheDay(task: any): boolean {
-    return !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && task.birthday_text_sent !== true;
+    return !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && !task.birthday_no_text && task.birthday_text_sent !== true;
   }
   // `kind` isn't kept on saved entries; the label is.
   const isDayOfEntry = (e: any) => e?.kind === 'day_of' || (String(e?.label || '').toLowerCase() === 'day of' && e?.kind !== 'own_day_of');
@@ -857,7 +857,9 @@ Deno.serve(async (req) => {
     for (const { key, kind, label } of kinds) {
       if (!toggles[key]) continue;
       if (key === 'day_of' && textCoversTheDay(task)) continue;
-      const content = birthdayReminderContent(person, kind, birthdayIso, task.birthday_animal);
+      // Their own young child's birthday (birthday_no_text; Anna, Nov 12
+      // 2026: "Yes, like pets") is worded like a pet's: nothing about a text.
+      const content = birthdayReminderContent(person, kind, birthdayIso, task.birthday_animal || (task.birthday_no_text ? 'child' : null));
       if (!content) continue;
       const sendAt = new Date(birthdayDate.getTime() + content.offsetDays * DAY_MS);
       if (sendAt.getTime() <= now.getTime()) continue;
@@ -1001,7 +1003,7 @@ Deno.serve(async (req) => {
       // message, so this is the only nudge they get when nothing is written.
       let pushTitle = entry.notification_title;
       let pushBody = entry.notification_body;
-      if (!isOwn && !task.birthday_animal && !task.birthday_text_message && (entry.kind === 'week_before' || entry.kind === 'day_before' || entry.kind === 'day_of')) {
+      if (!isOwn && !task.birthday_animal && !task.birthday_no_text && !task.birthday_text_message && (entry.kind === 'week_before' || entry.kind === 'day_before' || entry.kind === 'day_of')) {
         const person = task.birthday_person || 'Someone';
         const dateStr = new Date(nextReminderIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
         pushTitle = `🎂 Write a text for ${person}`;
@@ -1087,7 +1089,7 @@ Deno.serve(async (req) => {
     const timeZone = userTimeZone(owner);
     const isDayOf = localDateKey(bdayDate, timeZone) === localDateKey(now, timeZone);
     // Never for a pet's birthday: there is no text (Oct 12 2026).
-    if (isDayOf && !isOwn && !task.birthday_animal && task.birthday_text_sent !== true) {
+    if (isDayOf && !isOwn && !task.birthday_animal && !task.birthday_no_text && task.birthday_text_sent !== true) {
       const localMin = localMinutesOfDay(now, timeZone);
       const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
       const inQuiet = quietEnabled && (qStart < qEnd
@@ -1876,6 +1878,12 @@ async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> 
   // for, is planned as before.
   const allDayImport = task.classification === 'event' && !task.event_time && !!task.google_event_id && !task.reminder_wish;
   const dayKind = allDayImport ? await dayEntryKind(String(task.title || ''), String(task.notes || ''), 'cronRefillReminders') : 'attend';
+  // Kept on the entry: a day label (work hours, a day off, a holiday) leaves
+  // Today on its own once its day is over (todayTasks.isOverDayLabel in the app).
+  if (allDayImport && task.day_entry_kind !== dayKind) {
+    await base44.asServiceRole.entities.Task.update(task.id, { day_entry_kind: dayKind }).catch(() => {});
+    task.day_entry_kind = dayKind;
+  }
   if (dayKind === 'none' || dayKind === 'private') return [];
   const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
     title: task.title,

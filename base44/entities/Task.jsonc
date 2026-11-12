@@ -524,6 +524,14 @@
       "default": false,
       "description": "Send a birthday reminder on the day of the birthday. Only set on actual birthday tasks."
     },
+    "birthday_no_text": {
+      "type": "boolean",
+      "description": "Set when the birthday is their own young child's (too young to have a phone to text), judged from their calendar and what they wrote about themselves when the birthday is imported. Same reminders as a pet's birthday: nothing about a text anywhere (no 'Write a text for X', no drafted message, not in the scheduled texts list). The person can turn texts back on from the birthday's card (Anna, Nov 12 2026: 'Yes, like pets'). Empty or false = a person to text."
+    },
+    "day_entry_kind": {
+      "type": "string",
+      "description": "For an all-day entry brought in from their calendar: what it is, as judged at import (shared/calendarEntry.ts dayEntryKind). 'attend' = something they go to or must not miss; 'shift' = only their work hours for that day; 'none' = a day off, a holiday, a payday, a label for the day; 'private' = personal health tracking. shift / none / private are day labels: nothing to check off, so the app takes them out of Today and the Tasks list once their day is over (todayTasks.isOverDayLabel; Anna, Nov 12 2026: 'Yes, clear them'). They stay on the calendar. Empty = not judged (kept until checked off, like any event)."
+    },
     "birthday_animal": {
       "type": "string",
       "description": "Set when the birthday is a pet's or another animal's: what kind, lowercase ('dog', 'cat', 'hamster'). Same reminders as anyone's birthday, but nothing about a text: no drafted message, no send-a-text nudges, not in the scheduled texts list. The day-of reminder says to celebrate them (Anna, Oct 12 2026). Empty = a person."

@@ -434,7 +434,7 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // It opens the task's page either way, which has the Send / Draft text
       // button. Builds before 1.3.9 ignore this and keep "Got it".
       // A pet's birthday has no text: plain "Got it".
-      if (t.birthday_person && !t.is_own_birthday && !t.birthday_animal) {
+      if (t.birthday_person && !t.is_own_birthday && !t.birthday_animal && !t.birthday_no_text) {
         alarm.openLabel = t.birthday_text_message ? 'Send a text' : 'Write a text';
       }
       // An event (an appointment, Bike Night): the phone (build 42 on) shows
