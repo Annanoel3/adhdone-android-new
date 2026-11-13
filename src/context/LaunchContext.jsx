@@ -305,7 +305,9 @@ Answer with JSON only, in this shape: {"ten_minutes": "...", "more": ["...", "..
           new Promise((resolve) => setTimeout(() => resolve([]), 1500)),
         ]);
       }
-      const next = openStepsInOrder(steps)[0];
+      // Only this task's own steps (a list handed over a moment after the card
+      // switched tasks could still be the last task's).
+      const next = openStepsInOrder(steps).filter((s) => s.parent_task_id === taskIn.id)[0];
       if (next) {
         task = next;
         stepOf = { id: taskIn.id, title: String(taskIn.title || '').trim() };
