@@ -69,6 +69,7 @@ function persist(capture) {
     createdAt: capture.createdAt,
     handedOff: capture.handedOff || null,
     handedOffFrom: Number.isInteger(capture.handedOffFrom) ? capture.handedOffFrom : null,
+    guardAt: capture.guardAt || null,
     touchedAt: Date.now(),
   };
   writeStore([...readStore().filter((c) => c.id !== capture.id), entry]);
@@ -102,6 +103,7 @@ const fromEntry = (entry) => ({
   createdAt: entry.createdAt || Date.now(),
   handedOff: entry.handedOff || null,
   handedOffFrom: Number.isInteger(entry.handedOffFrom) ? entry.handedOffFrom : null,
+  guardAt: entry.guardAt || null,
   resumed: true,
   started: false,
 });
@@ -285,6 +287,19 @@ export function markCaptureHandedOff(id, fromPart = null) {
   capture.handedOff = Date.now();
   capture.handedOffFrom = Number.isInteger(fromPart) ? fromPart : null;
   persist(capture);
+}
+
+// The phone's own background sender was given a safety copy of this capture
+// (TaskCaptureProcessor, "The safety copy"): the server makes it if the app
+// never does. Kept with the capture, so one picked up again on a later open
+// knows the server may already have made it. Returns false when it already
+// had one.
+export function markCaptureGuarded(id) {
+  const capture = captures.find((c) => c.id === id);
+  if (!capture || capture.guardAt) return false;
+  capture.guardAt = Date.now();
+  persist(capture);
+  return true;
 }
 
 export function removeCapture(id) {
