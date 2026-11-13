@@ -68,7 +68,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import LaunchButtons from "../launch/LaunchButtons"; import DetailsTopBlock from "./DetailsTopBlock";
+import LaunchButtons, { StepTimeButton } from "../launch/LaunchButtons"; import DetailsTopBlock from "./DetailsTopBlock";
 import LocationField from "./LocationField"; import TaskNotesField from "./TaskNotesField"; import PrepNoteBox from "./PrepNoteBox";
 import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
@@ -298,6 +298,20 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
     setSubTasks(ordered);
     return ordered;
   };
+
+  // A step ticked from somewhere else while this card is open ("I finished
+  // this step" on a step's timer): the list here catches up.
+  useEffect(() => {
+    if (!isOpen || !taskProp?.id) return undefined;
+    const onChanged = (e) => {
+      const changedId = e?.detail?.taskId;
+      if (changedId === taskProp.id) return; // this task itself: handled above
+      fetchSubTasks(taskProp.id).catch(() => {});
+    };
+    window.addEventListener('tasks-changed', onChanged);
+    return () => window.removeEventListener('tasks-changed', onChanged);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, taskProp?.id]);
 
   const handleSubTaskToggle = async (subTask) => {
     const newStatus = subTask.status === 'completed' ? 'active' : 'completed';
@@ -2502,6 +2516,8 @@ Return JSON:
                       }`}>
                         {subTask.title}
                       </span>
+                      {/* Each step has its own timer (LaunchButtons). */}
+                      <StepTimeButton step={subTask} parent={task} theme={theme} unjudged />
                       <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:bg-red-100 hover:text-red-600" onClick={() => handleDeleteSubTask(subTask.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -2551,7 +2567,7 @@ Return JSON:
             {v2 && task.status !== 'completed' && !isEventOrBirthday && task.takes_time !== false && (
               <div className={v2Group}>
                 <div className={v2Label}>Timer</div>
-                <LaunchButtons task={task} theme={theme} />
+                <LaunchButtons task={task} theme={theme} steps={subTasks} />
               </div>
             )}
           </div>
@@ -2570,7 +2586,7 @@ Return JSON:
             )}
             {!v2 && task.status !== 'completed' && !isEventOrBirthday && task.takes_time !== false && (
               <div className="w-full mb-1">
-                <LaunchButtons task={task} theme={theme} />
+                <LaunchButtons task={task} theme={theme} steps={subTasks} />
               </div>
             )}
             {v2 ? (
