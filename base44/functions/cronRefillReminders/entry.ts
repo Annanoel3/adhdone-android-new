@@ -1,4 +1,5 @@
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
+// Nov 13 2026: owner check 2 ("Smart Reminders not re-planning") no longer counts an account Smart Reminders skips by rule (the phone doesn't allow ADHDone's notifications, or no phone has ever opened the account); a new account that was asked about notifications and still has them off an hour after joining is told as that, the same day.
 // Nov 13 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different event's own reminder tied to its start (two calendar events at 9:00 AM each got their hour-before at 8:00, as planned).
 // Nov 12 2026 (evening): "pushes are broken (app still installed)" is only said when the phone has checked in SINCE its pushes died, or its own check saw the sign-up off. A check-in from before (Jordan: 1:52 PM, pushes dead by 6:09 PM) proves nothing about now: that is told as "stopped taking notifications", reads as an uninstall, and is marked suspected_uninstall. If the phone then checks in and signs up again, Anna is told once that the pushes are back.
 // Nov 11 2026: owner check 8 treats the day after a mention as the planned day off for a task on the every-other-day plan.
@@ -2215,6 +2216,15 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   const stuckPlans: string[] = [];
   for (const u of allUsers) {
     if (!u?.email || !realUser(u.email) || !openTasksOf[u.email] || !activeLately(u)) continue;
+    // Nor an account the planner skips by rule (cronSmartTaskNudge): the
+    // phone doesn't allow ADHDone's notifications, or no phone has ever
+    // opened it. Nothing is planned for them, so their flag is never cleared,
+    // and nothing is failing. Nov 13 2026: Misty joined at 8:09 AM her time,
+    // asked for a reminder "later today", and her phone never allowed
+    // notifications; 90 minutes later Anna was told "the planner is failing on
+    // them every run". Check 11 says what is really wrong with such an
+    // account.
+    if (u.alarm_permissions?.notifications === false || (!u.app_platform && !u.app_build)) continue;
     const h = localHourIn(u.timezone || OWNER_TZ, now);
     if (h < 9 || h >= 22) continue;
     const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
@@ -2702,8 +2712,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     // Bri signed up Oct 29 2026 at 6:57 AM, was reported at 7:00 AM as
     // having notifications off, and had them on by 7:05. A day's grace; if
     // they are still off after that, it's real.
+    // The grace ends early for someone who has ANSWERED the welcome steps'
+    // notification question: the app re-reads the phone's answer within
+    // seconds of Android's own dialog (WidgetTaskSync), so an hour after
+    // joining, asked and still off is real, and worth knowing the same day
+    // (Nov 13 2026: Misty, whose first task asked for a reminder later that
+    // day).
     const createdMs = msOf(u.created_date);
-    const settingUp = Number.isFinite(createdMs) && nowMs - createdMs < H_DAY;
+    const askedAlready = Array.isArray(u.onboarding_flags) && u.onboarding_flags.includes('onboarding_permissions_done_v2');
+    const newToday = Number.isFinite(createdMs) && nowMs - createdMs < H_DAY;
+    const settingUp = newToday && !(askedAlready && nowMs - createdMs > H_HOUR);
     // Told within the last 7 days: enough (the ledger forgets after 3 days,
     // so this is remembered with the other marks).
     const offKey = `notifoff:${String(u.email).toLowerCase()}`;
@@ -2719,7 +2737,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       problems.push({
         title: wasAsked ? `📵 ADHDone: ${nameOf(u)} has notifications off` : `📵 ADHDone: ${nameOf(u)} left before the notification question`,
         body: wasAsked
-          ? `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`
+          ? (newToday
+            ? `They joined ${theirClock(u, createdMs)} (their time) and were asked about notifications in the welcome steps. ADHDone still isn't allowed to send any on their phone, so no reminder or alarm can reach them. The app asks once more the next time they open it. ${u.email}`
+            : `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`)
           : `They opened the app ${theirClock(u, permMs)} (their time) and left during the welcome chat, before it asked about notifications. The app was never allowed to send any, so nothing can reach them, and nothing is on their screen about it. ${u.email}`,
         sinceMs: nowMs - 7 * H_DAY,
         mark: { key: offKey, value: new Date(nowMs).toISOString() },
