@@ -300,17 +300,19 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   };
 
   // A step ticked from somewhere else while this card is open ("I finished
-  // this step" on a step's timer): the list here catches up.
+  // this step" on a step's timer): the same change is made to the list here.
   useEffect(() => {
     if (!isOpen || !taskProp?.id) return undefined;
     const onChanged = (e) => {
       const changedId = e?.detail?.taskId;
-      if (changedId === taskProp.id) return; // this task itself: handled above
-      fetchSubTasks(taskProp.id).catch(() => {});
+      const patch = e?.detail?.patch;
+      if (!changedId || !patch || changedId === taskProp.id) return;
+      setSubTasks((prev) => (prev.some((s) => s.id === changedId)
+        ? prev.map((s) => (s.id === changedId ? { ...s, ...patch } : s))
+        : prev));
     };
     window.addEventListener('tasks-changed', onChanged);
     return () => window.removeEventListener('tasks-changed', onChanged);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, taskProp?.id]);
 
   const handleSubTaskToggle = async (subTask) => {
