@@ -14,6 +14,7 @@ import {
   resumeAbandonedCaptures,
   currentCaptures,
   markCaptureHandedOff,
+  markCaptureGuarded,
 } from "@/lib/pendingCaptures";
 import {
   classifyCapture,
@@ -109,6 +110,114 @@ const partId = (c, part) => `${c.id}#${part}`;
 const handOffPayload = (c) => ({ text: c.text, timezone: localZone(), capture_id: c.id, said_at: c.createdAt || Date.now() });
 const partPayload = (c, part) => ({ text: c.parts[part], timezone: localZone(), capture_id: partId(c, part), said_at: c.createdAt || Date.now() });
 
+// ── The safety copy (Nov 13 2026) ───────────────────────────────────────────
+// The hand-off above needs the app to notice it is leaving the screen. An app
+// that stops without that moment (closed from the recent-apps screen, a
+// crash, a freeze, the phone dying) handed nothing over, and the task waited
+// for the next open: a new user's second task, typed at 12:34 PM that day,
+// was never made. So the moment the app starts on a capture, the phone's own
+// background sender (ShareBridge.handOffCapture: kept on the phone, sent again
+// until it lands) gets a copy of it under "<id>~g~<account tag>". captureText
+// answers that copy "not yet" while the app may still be working on it, and
+// makes the capture itself a minute after it first saw the copy if nothing
+// was made by then (see "The app's safety copy" in captureText). The app
+// stops making a capture itself APP_GIVES_WAY_MS after its copy went out and
+// asks the server instead (the hand-off's own path, finishOnServer), so the
+// two never save the same words at once. Android only: the iPhone app has no
+// such sender.
+const APP_GIVES_WAY_MS = 40 * 1000;
+const GUARD_TRY_EVERY_MS = 2000;
+const GUARD_TRIES = 10;
+// Same as accountTag in captureText (FNV-1a, 32 bit, hex): the server makes a
+// copy only for the account that typed it.
+const accountTag = (email) => {
+  let h = 0x811c9dc5;
+  const s = String(email || '').trim().toLowerCase();
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+};
+const guardIdFor = (id, email) => `${id}~g~${accountTag(email)}`;
+const guardBridge = () => {
+  const bridge = window.Capacitor?.Plugins?.ShareBridge;
+  return typeof bridge?.handOffCapture === 'function' ? bridge : null;
+};
+
+// Does the published captureText know safety copies? One that doesn't would
+// make a second task out of an id it has never seen, so it is asked first,
+// once per app start. A no (an older copy, or no signal) is asked again after
+// five minutes.
+let guardAnswer = null;
+let guardNoUntil = 0;
+const serverKnowsGuards = () => {
+  if (guardAnswer) return guardAnswer;
+  if (Date.now() < guardNoUntil) return Promise.resolve(false);
+  const asked = base44.functions.invoke('captureText', { guardProbe: true })
+    .then((res) => res?.data?.guard === 1)
+    .catch(() => false);
+  guardAnswer = asked;
+  asked.then((ok) => {
+    if (!ok) {
+      guardAnswer = null;
+      guardNoUntil = Date.now() + 5 * 60 * 1000;
+    }
+  });
+  return asked;
+};
+
+// The phone's sender signs in with a copy of the app's sign-in that the phone
+// takes 3, 8, 20 and 45 seconds after the app comes to the front
+// (SessionSnapshotter). A safety copy handed over before the phone has THIS
+// sign-in would sit unsent and show "Saved — open ADHDone to finish" over a
+// task the app is making fine. So one is only handed over when the sign-in is
+// the same one the app had the last time it came to the front, and that was
+// long enough ago for the phone to have copied it. A page load only counts as
+// coming to the front when it is the app starting (nothing in sessionStorage
+// yet): the reload after signing in is not one.
+const SIGN_IN_KEY = 'base44_access_token';
+const signInNow = () => {
+  try { return localStorage.getItem(SIGN_IN_KEY) || ''; } catch (e) { return ''; }
+};
+let appStarting = false;
+try {
+  appStarting = !sessionStorage.getItem('adhd_front_seen');
+  sessionStorage.setItem('adhd_front_seen', '1');
+} catch (e) { /* storage off: a page load is never counted */ }
+let frontAt = Date.now();
+let frontSignIn = appStarting ? signInNow() : '';
+let frontWaitMs = 9000;
+const noteFront = () => {
+  frontAt = Date.now();
+  frontSignIn = signInNow();
+  frontWaitMs = 4000;
+};
+const phoneHasThisSignIn = () => {
+  const now = signInNow();
+  return !!now && now === frontSignIn && Date.now() - frontAt >= frontWaitMs;
+};
+
+// The copies themselves: the whole capture, and once it is split in several,
+// each part not made yet (so a part the app never reached is still made when
+// the earlier ones were). Handing the phone the same id twice changes nothing.
+const sendGuards = (capture, email) => {
+  const bridge = guardBridge();
+  if (!bridge || !email) return;
+  const createdAt = capture.createdAt || Date.now();
+  const send = (id, text) => {
+    try {
+      Promise.resolve(bridge.handOffCapture({ id: guardIdFor(id, email), text, createdAt })).catch(() => {});
+    } catch (e) { /* the bridge went away */ }
+  };
+  send(capture.id, capture.text);
+  if (Array.isArray(capture.parts) && capture.parts.length > 1) {
+    capture.parts.forEach((text, i) => {
+      if (i >= (capture.doneCount || 0)) send(partId(capture, i), text);
+    });
+  }
+};
+
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
 // the few things the AI can't infer (priority, date). The "advance reminder"
@@ -152,6 +261,40 @@ export default function TaskCaptureProcessor({ userEmail }) {
   };
 
   useEffect(() => {
+    // Hands the phone a safety copy of this capture (see "The safety copy"
+    // above). Tried again for a few seconds when the phone doesn't have this
+    // sign-in yet (the app was only just opened or brought back).
+    const guardCapture = (capture) => {
+      if (capture.guardAt || !guardBridge() || !canHandOff(capture)) return;
+      let tries = 0;
+      const stillOurs = () => !capture.guardAt && !capture.handedOff
+        && currentCaptures().some((c) => c.id === capture.id);
+      const attempt = async () => {
+        if (!stillOurs()) return;
+        const email = emailRef.current;
+        if (email && phoneHasThisSignIn() && await serverKnowsGuards() && stillOurs() && phoneHasThisSignIn()) {
+          markCaptureGuarded(capture.id);
+          sendGuards(capture, email);
+          trace('captureGuardSent', { id: capture.id });
+          return;
+        }
+        tries += 1;
+        if (tries < GUARD_TRIES) setTimeout(attempt, GUARD_TRY_EVERY_MS);
+      };
+      attempt();
+    };
+    // Its copy has been out long enough that the server may be about to make
+    // this capture: from here the app only asks the server (finishOnServer),
+    // from the part it is on, or whole when it was never split.
+    const giveWayIfLate = (capture, part = null) => {
+      if (capture.handedOff || !capture.guardAt || Date.now() - capture.guardAt <= APP_GIVES_WAY_MS) return;
+      const from = Number.isInteger(part)
+        ? part
+        : (Array.isArray(capture.parts) && capture.parts.length ? (capture.doneCount || 0) : null);
+      markCaptureHandedOff(capture.id, from);
+      trace('captureGaveWay', { id: capture.id, from });
+    };
+
     const drain = async () => {
       if (runningRef.current) return;
       runningRef.current = true;
@@ -191,6 +334,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
           };
           try {
             trace('captureClaimed', { id: capture.id, text: capture.text.slice(0, 200), resumed: !!capture.resumed });
+            // A capture picked up again long after its safety copy went out
+            // (a later open, a retry) is the server's; a new one gets its copy.
+            giveWayIfLate(capture);
+            if (!capture.handedOff) guardCapture(capture);
             if (capture.handedOff) {
               await finishOnServer();
               continue;
@@ -220,6 +367,8 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 taskList = [capture.text];
               }
               saveCaptureProgress(capture.id, { parts: taskList, doneCount: 0, kind: wholeKind });
+              // Split in several: each part gets its own safety copy too.
+              if (capture.guardAt && taskList.length > 1) sendGuards(capture, emailRef.current);
             }
             trace('splitResult', { count: taskList.length, tasks: taskList.map(t => t.slice(0, 60)) });
             // A mixed capture that couldn't be pulled apart is sorted as one piece.
@@ -227,6 +376,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
             const firstPart = capture.doneCount || 0;
             for (let part = firstPart; part < taskList.length; part++) {
               const text = taskList[part];
+              giveWayIfLate(capture, part);
               // With the server from here on: ask it, make nothing here.
               if (capture.handedOff) {
                 await finishOnServer();
@@ -249,8 +399,9 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 // can see it was made if the app goes off screen with the save
                 // already on its way.
                 captureId: canHandOff(capture) ? partId(capture, part) : null,
-                // Handed to the server meanwhile: make nothing here.
-                stopIf: () => !!capture.handedOff,
+                // Handed to the server meanwhile, or its safety copy has been
+                // out too long: make nothing here.
+                stopIf: () => { giveWayIfLate(capture, part); return !!capture.handedOff; },
               });
               if (inflightRef.current?.id === capture.id) inflightRef.current.open = false;
               // Handed over before this part was saved: the server has it now,
@@ -375,12 +526,23 @@ export default function TaskCaptureProcessor({ userEmail }) {
     // A capture waiting for the app to be back on screen, or back online, is
     // picked up the moment that happens.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') drain();
-      else if (document.visibilityState === 'hidden') handOff();
+      if (document.visibilityState === 'visible') {
+        noteFront();
+        drain();
+      } else if (document.visibilityState === 'hidden') handOff();
     };
     const onOnline = () => drain();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
+    // Back from anything that covered the app without hiding the page (a
+    // permission question): the phone copies the sign-in again then too.
+    let frontHandle = null;
+    let unmounted = false;
+    try {
+      Promise.resolve(window.Capacitor?.Plugins?.App?.addListener?.('resume', noteFront))
+        .then((h) => { if (unmounted) h?.remove?.(); else frontHandle = h; })
+        .catch(() => {});
+    } catch (e) { /* not the phone app */ }
 
     const unsubscribe = subscribeCaptures(() => {
       // Tie each new capture to the signed-in account the moment it arrives, so
@@ -392,6 +554,8 @@ export default function TaskCaptureProcessor({ userEmail }) {
       unsubscribe();
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('online', onOnline);
+      unmounted = true;
+      frontHandle?.remove?.();
     };
   }, []);
 
