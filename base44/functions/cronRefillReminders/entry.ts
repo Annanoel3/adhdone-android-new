@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-13 checks 2, 6, 11', ...look });
+      return Response.json({ success: true, copy: '2026-11-13 daily note skips alerted captures', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -1821,6 +1821,13 @@ const NEVER_MENTION = new Set([
   'wickeddevildriver666@gmail.com',
 ]);
 const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+// Check 5's alert. The daily note reads it back to leave out what it told.
+const CAPTURE_ALERT_TITLE = '⚠️ ADHDone: a capture never finished';
+// A capture typed at atMs was inside check 5's look (15 minutes to 2 hours
+// old) for an alert sent at any of these times: she was told about it then.
+function captureWasAlerted(atMs: number, alertTimes: number[]): boolean {
+  return alertTimes.some((t) => t >= atMs + 15 * 60 * 1000 && t <= atMs + 2 * 60 * 60 * 1000);
+}
 const H_HOUR = 60 * 60 * 1000;
 const H_DAY = 24 * H_HOUR;
 
@@ -2342,7 +2349,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     console.error('[HEALTH] capture check failed:', e);
   }
   if (stalled.length) {
-    problems.push({ title: '⚠️ ADHDone: a capture never finished', body: `${stalled.length} task(s) typed in the last 2 hours never got made: ${stalled.slice(0, 2).map((s) => `${s.email} "${s.text.slice(0, 40)}"`).join('; ')}.` });
+    problems.push({ title: CAPTURE_ALERT_TITLE, body: `${stalled.length} task(s) typed in the last 2 hours never got made: ${stalled.slice(0, 2).map((s) => `${s.email} "${s.text.slice(0, 40)}"`).join('; ')}.` });
   }
 
   // 6. Two pushes to one person inside the same minute (Anna, Oct 10 2026:
@@ -3006,7 +3013,19 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // note said "Chad's alarms are going unanswered (1x)" minutes after
       // the alert did (Anna, Oct 28 2026). The note carries only what had no
       // push of its own: captures that never finished, and new signups.
-      const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email));
+      // A capture whose own alert already went out is left out too (Nov 13
+      // 2026: the 1:00 PM alert about one capture and this note about the
+      // same capture landed a second apart, and read as two failures).
+      let captureAlertTimes: number[] = [];
+      try {
+        const told = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+          user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(nowMs - H_DAY - 3 * H_HOUR).toISOString() },
+        });
+        captureAlertTimes = told.filter((r: any) => r.title === CAPTURE_ALERT_TITLE).map((r: any) => msOf(r.send_at)).filter((t: number) => Number.isFinite(t));
+      } catch (e) {
+        console.error('[HEALTH] could not read the capture alerts:', e);
+      }
+      const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email) && !captureWasAlerted(s.atMs, captureAlertTimes));
       const newPeople = allUsers.filter((u: any) => realUser(u?.email) && nowMs - (Date.parse(u.created_date || '') || 0) < H_DAY).map((u: any) => u.email);
       // "Are your reminders helping?" as an alarm (Anna, Nov 1 2026: "keep
       // tabs on how many times the 'are your reminders helping' alarms
