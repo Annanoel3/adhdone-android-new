@@ -65,9 +65,22 @@ const minutesWord = (n) => (n === 1 ? '1 minute' : `${n} minutes`);
 export const stopwatchElapsedMs = (s) => Math.max(0,
   (s?.pausedAtISO ? new Date(s.pausedAtISO).getTime() : Date.now()) - sessionStartMs(s));
 
+// A task's open steps, in the order the card shows them (subtask_order, then
+// oldest first). A step still being saved (temp_ id) can't be timed yet.
+const openStepsInOrder = (steps) => (Array.isArray(steps) ? steps : [])
+  .filter((s) => s?.id && s.status === 'active' && !String(s.id).startsWith('temp_'))
+  .sort((a, b) => {
+    const ao = typeof a.subtask_order === 'number' ? a.subtask_order : 9999;
+    const bo = typeof b.subtask_order === 'number' ? b.subtask_order : 9999;
+    if (ao !== bo) return ao - bo;
+    return new Date(a.created_date || 0) - new Date(b.created_date || 0);
+  });
+
 // "I finished the task": the same finish as ticking it off on Home. The task
 // and its open subtasks are done, a repeating task gets its next copy, and the
 // lists update right away. The server takes care of its reminders and alarms.
+// On a step's timer (session.stepOf) it is that step alone that gets ticked:
+// a step has no steps or repeat of its own, and its task stays open.
 async function finishTimerTask(sp) {
   if (!sp?.taskId) return;
   try {
@@ -267,11 +280,41 @@ Answer with JSON only, in this shape: {"ten_minutes": "...", "more": ["...", "..
   // and "Stop" the whole time; nothing rings. Its start is kept on disk, so it
   // keeps counting with the app closed. (The countdown with presets stays for
   // the places that ask for a set length.)
-  const startStopwatch = useCallback(async (task) => {
-    if (!task?.id) return;
+  //
+  // A task with steps is timed step by step, never as a whole (Anna, Nov 13
+  // 2026: "Is there a way to time each step instead of the whole task when
+  // there's subtasks?"). A step's own button times that step (opts.parent is
+  // its task, for the name on the timer); the task's button times its first
+  // open step, taken from opts.steps when the caller has the list and looked
+  // up otherwise. "I finished" then ticks that step alone (finishTimerTask),
+  // and the time is logged under the step. With every step done, or none, the
+  // task itself is timed as before.
+  const startStopwatch = useCallback(async (taskIn, opts = {}) => {
+    if (!taskIn?.id) return;
+    let task = taskIn;
+    let stepOf = null;
+    if (taskIn.parent_task_id) {
+      stepOf = { id: taskIn.parent_task_id, title: String(opts.parent?.title || '').trim() };
+    } else {
+      let steps = Array.isArray(opts.steps) ? opts.steps : null;
+      if (!steps) {
+        // Never holds the timer up for long: no answer in a second and a half
+        // times the task itself.
+        steps = await Promise.race([
+          base44.entities.Task.filter({ parent_task_id: taskIn.id, status: 'active' }, 'created_date', 50).catch(() => []),
+          new Promise((resolve) => setTimeout(() => resolve([]), 1500)),
+        ]);
+      }
+      const next = openStepsInOrder(steps)[0];
+      if (next) {
+        task = next;
+        stepOf = { id: taskIn.id, title: String(taskIn.title || '').trim() };
+      }
+    }
     const session = {
       taskId: task.id,
       title: task.title,
+      ...(stepOf ? { stepOf } : {}),
       stopwatch: true,
       startedAtISO: new Date().toISOString(),
       // How long this usually takes (from past timed sessions), so the voice
@@ -524,7 +567,7 @@ function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, o
       <button
         onClick={onFinish}
         className="text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-black/10 flex-shrink-0"
-        aria-label="I finished the task"
+        aria-label={session.stepOf ? 'I finished this step' : 'I finished the task'}
       >
         Finished ✓
       </button>
