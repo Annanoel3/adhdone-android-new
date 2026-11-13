@@ -149,7 +149,8 @@ Deno.serve(async (req) => {
         const seenMs = Date.parse(u.phone_seen_at || '') || 0;
         const diedMs = goneMs > lastMs ? goneMs : Date.now();
         const lookMs = Date.parse(u.phone_push_state?.at || '') || 0;
-        const installed = seenMs > 0 && (seenMs > diedMs || (u.phone_push_state?.server_enabled === false && lookMs > lastMs));
+        const installed = seenMs > 0 && Date.now() - seenMs < 36 * 60 * 60 * 1000
+          && (seenMs > diedMs || (u.phone_push_state?.server_enabled === false && lookMs > lastMs));
         const patch: any = takes
           ? { suspected_uninstall: false }
           : installed
@@ -2121,9 +2122,12 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const goneMs = msOf(u?.push_unreachable_at);
     return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs) && !pushFixed(u);
   };
+  //   Either proof only stands while the check-ins keep coming: 36 hours
+  //   with none (three in a row missed) and the app is no longer known to be
+  //   there.
   const stillInstalled = (u: any) => {
     const seenMs = msOf(u?.phone_seen_at);
-    if (!Number.isFinite(seenMs)) return false;
+    if (!Number.isFinite(seenMs) || nowMs - seenMs >= 36 * H_HOUR) return false;
     if (seenMs > msOf(u?.push_unreachable_at)) return true;
     // The phone's own look, since they were last in the app, found its
     // sign-up off: the app was there, broken, when it looked.
@@ -2646,7 +2650,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       } : Number.isFinite(seenBeforeMs) ? {
         title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
-        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. The app last checked in from that phone ${theirClock(u, seenBeforeMs)}, before that${ps.server_enabled === true ? ', with its pushes working' : ''}, and not since: this reads as an uninstall. It checks in every 12 hours; if it is still on the phone, the next check-in signs the pushes up again and you'll be told they're back. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        body: seenBeforeMs > goneMs
+          // It did check in after its pushes died, and has gone quiet since.
+          ? `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. The app last checked in from that phone ${theirClock(u, seenBeforeMs)} and has missed its check-ins since (it checks in every 12 hours): this reads as an uninstall. Last in the app ${theirClock(u, lastMs)}. ${u.email}`
+          : `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. The app last checked in from that phone ${theirClock(u, seenBeforeMs)}, before that${ps.server_enabled === true ? ', with its pushes working' : ''}, and not since: this reads as an uninstall. It checks in every 12 hours; if it is still on the phone, the next check-in signs the pushes up again and you'll be told they're back. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       } : {
