@@ -566,6 +566,9 @@ export default function TaskCaptureProcessor({ userEmail }) {
     if (!userEmail) return;
     stampCaptureOwner(userEmail);
     resumeAbandonedCaptures(userEmail);
+    // Asked now, so the first task typed gets its safety copy without waiting
+    // on the answer.
+    if (guardBridge()) serverKnowsGuards();
   }, [userEmail]);
 
   return (
