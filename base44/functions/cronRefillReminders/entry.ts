@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
       const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true, mistakeHours });
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
-      // running yet.
+      // running yet (a save can land in the files while its upload fails).
       return Response.json({ success: true, copy: '2026-11-13 checks 2, 6, 11', ...look });
     }
 
