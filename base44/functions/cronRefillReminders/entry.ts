@@ -217,7 +217,10 @@ Deno.serve(async (req) => {
       // preview only; the hourly run always looks back one hour.
       const mistakeHours = Math.min(168, Math.max(1, Number(body?.mistakeHours) || 1));
       const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true, mistakeHours });
-      return Response.json({ success: true, ...look });
+      // `copy`: which save of this file answered (the top line's date), so a
+      // look right after a change can tell whether the new copy is the one
+      // running yet.
+      return Response.json({ success: true, copy: '2026-11-13 checks 2, 6, 11', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
