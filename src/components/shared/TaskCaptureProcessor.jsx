@@ -130,15 +130,16 @@ const GUARD_TRY_EVERY_MS = 2000;
 const GUARD_TRIES = 10;
 // Same as accountTag in captureText (FNV-1a, 32 bit, hex): the server makes a
 // copy only for the account that typed it.
-const accountTag = (email) => {
+const fnv = (text) => {
   let h = 0x811c9dc5;
-  const s = String(email || '').trim().toLowerCase();
+  const s = String(text || '');
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
     h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h.toString(16).padStart(8, '0');
 };
+const accountTag = (email) => fnv(String(email || '').trim().toLowerCase());
 const guardIdFor = (id, email) => `${id}~g~${accountTag(email)}`;
 const guardBridge = () => {
   const bridge = window.Capacitor?.Plugins?.ShareBridge;
@@ -169,34 +170,69 @@ const serverKnowsGuards = () => {
 
 // The phone's sender signs in with a copy of the app's sign-in that the phone
 // takes 3, 8, 20 and 45 seconds after the app comes to the front
-// (SessionSnapshotter). A safety copy handed over before the phone has THIS
-// sign-in would sit unsent and show "Saved — open ADHDone to finish" over a
-// task the app is making fine. So one is only handed over when the sign-in is
-// the same one the app had the last time it came to the front, and that was
-// long enough ago for the phone to have copied it. A page load only counts as
-// coming to the front when it is the app starting (nothing in sessionStorage
-// yet): the reload after signing in is not one.
+// (SessionSnapshotter), and keeps from then on. A safety copy handed over
+// before the phone has THIS sign-in would sit unsent and show "Saved — open
+// ADHDone to finish" over a task the app is making fine, so one is only
+// handed over once the phone is known to hold it:
+//   - it was known to on an earlier open (remembered here by a tag of the
+//     sign-in, never the sign-in itself): no wait at all, so a task typed the
+//     second the app opens has its copy (Anna, Nov 13 2026: "there are
+//     probably a lot of tasks that are typed in the first few");
+//   - or one of those four looks has happened since this sign-in appeared.
+// The app coming to the front is the app starting (nothing in sessionStorage
+// yet), the page becoming visible again, or the App plugin's "resume" (back
+// from a permission question). It is kept in sessionStorage, so the page
+// reloading after sign-in is not taken for one. On a start the 3-second look
+// can come before the page is up, so only the later three are counted.
 const SIGN_IN_KEY = 'base44_access_token';
+const PHONE_HAS_KEY = 'adhd_phone_signin';
+const FRONT_KEY = 'adhd_front';
+const SEEN_KEY = 'adhd_signin_seen';
+const PHONE_LOOKS_MS = [3000, 8000, 20000, 45000];
 const signInNow = () => {
   try { return localStorage.getItem(SIGN_IN_KEY) || ''; } catch (e) { return ''; }
 };
-let appStarting = false;
-try {
-  appStarting = !sessionStorage.getItem('adhd_front_seen');
-  sessionStorage.setItem('adhd_front_seen', '1');
-} catch (e) { /* storage off: a page load is never counted */ }
-let frontAt = Date.now();
-let frontSignIn = appStarting ? signInNow() : '';
-let frontWaitMs = 9000;
+const readSession = (key) => {
+  try { return JSON.parse(sessionStorage.getItem(key) || 'null'); } catch (e) { return null; }
+};
+const writeSession = (key, value) => {
+  try { sessionStorage.setItem(key, JSON.stringify(value)); return true; } catch (e) { return false; }
+};
+// When the app last came to the front. With storage off a start can't be told
+// from a reload, so only the page becoming visible and "resume" count.
+let front = readSession(FRONT_KEY);
+if (!front || !Number.isFinite(front.at)) {
+  front = { at: Date.now(), resumed: false };
+  if (!writeSession(FRONT_KEY, front)) front = null;
+}
 const noteFront = () => {
-  frontAt = Date.now();
-  frontSignIn = signInNow();
-  frontWaitMs = 4000;
+  front = { at: Date.now(), resumed: true };
+  writeSession(FRONT_KEY, front);
 };
 const phoneHasThisSignIn = () => {
-  const now = signInNow();
-  return !!now && now === frontSignIn && Date.now() - frontAt >= frontWaitMs;
+  const signIn = signInNow();
+  if (!signIn) return false;
+  const tag = fnv(signIn);
+  let known = '';
+  try { known = localStorage.getItem(PHONE_HAS_KEY) || ''; } catch (e) { /* storage off */ }
+  if (known === tag) return true;
+  const now = Date.now();
+  // When this sign-in was first seen here: a look before then copied nothing.
+  let seen = readSession(SEEN_KEY);
+  if (!seen || seen.tag !== tag || !Number.isFinite(seen.at)) {
+    seen = { tag, at: now };
+    writeSession(SEEN_KEY, seen);
+  }
+  if (!front) return false;
+  const looks = front.resumed ? PHONE_LOOKS_MS : PHONE_LOOKS_MS.slice(1);
+  const copied = looks.some((ms) => front.at + ms >= seen.at && front.at + ms + 1000 <= now);
+  if (copied) {
+    try { localStorage.setItem(PHONE_HAS_KEY, tag); } catch (e) { /* storage off */ }
+  }
+  return copied;
 };
+// Looked at once now, so the moment this sign-in first appears is on record.
+phoneHasThisSignIn();
 
 // The copies themselves: the whole capture, and once it is split in several,
 // each part not made yet (so a part the app never reached is still made when
@@ -567,8 +603,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
     stampCaptureOwner(userEmail);
     resumeAbandonedCaptures(userEmail);
     // Asked now, so the first task typed gets its safety copy without waiting
-    // on the answer.
+    // on the answer; and the sign-in is looked at, so the phone having it is
+    // on record before any task is typed.
     if (guardBridge()) serverKnowsGuards();
+    phoneHasThisSignIn();
   }, [userEmail]);
 
   return (
