@@ -1,4 +1,5 @@
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
+// Nov 13 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different event's own reminder tied to its start (two calendar events at 9:00 AM each got their hour-before at 8:00, as planned).
 // Nov 12 2026 (evening): "pushes are broken (app still installed)" is only said when the phone has checked in SINCE its pushes died, or its own check saw the sign-up off. A check-in from before (Jordan: 1:52 PM, pushes dead by 6:09 PM) proves nothing about now: that is told as "stopped taking notifications", reads as an uninstall, and is marked suspected_uninstall. If the phone then checks in and signs up again, Anna is told once that the pushes are back.
 // Nov 11 2026: owner check 8 treats the day after a mention as the planned day off for a task on the every-other-day plan.
 // Nov 11 2026: the morning summary is gone, so owner check 8 (due today, never reminded) no longer counts a summary as the reminder.
@@ -2386,7 +2387,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       if (list.length < 2) continue;
       const taskIds = list.map((r: any) => r.task_id);
       const allDifferent = taskIds.every((id: any) => id) && new Set(taskIds).size === list.length;
-      if (allDifferent && list.every((r: any) => theirTimeRow(r, Date.parse(r.send_at || '')))) continue;
+      // Nov 13 2026: an event's own reminders tied to its start (the hour
+      // before, leave now, at the time: ledger kind 'event_reminder'; its
+      // night-before and morning-of are 'task_checkin' and are spaced) count
+      // the same way. Julianna's phone calendar has two entries that both
+      // run 9:00 to 10:00 AM on Nov 13, so each one's "in about an hour"
+      // went out at 8:00: the send ledger never moves a reminder tied to an
+      // event's start (shared/sendLedger.ts), so that is the plan as built,
+      // not the server colliding with itself, and Anna was alerted about it.
+      const eventsOwnRow = (r: any) => r.kind === 'event_reminder' && (r.task_id ? taskById[r.task_id] : null)?.classification === 'event';
+      if (allDifferent && list.every((r: any) => theirTimeRow(r, Date.parse(r.send_at || '')) || eventsOwnRow(r))) continue;
       sameMinute.push(`${k.split('|')[0]}: ${list.map((r: any) => String(r.title || r.kind).slice(0, 24)).join(' + ')}`);
     }
   } catch (e) {
