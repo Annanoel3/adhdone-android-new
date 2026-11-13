@@ -2122,9 +2122,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const goneMs = msOf(u?.push_unreachable_at);
     return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs) && !pushFixed(u);
   };
-  //   Either proof only stands while the check-ins keep coming: 36 hours
-  //   with none (three in a row missed) and the app is no longer known to be
-  //   there.
+  // stillInstalled (the rule above). Either proof only stands while the
+  // check-ins keep coming: 36 hours with none (three in a row missed) and the
+  // app is no longer known to be there.
   const stillInstalled = (u: any) => {
     const seenMs = msOf(u?.phone_seen_at);
     if (!Number.isFinite(seenMs) || nowMs - seenMs >= 36 * H_HOUR) return false;
