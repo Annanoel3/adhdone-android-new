@@ -208,6 +208,7 @@ if (!front || !Number.isFinite(front.at)) {
 const noteFront = () => {
   front = { at: Date.now(), resumed: true };
   writeSession(FRONT_KEY, front);
+  watchPhoneSignIn();
 };
 const phoneHasThisSignIn = () => {
   const signIn = signInNow();
@@ -231,8 +232,14 @@ const phoneHasThisSignIn = () => {
   }
   return copied;
 };
-// Looked at once now, so the moment this sign-in first appears is on record.
-phoneHasThisSignIn();
+// Looked at now, so the moment this sign-in first appears is on record, and
+// again just after each of the phone's looks, so the phone having it is
+// remembered whether or not a task is typed this time.
+function watchPhoneSignIn() {
+  phoneHasThisSignIn();
+  PHONE_LOOKS_MS.forEach((ms) => setTimeout(phoneHasThisSignIn, ms + 1200));
+}
+watchPhoneSignIn();
 
 // The copies themselves: the whole capture, and once it is split in several,
 // each part not made yet (so a part the app never reached is still made when
