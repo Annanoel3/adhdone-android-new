@@ -32,6 +32,9 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
   const primary = primaryButton(theme, specialMode);
   const outline = outlineButton(theme, specialMode);
   const trackStroke = theme === 'dark' && !isSeasonal(specialMode) ? '#374151' : '#e5e7eb';
+  // A step's timer (LaunchContext.startStopwatch): its task's name sits above
+  // the step's, and finishing ticks the step, not the task.
+  const finishLabel = session.stepOf ? 'I finished this step' : 'I finished the task';
 
   const totalMs = sessionDurationMs(session);
   const totalMin = Math.round(totalMs / 60000);
@@ -125,6 +128,9 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             <div className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-1">
               {stopwatch ? 'Timer' : `${minutesWord(totalMin)} timer`}
             </div>
+            {session.stepOf?.title && (
+              <div className={`text-xs mb-1 ${subtle}`}>{session.stepOf.title}</div>
+            )}
             <h2 className="text-xl font-bold mb-4">{session.title}</h2>
 
             <div className="relative mx-auto w-44 h-44 mb-5">
@@ -164,7 +170,7 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
                 onClick={onFinish}
                 className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${outline}`}
               >
-                I finished the task
+                {finishLabel}
               </button>
               <button
                 onClick={onStop}
