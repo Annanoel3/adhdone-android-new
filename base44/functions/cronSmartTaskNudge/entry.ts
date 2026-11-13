@@ -1,3 +1,4 @@
+// Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 11 2026: the lowest eased plan (a low-stakes repeating task put off on 3 days) gets one regular notification every other day (Anna: "once every other day", "ok build it"). It was "morning summary only" until the summary went away.
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: with the morning summary gone, the eased plans are the one alarm or notice a day alone, and no task is put on the lowest plan until its new rhythm is decided.
 // Nov 11 2026: the morning summary is gone (Anna: "ok get rid of it"). Smart Reminders no longer wait for it in the hour after wake-up, and no longer tell the planner about it.

@@ -1,3 +1,4 @@
+// Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: the lowest eased plan is one regular notification every other day.
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: with the morning summary gone, the eased plans are the one alarm or notice a day alone, and no task is put on the lowest plan until its new rhythm is decided.
 // Re-saved Nov 11 2026 so the bundled shared/nextCopy.ts is picked up: a repeat whose next copy was never made is repaired up to 30 days later (was 3), and only where the repeat really stopped (no open or newer copy of it).

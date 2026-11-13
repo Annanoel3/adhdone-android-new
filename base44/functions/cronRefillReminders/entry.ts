@@ -1,3 +1,4 @@
+// Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 12 2026 (evening): "pushes are broken (app still installed)" is only said when the phone has checked in SINCE its pushes died, or its own check saw the sign-up off. A check-in from before (Jordan: 1:52 PM, pushes dead by 6:09 PM) proves nothing about now: that is told as "stopped taking notifications", reads as an uninstall, and is marked suspected_uninstall. If the phone then checks in and signs up again, Anna is told once that the pushes are back.
 // Nov 11 2026: owner check 8 treats the day after a mention as the planned day off for a task on the every-other-day plan.
 // Nov 11 2026: the morning summary is gone, so owner check 8 (due today, never reminded) no longer counts a summary as the reminder.
