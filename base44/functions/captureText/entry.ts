@@ -85,12 +85,74 @@ const byAge = (a: any, b: any) =>
   String(a.created_date || "").localeCompare(String(b.created_date || "")) ||
   String(a.id).localeCompare(String(b.id));
 
-async function lostCaptureRace(base44: any, captureId: string, mine: { entity: string; ids: string[] }) {
+// ── One capture, several ids ────────────────────────────────────────────────
+// The app names a capture "pending-…" and each part of one it has split
+// "<id>#<n>" (TaskCaptureProcessor.partId). What was made under the whole id
+// and what was made under a part id are the same words, so each counts as the
+// other already being made: a part arriving after the whole was made here
+// makes nothing, and neither does the whole arriving after a part. Ids from
+// outside the app (the share sheet, the pinned notification) are only ever
+// themselves.
+const APP_CAPTURE_RE = /^pending-/;
+const PART_RE = /^(.+)#\d+$/;
+function sameCaptureIds(captureId: string): string[] {
+  if (!APP_CAPTURE_RE.test(captureId)) return [captureId];
+  const part = PART_RE.exec(captureId);
+  if (part) return [captureId, part[1]];
+  return [captureId, ...Array.from({ length: 12 }, (_, i) => `${captureId}#${i}`)];
+}
+const byIds = (ids: string[]) => (ids.length > 1 ? { capture_id: { $in: ids } } : { capture_id: ids[0] });
+
+// ── The app's safety copy ───────────────────────────────────────────────────
+// (Nov 13 2026) A task typed in the app is set up by the app, and handed here
+// only when the app goes off screen. An app that stops without that moment
+// (killed, crashed, frozen, the phone dying) handed nothing over, and the task
+// waited for the next open: a new user's second task, typed at 12:34 PM that
+// day, was never made. Now the app gives the phone's own background sender a
+// copy the moment it starts on the words, under
+// "<capture id>~g~<account tag>" (ShareBridge.handOffCapture, the sender that
+// already carries hand-offs: kept on the phone, sent again until it lands).
+// That copy is answered here:
+//   - the capture was made (by the app, or by a hand-off): done, nothing made;
+//   - the app may still be working on it: "not yet" (success false), which the
+//     phone's sender takes as "send again later" (10 s, 20 s, 40 s, …);
+//   - a minute after this function first saw the copy, with nothing made and
+//     the app silent: the capture is made here, as any hand-off is.
+// The minute is counted on the server's clock, from a CaptureTrace row
+// (captureGuard) written the first time the copy is seen, never from the
+// phone's clock. The app itself stops making a capture 40 seconds in and asks
+// here instead, so the two never save the same words at once; if they ever
+// do, the earliest saved row wins (lostCaptureRace over sameCaptureIds).
+const GUARD_RE = /^(.+)~g(?:~([0-9a-f]{8}))?$/;
+const GUARD_TAKEOVER_MS = 60 * 1000;
+// A trace from their app this recently: it is alive, and it will ask here
+// itself. Past the cap the copy is made anyway.
+const GUARD_APP_ALIVE_MS = 20 * 1000;
+const GUARD_HARD_CAP_MS = 5 * 60 * 1000;
+// Which account typed it. Same as accountTag in TaskCaptureProcessor.jsx
+// (FNV-1a, 32 bit, hex): the phone's stored sign-in can be an earlier
+// account's until the app is next brought to the front.
+function accountTag(email: string): string {
+  let h = 0x811c9dc5;
+  const s = String(email || "").trim().toLowerCase();
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+const rowMs = (r: any) => {
+  const s = String(r?.created_date || "");
+  return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+};
+const notYet = () => Response.json({ success: false, waiting: true, error: "safety copy: the app still has this one" });
+
+async function lostCaptureRace(base44: any, sameIds: string[], mine: { entity: string; ids: string[] }) {
   for (const pause of [0, 1500]) {
     if (pause) await new Promise((r) => setTimeout(r, pause));
     const [tasks, ideas] = await Promise.all([
-      base44.entities.Task.filter({ capture_id: captureId }).catch(() => []),
-      base44.entities.ParkingLotIdea.filter({ capture_id: captureId }).catch(() => []),
+      base44.entities.Task.filter(byIds(sameIds)).catch(() => []),
+      base44.entities.ParkingLotIdea.filter(byIds(sameIds)).catch(() => []),
     ]);
     const rows = [...(tasks || []), ...(ideas || [])].sort(byAge);
     const first = rows[0];
@@ -117,7 +179,7 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
-    const { text, timezone, capture_id, said_at, foldIdea } = await req.json();
+    const { text, timezone, capture_id: sentId, said_at, foldIdea, guardProbe } = await req.json();
     // When the words were said (ms), for a capture the phone held on to and
     // delivered later (no signal, app killed): "tomorrow" counts from then.
     const saidRaw = Number(said_at);
@@ -131,6 +193,12 @@ Deno.serve(async (req) => {
     if (!user?.email) {
       return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
+
+    // { guardProbe: true }: the app asks whether this copy of the function
+    // knows safety copies (see "The app's safety copy" above) before it sends
+    // one. A copy from before Nov 13 2026 answers "text is required", and
+    // would have made a second task out of an id it didn't know.
+    if (guardProbe) return Response.json({ success: true, guard: 1 });
 
     // { foldIdea: <id> }: the in-app Add box saved an idea of theirs; give it
     // the same tracker look a captured idea gets, right now (see
@@ -151,11 +219,25 @@ Deno.serve(async (req) => {
     const raw = String(text).trim();
     const tz = timezone || user.timezone || "America/Chicago";
 
+    // A safety copy is asked about under the capture's own id.
+    let capture_id: string | undefined = sentId ? String(sentId).trim() : undefined;
+    let guardBase: string | null = null;
+    const guard = capture_id ? GUARD_RE.exec(capture_id) : null;
+    if (guard) {
+      if (guard[2] && guard[2] !== accountTag(user.email)) {
+        console.log(`[captureText] safety copy ${guard[1]}: typed under another account, dropped`);
+        return Response.json({ success: true, duplicate: true, kind: "task", count: 0, tasks: [], guard: "other_account" });
+      }
+      guardBase = guard[1];
+      capture_id = guardBase;
+    }
+    const sameIds = capture_id ? sameCaptureIds(capture_id) : [];
+
     // Idempotency: native retries after a network failure, and a lost response
     // would otherwise double-create. The same capture_id returns what the first
     // attempt already made instead of parsing and creating all over again.
     if (capture_id) {
-      const existingIdeas = await retryBrief(() => base44.entities.ParkingLotIdea.filter({ capture_id }));
+      const existingIdeas = await retryBrief(() => base44.entities.ParkingLotIdea.filter(byIds(sameIds)));
       if (existingIdeas?.length) {
         return Response.json({
           success: true,
@@ -166,7 +248,7 @@ Deno.serve(async (req) => {
           ideas: existingIdeas.map((i: any) => ({ id: i.id, title: i.idea })),
         });
       }
-      const existing = await retryBrief(() => base44.entities.Task.filter({ capture_id }));
+      const existing = await retryBrief(() => base44.entities.Task.filter(byIds(sameIds)));
       if (existing?.length) {
         return Response.json({
           success: true,
@@ -176,6 +258,34 @@ Deno.serve(async (req) => {
           tasks: existing.map((t: any) => ({ id: t.id, title: t.title })),
         });
       }
+    }
+
+    // A safety copy with nothing made yet: the app's to finish for the first
+    // minute, this function's after it (see "The app's safety copy" above).
+    if (guardBase) {
+      const traces = base44.asServiceRole.entities.CaptureTrace;
+      const now = Date.now();
+      let recent: any[] | null = null;
+      try {
+        recent = await retryBrief(() => traces.filter(
+          { user_email: user.email, created_date: { $gte: new Date(now - 24 * 60 * 60 * 1000).toISOString() } }, "-created_date", 200));
+      } catch (e) {
+        console.error("[captureText] safety copy: could not read the traces:", e?.message);
+      }
+      // Can't tell how long it has been: never made blind.
+      if (!recent) return notYet();
+      const mark = recent.filter((r: any) => r.step === "captureGuard" && String(r.detail || "").includes(`"${guardBase}"`)).sort(byAge)[0];
+      if (!mark) {
+        await traces.create({ step: "captureGuard", detail: JSON.stringify({ id: guardBase }), user_email: user.email })
+          .catch((e: any) => console.error("[captureText] safety copy: could not note it:", e?.message));
+        return notYet();
+      }
+      const age = now - rowMs(mark);
+      const appRow = recent.find((r: any) => r.step !== "captureGuard" && r.step !== "captureGuardTook");
+      const appQuietFor = appRow ? now - rowMs(appRow) : Infinity;
+      if (!(age >= GUARD_TAKEOVER_MS) || (appQuietFor < GUARD_APP_ALIVE_MS && age < GUARD_HARD_CAP_MS)) return notYet();
+      console.log(`[captureText] safety copy ${guardBase}: the app never finished it (${Math.round(age / 1000)} s), making it here`);
+      await traces.create({ step: "captureGuardTook", detail: JSON.stringify({ id: guardBase, after_s: Math.round(age / 1000) }), user_email: user.email }).catch(() => {});
     }
 
     // What kind of thing is it? Asked once, on the WHOLE capture, before any
@@ -202,7 +312,7 @@ Deno.serve(async (req) => {
       const feedback = category.category === "app_feedback";
       const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : category, raw, capture_id, !feedback);
       if (capture_id && ideas.length) {
-        const winner = await lostCaptureRace(base44, capture_id, { entity: "ParkingLotIdea", ids: ideas.map((i: any) => i.id) });
+        const winner = await lostCaptureRace(base44, sameIds, { entity: "ParkingLotIdea", ids: ideas.map((i: any) => i.id) });
         if (winner) {
           console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
           return duplicateResponse(winner);
@@ -231,7 +341,7 @@ Deno.serve(async (req) => {
       const birthday = await createBirthdayTask(base44, category, raw, { email: user.email, tz, captureId: capture_id });
       if (birthday) {
         if (capture_id) {
-          const winner = await lostCaptureRace(base44, capture_id, { entity: "Task", ids: [birthday.id] });
+          const winner = await lostCaptureRace(base44, sameIds, { entity: "Task", ids: [birthday.id] });
           if (winner) {
             console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
             return duplicateResponse(winner);
@@ -271,7 +381,7 @@ Deno.serve(async (req) => {
     const claim = async (entity: string, ids: string[]) => {
       if (!capture_id || !first || !ids.length) return null;
       first = false;
-      return await lostCaptureRace(base44, capture_id, { entity, ids });
+      return await lostCaptureRace(base44, sameIds, { entity, ids });
     };
 
     for (const piece of pieces) {
@@ -385,3 +495,5 @@ Deno.serve(async (req) => {
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).
 
 // Re-saved Nov 12 2026: shared/reminderTitle.ts (the alarm of their own young child's birthday has no "Write a text" button; birthday_no_text).
+
+// Nov 13 2026: the app's safety copy (a task whose app stopped mid-way is made here a minute later), and a part of a capture counts as made once the whole was.
