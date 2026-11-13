@@ -42,7 +42,7 @@ import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { appConfirm } from "@/components/ui/alert-dialog";
-import { TimeItButton } from "../launch/LaunchButtons";
+import { TimeItButton, StepTimeButton } from "../launch/LaunchButtons";
 import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
@@ -1102,7 +1102,7 @@ export default function TaskCard({
             <TagPill task={task} theme={theme} onUpdateTask={onUpdateTask} onRefreshTasks={onRefreshTasks} />
           )}
 
-          <TimeItButton task={task} theme={theme} />
+          <TimeItButton task={task} theme={theme} steps={subtasks} />
           <RecordNotesButton task={task} theme={theme} compact />
 
           {/* The priority pill is the picker, right on the collapsed card
@@ -1782,6 +1782,8 @@ export default function TaskCard({
                     }`}>
                       {subtask.title}
                     </span>
+                    {/* Each step has its own timer (LaunchButtons). */}
+                    <StepTimeButton step={subtask} parent={task} theme={theme} />
                   </div>
                 ))}
               </div>
