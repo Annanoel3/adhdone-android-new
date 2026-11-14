@@ -47,7 +47,7 @@ import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
 import { noteTaskTimeChanged } from "../utils/notificationOwnership";
-import { dayForRepeatTime } from "../utils/repeatTime";
+import { dayForRepeatTime, monthlyChoicesFor, repeatValueOf, repeatFieldsOf, repeatShortLabel } from "../utils/repeatTime";
 
 export default function TaskCard({
   task,
@@ -443,9 +443,9 @@ export default function TaskCard({
     : '';
   const repeatScheduleLabel = (() => {
     if (!isRepeating) return null;
-    const days = task.recurrence_pattern === 'weekly' && repeatDayNames
-      ? repeatDayNames
-      : repeatWords[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ');
+    // "Daily", "Sat, Sun", "Monthly 2nd Tue" (utils/repeatTime.js: the one
+    // copy of these words).
+    const days = repeatShortLabel(task);
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
     if (!m) return days;
     const h = Number(m[1]);
@@ -978,10 +978,12 @@ export default function TaskCard({
       { value: 'every_other_day', label: repeatWords.every_other_day },
       { value: 'weekdays', label: 'Weekdays (Mon–Fri)' },
       { value: 'weekly', label: repeatDayNames ? `Weekly (${repeatDayNames})` : repeatWords.weekly },
-      { value: 'monthly', label: repeatWords.monthly },
+      // Monthly on its date, or on a weekday of the month ("the second
+      // Tuesday"), offered by the day the task is on (monthlyChoicesFor).
+      ...monthlyChoicesFor(task),
       { value: 'yearly', label: repeatWords.yearly },
     ];
-    if (isRepeating && !list.some((o) => o.value === task.recurrence_pattern)) {
+    if (isRepeating && !list.some((o) => o.value === repeatValueOf(task))) {
       list.push({ value: task.recurrence_pattern, label: repeatWords[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ') });
     }
     list.push({ value: 'none', label: "Doesn't repeat" });
@@ -1010,16 +1012,18 @@ export default function TaskCard({
     if (!showRepeatPill) return;
     const picked = repeatSelectRef.current?.value || '';
     const newTime = repeatHasTime ? (repeatTimeRef.current?.value || '') : '';
-    const patternChanged = !!picked && picked !== task.recurrence_pattern;
+    // The repeat as one value ('daily', 'monthly', 'monthly:2TU'); a change
+    // saves the pattern AND the weekday-of-the-month together (repeatFieldsOf).
+    const patternChanged = !!picked && picked !== repeatValueOf(task);
     const timeChanged = !!newTime && newTime !== repeatTimeValue;
     if (!patternChanged && !timeChanged) return;
-    const also = patternChanged ? { recurrence_pattern: picked } : {};
+    const also = patternChanged ? repeatFieldsOf(picked) : {};
     if (timeChanged) {
       // A task with no rhythm of its own becomes one with a time of its own
       // ('once': what every reminder at a set time is filed as, and what the
       // phone's alarm looks for).
       if (!task.reminder_interval) also.reminder_interval = 'once';
-      handleReminderDateChange(dayForRepeatTime(task, newTime, patternChanged ? picked : task.recurrence_pattern), newTime, { also, notAPush: true });
+      handleReminderDateChange(dayForRepeatTime({ ...task, ...also }, newTime), newTime, { also, notAPush: true });
       return;
     }
     if (onUpdateTask) onUpdateTask({ ...task, ...also });
@@ -1398,7 +1402,7 @@ export default function TaskCard({
                         <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Repeats</label>
                         <select
                           ref={repeatSelectRef}
-                          defaultValue={task.recurrence_pattern}
+                          defaultValue={repeatValueOf(task)}
                           className={`w-full border rounded px-3 py-2 text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white'}`}
                         >
                           {repeatChoices.map((o) => (
