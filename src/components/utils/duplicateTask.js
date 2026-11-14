@@ -12,11 +12,18 @@ import { trackFire } from '@/lib/appTrack';
 // usual path and books the reminders exactly as it would for any task. Until
 // then a copied task is a dateless Smart Reminders task like any other; a
 // copied event waits for its date.
+//
+// The named time (anchor_time) is a "when" too, so it stays behind (Nov 14
+// 2026): a copy of the 10 AM "Take heart pill" kept 10:00 with nothing
+// booked, and a repeat is told apart from its twin by name + named time
+// (taskRecurrence: findNextCopy, carriesOn), so the copy read as the 10 AM
+// chain itself — a broken 10 AM chain would not have been repaired, and
+// finishing the copy would have made a second 10 AM pill.
 const KEEP = [
   'title', 'description', 'notes', 'location', 'business_name', 'business_hours',
   'classification', 'urgency', 'energy_required', 'takes_time', 'worth_breaking_down', 'prep_worthy', 'prep_note', 'life_area', 'tag',
   'day_only_task', 'deadline_style', 'reminder_interval', 'recurrence_pattern',
-  'recurrence_days', 'reminder_wish', 'anchor_time', 'alert_style', 'quiet_hours_exempt',
+  'recurrence_days', 'reminder_wish', 'alert_style', 'quiet_hours_exempt',
   'follow_up_title', 'follow_up_minutes', 'pictures', 'prep_questions', 'typical_minutes',
   'task_family', 'original_input',
 ];
@@ -40,6 +47,7 @@ export async function duplicateTask(task) {
     event_time: null,
     end_time: null,
     time_stated: false,
+    anchor_time: null,
     onesignal_notification_ids: [],
     reminder_schedule: [],
     silenced: false,
