@@ -44,10 +44,23 @@ const sheetVariants = cva(
   }
 )
 
-const SheetContent = React.forwardRef(({ side = "right", className, children, ...props }, ref) => (
+// Same as the dialog: a tap on a toast is not a tap outside the sheet
+// (Nov 14 2026).
+const fromToast = (e) => {
+  const t = e?.detail?.originalEvent?.target || e?.target;
+  return !!(t && typeof t.closest === 'function' && t.closest('[data-app-toast]'));
+};
+
+const SheetContent = React.forwardRef(({ side = "right", className, children, onPointerDownOutside, onInteractOutside, onFocusOutside, ...props }, ref) => (
   <SheetPortal>
     <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+    <SheetPrimitive.Content
+      ref={ref}
+      className={cn(sheetVariants({ side }), className)}
+      onPointerDownOutside={(e) => { if (fromToast(e)) e.preventDefault(); onPointerDownOutside?.(e); }}
+      onInteractOutside={(e) => { if (fromToast(e)) e.preventDefault(); onInteractOutside?.(e); }}
+      onFocusOutside={(e) => { if (fromToast(e)) e.preventDefault(); onFocusOutside?.(e); }}
+      {...props}>
       <SheetPrimitive.Close
         className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
         <X className="h-4 w-4" />
