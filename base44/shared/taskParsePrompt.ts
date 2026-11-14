@@ -408,6 +408,16 @@ recurrence_days — only with recurrence_pattern "weekly": the weekdays it
   and Fridays" = [1, 3, 5], "on weekdays" = [1, 2, 3, 4, 5], "every Tuesday" =
   [2]. target_date is then the NEXT of those days. Otherwise null.
 
+recurrence_nth_weekday — only with recurrence_pattern "monthly", when the
+  user named a WEEKDAY of the month instead of a date: a number (1, 2, 3 or 4,
+  or -1 for "last") followed by the day as SU, MO, TU, WE, TH, FR or SA.
+  "the second Tuesday of every month" = "2TU", "first Monday of each month" =
+  "1MO", "every third Thursday" = "3TH", "the last Friday of the month" =
+  "-1FR", "first Sunday every month" = "1SU". recurrence_pattern is then
+  "monthly" and target_date is the next such day. A date of the month ("the
+  1st of every month", "monthly on the 15th") is not this: null. "Every other
+  Tuesday" is every_other_week, not this: null.
+
 urgency — judge the real consequence of it not happening: what breaks, spoils,
   costs money, or leaves someone waiting. "urgent" for real same-day stakes,
   down to "low" for nice-to-haves. A date attached does not make something
@@ -498,6 +508,7 @@ Return JSON with exactly these keys:
   "repeat_words": string | null,
   "recurrence_pattern": "none" | "daily" | "every_other_day" | "weekly" | "every_other_week" | "monthly" | "yearly",
   "recurrence_days": integer[] | null,
+  "recurrence_nth_weekday": string | null,
   "deadline_style": "on" | "by",
   "day_only_task": boolean,
   "needs_date_pick": boolean,
