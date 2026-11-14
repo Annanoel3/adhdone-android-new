@@ -233,6 +233,19 @@ export function repeatShortLabel(task) {
   return WORDS[pattern] || String(pattern).replace(/_/g, ' ');
 }
 
+// A whole line for a place that only SAYS a thing repeats (an event's
+// details): "Repeats yearly", "Repeats every other week", "Repeats weekly on
+// Mon, Wed", "Repeats monthly on the second Tuesday". '' when it doesn't repeat.
+export function repeatLine(task) {
+  const pattern = task?.recurrence_pattern;
+  if (!pattern || pattern === 'none') return '';
+  const days = validDays(task?.recurrence_days);
+  if (pattern === 'weekly' && days.length) return `Repeats weekly on ${days.map((n) => DAY_SHORT[n]).join(', ')}`;
+  if (nthOfTask(task)) return `Repeats monthly on the ${nthWeekdayLabel(task.recurrence_nth_weekday)}`;
+  if (pattern === 'weekdays') return 'Repeats on weekdays';
+  return `Repeats ${WORDS[pattern] ? WORDS[pattern].toLowerCase() : String(pattern).replace(/_/g, ' ')}`;
+}
+
 // ── A repeat that names its own days ─────────────────────────────────────────
 // A repeat that says which days it lands on all by itself: every day, Mon–Fri,
 // named weekdays ("Sat, Sun"), or monthly ("the 2nd Tuesday of every month",
