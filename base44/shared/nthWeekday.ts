@@ -78,6 +78,43 @@ export function nextMonthNthWeekdayKey(key: string, nth: Nth): string | null {
   return inMonth(key, 1, nth);
 }
 
+// ── Monthly on a DATE: the same day each month ───────────────────────────────
+// Anna, Nov 14 2026: "we should probably assume that if someone makes
+// something monthly, they actually mean that same day each month. Not however
+// we were doing it before." Before, the next month was reached by adding a
+// month to the date and letting the calendar spill over: the 31st in a 30-day
+// month became the 1st of the month after (Oct 31 -> Dec 1), Jan 29, 30 and
+// 31 became Mar 1, 2 and 3, and the task then stayed on that wrong day for
+// good. Now a month that doesn't have the day uses its LAST day (Jan 31 ->
+// Feb 28), and the round after goes back to the day it belongs on (-> Mar 31).
+// That day is remembered on the task as recurrence_month_day (29, 30 or 31),
+// and only trusted while the task sits on the last day of a shorter month, so
+// a date the person moved by hand is never pulled back.
+const daysIn = (y: number, mi: number) => new Date(Date.UTC(y, mi + 1, 0)).getUTCDate();
+
+// The day of the month this round belongs on: its own day, or the remembered
+// one when a shorter month has it on its last day.
+export function monthDayWanted(task: any, key: string): number {
+  const p = partsOf(key);
+  if (!p) return 0;
+  const want = Number(task?.recurrence_month_day);
+  return Number.isInteger(want) && want >= 29 && want <= 31 && want > p.d && p.d === daysIn(p.y, p.mi) ? want : p.d;
+}
+
+// One round on: that day in the month after the month `key` is in, or that
+// month's last day when it is shorter.
+export function nextMonthSameDayKey(key: string, want: number): string | null {
+  const p = partsOf(key);
+  if (!p) return null;
+  const first = new Date(Date.UTC(p.y, p.mi + 1, 1));
+  const y = first.getUTCFullYear();
+  const mi = first.getUTCMonth();
+  return keyOf(Date.UTC(y, mi, Math.min(want >= 1 ? want : p.d, daysIn(y, mi))));
+}
+
+// What to remember on the next round (only a day some months don't have).
+export const monthDayToKeep = (want: number): number | null => (Number.isInteger(want) && want >= 29 && want <= 31 ? want : null);
+
 // A calendar's own rule for a monthly series on a weekday of the month:
 // "FREQ=MONTHLY;BYDAY=2TU" (Google, phone calendars) or
 // "FREQ=MONTHLY;BYDAY=TU;BYSETPOS=2". Null for a rule the app has no repeat
