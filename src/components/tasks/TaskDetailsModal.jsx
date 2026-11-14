@@ -206,14 +206,16 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   // card closing).
   const commitMonthlyDraft = () => {
     if (monthlyTimerRef.current) { clearTimeout(monthlyTimerRef.current); monthlyTimerRef.current = null; }
-    const rule = monthlyDraftRef.current;
+    const draft = monthlyDraftRef.current;
     monthlyDraftRef.current = null;
-    if (!rule) return;
+    if (!draft) return;
     const before = lastTimeSaveRef.current;
-    Promise.resolve(before).catch(() => {}).then(() => { setMonthlyRuleRef.current(rule); setMonthlyDraft(null); });
+    // Saved by the newest render's handler (it reads the task as the save
+    // before left it), and only on the task the blanks were turned on.
+    Promise.resolve(before).catch(() => {}).then(() => { setMonthlyRuleRef.current(draft.rule, draft.taskId); setMonthlyDraft(null); });
   };
   const onMonthlyBlank = (rule) => {
-    monthlyDraftRef.current = rule;
+    monthlyDraftRef.current = { rule, taskId: task?.id };
     setMonthlyDraft(rule);
     if (monthlyTimerRef.current) clearTimeout(monthlyTimerRef.current);
     monthlyTimerRef.current = setTimeout(() => commitMonthlyDraft(), 1500);
@@ -1820,8 +1822,8 @@ Return JSON:
   // not). A move goes through the same save as any date change here
   // (handleUpdateReminderTime: old reminders down, the one at its time booked
   // again, the phone's alarm moved), with the repeat saved in the same breath.
-  const handleSetMonthlyRule = (rule) => {
-    if (!task || !rule) return;
+  const handleSetMonthlyRule = (rule, forTaskId) => {
+    if (!task || !rule || (forTaskId && forTaskId !== task.id)) return;
     const value = monthlyRuleValue(rule);
     if (value === repeatValueOf(task)) return;
     const repeat = repeatFieldsOf(value);
