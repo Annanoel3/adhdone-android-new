@@ -1477,6 +1477,21 @@ Return JSON:
   // "Repeats daily" task that read "Due Nov 15, 2026 • 2:00 PM": "if it says
   // repeats daily up there, you should not be able to set a due date for it."
   const repeatTimeOnly = currentType === 'repeat' && repeatSetsItsOwnDays(task);
+  // The pill itself says how often, so one look reads "Daily at 2:00 PM"
+  // (Anna, the same afternoon, about "Due November 15th at 2 p.m." on a task
+  // that had saved as daily: "It does not indicate that its daily at 2 pm. It
+  // lies"). Words as on the card's repeat pill: Daily, Weekdays, "Sat, Sun".
+  const repeatWord = (() => {
+    if (task.recurrence_pattern === 'daily') return 'Daily';
+    if (task.recurrence_pattern === 'weekdays') return 'Weekdays';
+    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const days = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
+    return days.length ? days.map((n) => names[n]).join(', ') : 'Weekly';
+  })();
+  // A repeat that keeps a date (monthly, yearly, every other day) isn't "due"
+  // once: that date is only its next round. A "by" deadline (a monthly
+  // payment) really is due, and keeps the word.
+  const dueWord = currentType === 'repeat' && task.deadline_style !== 'by' ? 'Next:' : 'Due';
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
@@ -2195,12 +2210,12 @@ Return JSON:
                         `Overdue • ${formatReminderDate(dueSource)}${task.day_only_task ? '' : ` • ${formatReminderTime(dueSource)}`}`
                       ) : repeatTimeOnly ? (
                         dueSource && !task.day_only_task
-                          ? `${task.deadline_style === 'by' ? 'By' : 'At'} ${formatReminderTime(dueSource)}`
+                          ? `${repeatWord} ${task.deadline_style === 'by' ? 'by' : 'at'} ${formatReminderTime(dueSource)}`
                           : 'Add a time'
                       ) : dueSource ? (
                         task.day_only_task
-                          ? `Due ${formatReminderDate(dueSource)}`
-                          : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
+                          ? `${dueWord} ${formatReminderDate(dueSource)}`
+                          : `${dueWord} ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
                       ) : (
                         currentType === 'repeat' ? 'Add a time' : 'Add due date'
                       )}
