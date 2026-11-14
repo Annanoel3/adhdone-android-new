@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it").
 // Nov 12 2026: { renamed: { from, to } } reads a task's new name after a rename. A short look on gpt-6-astra says whether the new name adds a day, a time or a repeat the old one didn't have; only then is the new name parsed, as of now, by the same parser as a new task. Nothing is saved here (the app applies it: renameReread.js). Admin check of several at once: { renameTry: [{ from, to }] }.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
