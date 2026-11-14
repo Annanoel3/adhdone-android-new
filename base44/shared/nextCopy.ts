@@ -18,6 +18,7 @@
 // person's time zone. Keep the two in step.
 
 import { pushPhoneAlarms } from './reminderTitle.ts';
+import { nthOfTask, nthWeekdayDay, type Nth } from './nthWeekday.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INTERVAL_MS: Record<string, number> = {
@@ -73,7 +74,10 @@ const weekday = (ms: number, tz: string) => {
 };
 const atClock = (ms: number, hh: number, mi: number, tz: string) => fromWall({ ...wallOf(ms, tz), hh, mi }, tz);
 
-function advance(ms: number, pattern: string, days: any, tz: string): number {
+// `nth` is a monthly task's weekday of the month ("the second Tuesday",
+// shared/nthWeekday.ts): on to that weekday of the NEXT month on their clock,
+// wherever this round was done. Without one, monthly is the same date.
+function advance(ms: number, pattern: string, days: any, tz: string, nth: Nth | null = null): number {
   const daySet = Array.isArray(days) ? days.filter((n: any) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   if (pattern === 'daily') return moveDays(ms, 1, tz);
   if (pattern === 'every_other_day') return moveDays(ms, 2, tz);
@@ -90,6 +94,13 @@ function advance(ms: number, pattern: string, days: any, tz: string): number {
   }
   if (pattern === 'weekly') return moveDays(ms, 7, tz);
   if (pattern === 'every_other_week') return moveDays(ms, 14, tz);
+  if (pattern === 'monthly' && nth) {
+    const w = wallOf(ms, tz);
+    const first = new Date(Date.UTC(w.y, w.m, 1));
+    const y = first.getUTCFullYear();
+    const mi = first.getUTCMonth();
+    return fromWall({ ...w, y, m: mi + 1, d: nthWeekdayDay(y, mi, nth) }, tz);
+  }
   if (pattern === 'monthly') return moveMonths(ms, 1, tz);
   if (pattern === 'yearly') return moveMonths(ms, 12, tz);
   return ms;
@@ -141,17 +152,17 @@ export function nextOccurrenceIn(task: any, nowMs: number, tz: string, owner: an
   const keepOwnTime = task.classification === 'event' || !!task.day_only_task;
   const m = anchorOf(task);
   const at = (ms: number) => (keepOwnTime || !m ? ms : atClock(ms, Number(m[1]), Number(m[2]), tz));
-  let next = advance(base, task.recurrence_pattern, task.recurrence_days, tz);
+  let next = advance(base, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
   let guard = 0;
-  while (at(next) <= nowMs && guard++ < 1000) next = advance(next, task.recurrence_pattern, task.recurrence_days, tz);
-  if (at(next) <= nowMs) next = advance(nowMs, task.recurrence_pattern, task.recurrence_days, tz);
+  while (at(next) <= nowMs && guard++ < 1000) next = advance(next, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
+  if (at(next) <= nowMs) next = advance(nowMs, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
   const nowWall = wallOf(nowMs, tz);
   let finishDay = nowMs;
   if (nowWall.hh * 60 + nowWall.mi < lateNightEndsMin(owner)) finishDay = moveDays(nowMs, -1, tz);
   if (dayNum(finishDay, tz) - dayNum(base, tz) > 0) {
     let lateGuard = 0;
     while (dayNum(at(next), tz) === dayNum(finishDay, tz) && lateGuard++ < 400) {
-      next = advance(next, task.recurrence_pattern, task.recurrence_days, tz);
+      next = advance(next, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
     }
   }
   return { base, nextDate: at(next) };
@@ -227,6 +238,7 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
     next_reminder: new Date(nextReminder).toISOString(),
     recurrence_pattern: task.recurrence_pattern,
     recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
+    recurrence_nth_weekday: task.recurrence_nth_weekday || null,
     notification_recipient_email: recipient,
     onesignal_notification_ids: [],
     reminder_count: 0,
