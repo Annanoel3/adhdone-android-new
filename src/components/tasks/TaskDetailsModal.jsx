@@ -1837,7 +1837,7 @@ Return JSON:
       // Already on such a day: only the repeat changes.
       onUpdate({ ...task, ...repeat });
       toast({ title: 'Repeat saved ✓', description: said });
-      Task.update(task.id, repeat).catch((e) => console.error('Error setting the monthly day:', e));
+      lastTimeSaveRef.current = Task.update(task.id, repeat).catch((e) => console.error('Error setting the monthly day:', e));
       return;
     }
     dueDirty.current = false;
