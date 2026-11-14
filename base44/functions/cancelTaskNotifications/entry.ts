@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 so the bundled shared/runTaskParse.ts and nextCopy.ts are picked up: the parser no longer invents a "next step" for a chore and a repeating task's next copy carries none (Anna: "Remove it").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: the lowest eased plan is one regular notification every other day.
 // Re-saved Nov 11 2026 so the bundled shared/easeOff.ts is picked up: with the morning summary gone, the eased plans are the one alarm or notice a day alone, and no task is put on the lowest plan until its new rhythm is decided.
