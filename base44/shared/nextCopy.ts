@@ -18,7 +18,7 @@
 // person's time zone. Keep the two in step.
 
 import { pushPhoneAlarms } from './reminderTitle.ts';
-import { nthOfTask, nthWeekdayDay, type Nth } from './nthWeekday.ts';
+import { nthOfTask, nthWeekdayDay, monthDayWanted, nextMonthSameDayKey, monthDayToKeep, type Nth } from './nthWeekday.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INTERVAL_MS: Record<string, number> = {
@@ -73,11 +73,14 @@ const weekday = (ms: number, tz: string) => {
   return new Date(Date.UTC(w.y, w.m - 1, w.d)).getUTCDay();
 };
 const atClock = (ms: number, hh: number, mi: number, tz: string) => fromWall({ ...wallOf(ms, tz), hh, mi }, tz);
+const wallKey = (w: Wall) => `${w.y}-${String(w.m).padStart(2, '0')}-${String(w.d).padStart(2, '0')}`;
 
 // `nth` is a monthly task's weekday of the month ("the second Tuesday",
 // shared/nthWeekday.ts): on to that weekday of the NEXT month on their clock,
-// wherever this round was done. Without one, monthly is the same date.
-function advance(ms: number, pattern: string, days: any, tz: string, nth: Nth | null = null): number {
+// wherever this round was done. Without one, monthly is the same DAY of the
+// next month, or that month's last day when it is shorter; `monthDay` is the
+// day the task belongs on (monthDayWanted), so Jan 31 -> Feb 28 -> Mar 31.
+function advance(ms: number, pattern: string, days: any, tz: string, nth: Nth | null = null, monthDay = 0): number {
   const daySet = Array.isArray(days) ? days.filter((n: any) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   if (pattern === 'daily') return moveDays(ms, 1, tz);
   if (pattern === 'every_other_day') return moveDays(ms, 2, tz);
@@ -101,7 +104,13 @@ function advance(ms: number, pattern: string, days: any, tz: string, nth: Nth | 
     const mi = first.getUTCMonth();
     return fromWall({ ...w, y, m: mi + 1, d: nthWeekdayDay(y, mi, nth) }, tz);
   }
-  if (pattern === 'monthly') return moveMonths(ms, 1, tz);
+  if (pattern === 'monthly') {
+    const w = wallOf(ms, tz);
+    const key = nextMonthSameDayKey(wallKey(w), monthDay || w.d);
+    const p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+    if (!p) return moveMonths(ms, 1, tz);
+    return fromWall({ ...w, y: Number(p[1]), m: Number(p[2]), d: Number(p[3]) }, tz);
+  }
   if (pattern === 'yearly') return moveMonths(ms, 12, tz);
   return ms;
 }
@@ -147,25 +156,30 @@ function lateNightEndsMin(owner: any): number {
   return start > 4 * 60 && start <= 12 * 60 ? start : 4 * 60;
 }
 
-export function nextOccurrenceIn(task: any, nowMs: number, tz: string, owner: any): { base: number; nextDate: number } {
+export function nextOccurrenceIn(task: any, nowMs: number, tz: string, owner: any): { base: number; nextDate: number; monthDay: number | null } {
   const base = occurrenceMoment(task, nowMs, tz);
   const keepOwnTime = task.classification === 'event' || !!task.day_only_task;
   const m = anchorOf(task);
   const at = (ms: number) => (keepOwnTime || !m ? ms : atClock(ms, Number(m[1]), Number(m[2]), tz));
-  let next = advance(base, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
+  // A monthly task on a date: the day of the month it belongs on, carried
+  // through every step (the 31st stays the 31st after a shorter month).
+  const nth = nthOfTask(task);
+  const wantDay = task.recurrence_pattern === 'monthly' && !nth ? monthDayWanted(task, wallKey(wallOf(base, tz))) : 0;
+  const step = (ms: number) => advance(ms, task.recurrence_pattern, task.recurrence_days, tz, nth, wantDay);
+  let next = step(base);
   let guard = 0;
-  while (at(next) <= nowMs && guard++ < 1000) next = advance(next, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
-  if (at(next) <= nowMs) next = advance(nowMs, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
+  while (at(next) <= nowMs && guard++ < 1000) next = step(next);
+  if (at(next) <= nowMs) next = step(nowMs);
   const nowWall = wallOf(nowMs, tz);
   let finishDay = nowMs;
   if (nowWall.hh * 60 + nowWall.mi < lateNightEndsMin(owner)) finishDay = moveDays(nowMs, -1, tz);
   if (dayNum(finishDay, tz) - dayNum(base, tz) > 0) {
     let lateGuard = 0;
     while (dayNum(at(next), tz) === dayNum(finishDay, tz) && lateGuard++ < 400) {
-      next = advance(next, task.recurrence_pattern, task.recurrence_days, tz, nthOfTask(task));
+      next = step(next);
     }
   }
-  return { base, nextDate: at(next) };
+  return { base, nextDate: at(next), monthDay: monthDayToKeep(wantDay) };
 }
 
 function shiftDays(value: any, days: number, tz: string): string | null {
