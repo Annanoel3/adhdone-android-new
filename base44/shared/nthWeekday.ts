@@ -13,7 +13,6 @@
 // src/components/utils/repeatTime.js. Keep the two in step.
 
 const CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type Nth = { n: number; weekday: number };
 
@@ -99,5 +98,3 @@ export function nthWeekdayOfRule(rule: any): string | null {
   }
   return cleanNthWeekday(`${n}${one[2]}`);
 }
-
-export const NTH_DAY_MS = DAY_MS;
