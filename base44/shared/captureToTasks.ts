@@ -135,10 +135,6 @@ export function buildTaskRecord(
     goes_somewhere: parsed.goes_somewhere === true,
     recurrence_pattern: parsed.recurrence_pattern || "none",
     recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
-    // The next step this chore leads to, scheduled the moment the task is
-    // marked done (see logTaskCompletion).
-    follow_up_title: parsed.follow_up_title || null,
-    follow_up_minutes: parsed.follow_up_minutes || null,
     // The user's own words about how to remind them ("keep reminding me until
     // I finish"), read by the reminder planners; and the clock time they named,
     // so each new occurrence of a recurring task starts at the same time.
