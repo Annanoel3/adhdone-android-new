@@ -1,3 +1,4 @@
+// Nov 14 2026 (afternoon): a calendar series on a weekday of the month ("first Tuesday", RRULE BYDAY=1TU) is imported as monthly ON THAT WEEKDAY (Task.recurrence_nth_weekday, shared/nthWeekday.ts) and its next date is counted that way. Until now it was imported as plain monthly and stepped by DATE, so from its second month on it sat on the wrong day (a first-Tuesday dinner imported on Oct 6 sat on Nov 6 and Dec 6). Also re-saved so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: "the second Tuesday of every month" typed or said (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday").
 // Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: the parser no longer invents a "next step" for a chore and none is saved on a task (Anna: "Remove it").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts (through shared/eventConflicts.ts) is picked up: reminder history is filed by what OneSignal says happened.
@@ -35,17 +36,48 @@ import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { flagConflicts } from '../../shared/eventConflicts.ts';
 import { needsPrepAskPush, sendPrepAsk } from '../../shared/prepNote.ts';
 import { seriesPattern, seriesEvery, seriesUnit, dayEntryKind, clockOf } from '../../shared/calendarEntry.ts';
+import { nthWeekdayOfRule, parseNthWeekday, nextMonthNthWeekdayKey, type Nth } from '../../shared/nthWeekday.ts';
 
 // The next date of a calendar series after `afterMs`, counted from one of its
 // dates and honoring "every N" (shared/calendarEntry.ts). Until Nov 12 2026
 // the N was dropped: "every 2 weeks" was stepped a week at a time.
 function nextSeriesOccurrence(start: Date, rule: string, afterMs: number, timeZone: any): Date {
+  // A monthly series on a weekday of the month ("first Tuesday", BYDAY=1TU):
+  // that weekday of each following month, never the same date.
+  const nth = seriesNth(rule);
+  if (nth) return nextNthOccurrence(start, nth, afterMs, timeZone);
   const unit = seriesUnit(rule);
   const every = seriesEvery(rule);
   if (every <= 1) return nextLocalOccurrence(start, unit, afterMs, timeZone);
   let d = start;
   for (let guard = 0; guard < 4000 && d.getTime() <= afterMs; guard++) {
     for (let i = 0; i < every; i++) d = nextLocalOccurrence(d, unit, d.getTime(), timeZone);
+  }
+  return d;
+}
+
+// The weekday of the month a calendar series repeats on ("first Tuesday"),
+// only when the app keeps that series as its own monthly repeat
+// (shared/calendarEntry.ts seriesPattern, shared/nthWeekday.ts).
+function seriesNth(rule: string): Nth | null {
+  return seriesPattern(rule) === 'monthly' ? parseNthWeekday(nthWeekdayOfRule(rule)) : null;
+}
+
+// The next date of such a series after `afterMs`: that weekday of each
+// following month, at the same clock time on their clock. Stepping the DATE a
+// month at a time put the series on the wrong day from its second month on (a
+// first-Tuesday dinner imported on Oct 6 2026 sat on Nov 6 and Dec 6).
+function nextNthOccurrence(start: Date, nth: Nth, afterMs: number, timeZone: any): Date {
+  if (start.getTime() > afterMs) return start;
+  const clock = clockIn(start.toISOString(), timeZone) || { hh: 9, mm: 0 };
+  let key = new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || undefined, year: 'numeric', month: '2-digit', day: '2-digit' }).format(start);
+  let d = start;
+  for (let guard = 0; guard < 2400 && d.getTime() <= afterMs; guard++) {
+    const next = nextMonthNthWeekdayKey(key, nth);
+    if (!next) break;
+    key = next;
+    const [y, m, dd] = key.split('-').map((n) => parseInt(n, 10));
+    d = wallClockToUtc(y, m, dd, clock.hh, clock.mm, timeZone || null);
   }
   return d;
 }
@@ -1466,7 +1498,11 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // The calendar's rule with its number read: "every 2 weeks" is every
         // other week, and a step the app has no repeat for (every 6 weeks,
         // every 30 days) is 'none', kept by the calendar (shared/calendarEntry.ts).
-        recurrence_pattern: seriesPattern(recurrenceRule)
+        recurrence_pattern: seriesPattern(recurrenceRule),
+        // A monthly series on a weekday of the month ("first Tuesday") keeps
+        // that weekday: the hourly repeat pass moves it to the first Tuesday
+        // of next month, not to the same date (shared/nthWeekday.ts).
+        recurrence_nth_weekday: seriesPattern(recurrenceRule) === 'monthly' ? nthWeekdayOfRule(recurrenceRule) : null
       };
       // An all-day task or payment is an all-day task (day_only_task), the
       // way the app saves one typed in: 9 AM is only its anchor, nothing is
