@@ -718,14 +718,14 @@ Return JSON:
 
       const effectiveTime = selectedTime !== undefined ? selectedTime : currentTaskTime;
       // A repeat that names its own days (daily, weekdays, "Sat, Sun") has a
-      // time and no date of its own: the day is worked out from the task and
-      // its repeat, never typed in (utils/repeatTime.js; the repeat pill on
-      // the card uses the same rule). Anna, Nov 14 2026: "if it says repeats
-      // daily up there, you should not be able to set a due date for it."
+      // time and no date of its own: its box here has no date field, so the
+      // day is the one the task is already on, and for a task with no day yet
+      // it is worked out from the repeat (utils/repeatTime.js; the repeat pill
+      // on the card uses the same rule). Anna, Nov 14 2026: "if it says
+      // repeats daily up there, you should not be able to set a due date for it."
       const timeOnlyRepeat = getCurrentReminderType(task) === 'repeat' && repeatSetsItsOwnDays(task);
-      const effectiveDate = timeOnlyRepeat && effectiveTime
-        ? dayForRepeatTime(task, effectiveTime)
-        : (selectedDate !== undefined ? selectedDate : currentTaskDate);
+      const givenDate = selectedDate !== undefined ? selectedDate : currentTaskDate;
+      const effectiveDate = givenDate || (timeOnlyRepeat && effectiveTime ? dayForRepeatTime(task, effectiveTime) : givenDate);
 
       const _now = new Date();
       const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
