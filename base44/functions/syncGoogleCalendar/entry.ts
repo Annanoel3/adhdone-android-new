@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: the parser no longer invents a "next step" for a chore and none is saved on a task (Anna: "Remove it").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts (through shared/eventConflicts.ts) is picked up: reminder history is filed by what OneSignal says happened.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
