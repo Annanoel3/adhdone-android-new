@@ -76,6 +76,7 @@ import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
+import { repeatSetsItsOwnDays, dayForRepeatTime } from "../utils/repeatTime";
 import { appConfirm } from "@/components/ui/alert-dialog";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
@@ -716,7 +717,15 @@ Return JSON:
       const currentTaskDate = getCurrentReminderDate(task);
 
       const effectiveTime = selectedTime !== undefined ? selectedTime : currentTaskTime;
-      const effectiveDate = selectedDate !== undefined ? selectedDate : currentTaskDate;
+      // A repeat that names its own days (daily, weekdays, "Sat, Sun") has a
+      // time and no date of its own: the day is worked out from the task and
+      // its repeat, never typed in (utils/repeatTime.js; the repeat pill on
+      // the card uses the same rule). Anna, Nov 14 2026: "if it says repeats
+      // daily up there, you should not be able to set a due date for it."
+      const timeOnlyRepeat = getCurrentReminderType(task) === 'repeat' && repeatSetsItsOwnDays(task);
+      const effectiveDate = timeOnlyRepeat && effectiveTime
+        ? dayForRepeatTime(task, effectiveTime)
+        : (selectedDate !== undefined ? selectedDate : currentTaskDate);
 
       const _now = new Date();
       const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
@@ -757,6 +766,11 @@ Return JSON:
         const iv = task.reminder_interval;
         if (iv && iv !== 'once' && intervalMsGuard[iv]) {
           nextReminder = new Date(guardNowSync.getTime() + intervalMsGuard[iv]);
+        } else if (timeOnlyRepeat) {
+          // Today's round of a daily task whose new time has already gone by:
+          // the time is saved and today's stays not done (late), the way the
+          // repeat pill on the card saves it. There is no date field to "pick
+          // a future one" with, and the next round starts at the new time.
         } else {
           alert("⚠️ That date and time has already passed. Pick a future one and tap Save again.");
           return;
