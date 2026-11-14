@@ -47,6 +47,7 @@ import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
 import { noteTaskTimeChanged } from "../utils/notificationOwnership";
+import { dayForRepeatTime } from "../utils/repeatTime";
 
 export default function TaskCard({
   task,
@@ -1001,23 +1002,10 @@ export default function TaskCard({
     if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
     return task.day_only_task ? '' : timeValueOf(task.next_reminder);
   })();
-  // The day a time set here lands on: the day the task is already on. With no
-  // day at all it is today, or, when that time has already gone by today, the
-  // next day the repeat allows (a 10 AM pill time added at 2:30 PM starts
-  // tomorrow instead of arriving already late).
-  const repeatDayFor = (newTime, pattern) => {
-    if (task.next_reminder) return dateValueOf(task.next_reminder);
-    if (task.due_date) return dateValueOf(task.due_date);
-    const [h, mi] = String(newTime).split(':').map((n) => parseInt(n, 10));
-    const now = new Date();
-    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, mi, 0, 0);
-    if (at.getTime() <= Date.now() + 2 * 60 * 1000) at.setDate(at.getDate() + 1);
-    const days = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
-    const fits = (x) => (pattern === 'weekdays' ? x.getDay() !== 0 && x.getDay() !== 6
-      : pattern === 'weekly' && days.length ? days.includes(x.getDay()) : true);
-    for (let i = 0; i < 7 && !fits(at); i++) at.setDate(at.getDate() + 1);
-    return dateValueOf(at.toISOString());
-  };
+  // The day a time set here lands on is worked out in one place for this pill
+  // and for Task Details (utils/repeatTime.js, dayForRepeatTime): the day the
+  // task is already on, or for a task with no day the next time that clock
+  // time comes round on a day the repeat allows.
   const commitRepeat = () => {
     if (!showRepeatPill) return;
     const picked = repeatSelectRef.current?.value || '';
@@ -1031,7 +1019,7 @@ export default function TaskCard({
       // ('once': what every reminder at a set time is filed as, and what the
       // phone's alarm looks for).
       if (!task.reminder_interval) also.reminder_interval = 'once';
-      handleReminderDateChange(repeatDayFor(newTime, patternChanged ? picked : task.recurrence_pattern), newTime, { also, notAPush: true });
+      handleReminderDateChange(dayForRepeatTime(task, newTime, patternChanged ? picked : task.recurrence_pattern), newTime, { also, notAPush: true });
       return;
     }
     if (onUpdateTask) onUpdateTask({ ...task, ...also });
