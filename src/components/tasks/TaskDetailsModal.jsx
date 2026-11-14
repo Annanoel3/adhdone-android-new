@@ -166,6 +166,17 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef(''); const dueDirty = useRef(false); const eventDirty = useRef(false); // autosave: popovers save on close
   const isInitializingRef = useRef(false);
+  // The monthly sentence ("the [2nd] [Tuesday] of every month"): the blanks as
+  // they are being turned, saved once they have been left alone for a moment
+  // (or when the card closes). A scrolling picker reports every value it
+  // passes, and two saves of one task sent together can land in either order:
+  // "Thursday" picked by way of "Tuesday" saved Tuesday (found testing, Nov 14
+  // 2026). Each save also waits for the one before it to finish.
+  const [monthlyDraft, setMonthlyDraft] = useState(null);
+  const monthlyDraftRef = useRef(null);
+  const monthlyTimerRef = useRef(null);
+  const setMonthlyRuleRef = useRef(() => {});
+  const lastTimeSaveRef = useRef(null);
   // The due-date and event popovers save when they close by a tap elsewhere.
   // Leaving the card any other way while one is still open — the X, the back
   // button, Mark as Complete — takes the popover down without that close, and
@@ -189,8 +200,29 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
       handleUpdateEventTime(eventDateRef.current, eventTimeRef.current);
       toast({ title: 'Saved ✓', duration: 1500 });
     }
+    commitMonthlyDraft();
   };
-  const dropDirtyDates = () => { dueDirty.current = false; eventDirty.current = false; };
+  // The monthly blanks still waiting are saved now (a timer's turn, or the
+  // card closing).
+  const commitMonthlyDraft = () => {
+    if (monthlyTimerRef.current) { clearTimeout(monthlyTimerRef.current); monthlyTimerRef.current = null; }
+    const rule = monthlyDraftRef.current;
+    monthlyDraftRef.current = null;
+    if (!rule) return;
+    const before = lastTimeSaveRef.current;
+    Promise.resolve(before).catch(() => {}).then(() => { setMonthlyRuleRef.current(rule); setMonthlyDraft(null); });
+  };
+  const onMonthlyBlank = (rule) => {
+    monthlyDraftRef.current = rule;
+    setMonthlyDraft(rule);
+    if (monthlyTimerRef.current) clearTimeout(monthlyTimerRef.current);
+    monthlyTimerRef.current = setTimeout(() => commitMonthlyDraft(), 1500);
+  };
+  const dropDirtyDates = () => {
+    dueDirty.current = false; eventDirty.current = false;
+    monthlyDraftRef.current = null;
+    if (monthlyTimerRef.current) { clearTimeout(monthlyTimerRef.current); monthlyTimerRef.current = null; }
+  };
   // The newest version from a render that still had the task: the parent can
   // let go of the task in the same render that closes the card.
   const flushRef = useRef(() => {});
@@ -845,7 +877,7 @@ Return JSON:
             : `We'll remind you an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
       });
 
-      (async () => {
+      lastTimeSaveRef.current = (async () => {
       // Cancel existing reminders — include every notification ID we know about
       // (both onesignal_notification_ids and any IDs stored on individual
       // reminder_schedule entries) so no stale reminder survives a date/time
@@ -1810,6 +1842,8 @@ Return JSON:
     handleUpdateReminderTime(time, day, { notAPush: true, also: repeat, said });
   };
 
+  setMonthlyRuleRef.current = handleSetMonthlyRule;
+
   // One entry point for the ReminderTypeSelector — routes each type to the
   // right existing handler so all the cancel/reschedule logic stays in one place.
   const handleChangeReminderType = (type, sub) => {
@@ -2179,7 +2213,7 @@ Return JSON:
                 Not for a task pinging at a rhythm: its pings are booked from
                 its start, which this doesn't move. */}
             {monthlySentence && (
-              <MonthlyRuleFields rule={monthlyRuleOf(task)} task={task} theme={theme} onChange={handleSetMonthlyRule} />
+              <MonthlyRuleFields rule={monthlyDraft || monthlyRuleOf(task)} task={task} theme={theme} onChange={onMonthlyBlank} />
             )}
 
             {/* "You usually finish this around…" waiting for a yes or no. */}
