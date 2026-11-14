@@ -281,7 +281,15 @@ export async function scheduleMultiReminders({
         notification_title: words.title,
         notification_body: words.body,
       };
-      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
+      // Waited for (here and at the two saves below): every caller saves the
+      // ids on the task the moment this returns, and two saves of one task
+      // sent together can land in either order, the later one putting back
+      // the task as it read it. Nov 13 2026, a test task's time changed seven
+      // times on its card: four times the entry saved here was gone a moment
+      // later and the task still listed its reminder at the OLD time (the
+      // push itself was booked right; the stale entry is what Task Details
+      // shows and what Back Burner and un-checking book again from).
+      if (!overtaken()) await base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
       return id ? [id] : [];
     }
     const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish, taskId);
@@ -368,7 +376,7 @@ export async function scheduleMultiReminders({
         notification_title: r.notification_title,
         notification_body: r.notification_body,
       }));
-      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
+      if (!overtaken()) await base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
     } else {
       // Nothing could be booked (this phone isn't subscribed for pushes yet —
       // notifications were declined, or the link isn't there). The plan is
@@ -382,7 +390,7 @@ export async function scheduleMultiReminders({
         notification_title: r.notification_title,
         notification_body: r.notification_body,
       }));
-      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: planned }).catch(() => {});
+      if (!overtaken()) await base44.entities.Task.update(taskId, { reminder_schedule: planned }).catch(() => {});
     }
 
     return notificationIds.length > 0 ? notificationIds : (clockDeadline ? [] : null);
