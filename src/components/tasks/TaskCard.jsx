@@ -47,7 +47,8 @@ import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
 import { noteTaskTimeChanged } from "../utils/notificationOwnership";
-import { dayForRepeatTime, monthlyChoicesFor, repeatValueOf, repeatFieldsOf, repeatShortLabel } from "../utils/repeatTime";
+import { dayForRepeatTime, repeatValueOf, repeatFieldsOf, repeatShortLabel, monthlyRuleOf, monthlyRuleValue, dayForMonthlyRule } from "../utils/repeatTime";
+import MonthlyRuleFields from "./MonthlyRuleFields";
 
 export default function TaskCard({
   task,
@@ -89,6 +90,10 @@ export default function TaskCard({
   // The open card's repeat pill ("Daily 10 PM") opens a small editor of its
   // own too: how often it repeats and its time (see commitRepeat).
   const [repeatOpen, setRepeatOpen] = useState(false);
+  // While the repeat popup is open: the repeat picked in its list, and for
+  // Monthly the two blanks of "the [2nd] [Tuesday] of every month".
+  const [repeatPick, setRepeatPick] = useState(null);
+  const [repeatRule, setRepeatRule] = useState(null);
   const repeatSelectRef = useRef(null);
   const repeatTimeRef = useRef(null);
 
@@ -978,12 +983,12 @@ export default function TaskCard({
       { value: 'every_other_day', label: repeatWords.every_other_day },
       { value: 'weekdays', label: 'Weekdays (Mon–Fri)' },
       { value: 'weekly', label: repeatDayNames ? `Weekly (${repeatDayNames})` : repeatWords.weekly },
-      // Monthly on its date, or on a weekday of the month ("the second
-      // Tuesday"), offered by the day the task is on (monthlyChoicesFor).
-      ...monthlyChoicesFor(task),
+      // Monthly: which day is said in the sentence under the list ("the 2nd
+      // Tuesday of every month", MonthlyRuleFields).
+      { value: 'monthly', label: repeatWords.monthly },
       { value: 'yearly', label: repeatWords.yearly },
     ];
-    if (isRepeating && !list.some((o) => o.value === repeatValueOf(task))) {
+    if (isRepeating && !list.some((o) => o.value === task.recurrence_pattern)) {
       list.push({ value: task.recurrence_pattern, label: repeatWords[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ') });
     }
     list.push({ value: 'none', label: "Doesn't repeat" });
@@ -1010,20 +1015,52 @@ export default function TaskCard({
   // time comes round on a day the repeat allows.
   const commitRepeat = () => {
     if (!showRepeatPill) return;
-    const picked = repeatSelectRef.current?.value || '';
+    const pattern = repeatPick || repeatSelectRef.current?.value || task.recurrence_pattern || '';
     const newTime = repeatHasTime ? (repeatTimeRef.current?.value || '') : '';
-    // The repeat as one value ('daily', 'monthly', 'monthly:2TU'); a change
-    // saves the pattern AND the weekday-of-the-month together (repeatFieldsOf).
+    // The repeat as one value ('daily', 'monthly:2TU', 'monthly:D15'); a change
+    // saves every repeat field together (repeatFieldsOf).
+    const picked = pattern === 'monthly' ? monthlyRuleValue(repeatRule) : pattern;
     const patternChanged = !!picked && picked !== repeatValueOf(task);
     const timeChanged = !!newTime && newTime !== repeatTimeValue;
     if (!patternChanged && !timeChanged) return;
     const also = patternChanged ? repeatFieldsOf(picked) : {};
-    if (timeChanged) {
+    // A monthly rule names its day ("the 2nd Tuesday", "the 15th day"): the
+    // task moves to the next such day, unless the day it is on already fits.
+    const ownDay = task.day_only_task ? dateValueOf(task.due_date || task.next_reminder) : dateValueOf(task.next_reminder || task.due_date);
+    const ruleDay = patternChanged && pattern === 'monthly' && repeatRule
+      ? dayForMonthlyRule(task, repeatRule, newTime || repeatTimeValue)
+      : null;
+    const moveTo = ruleDay && ruleDay !== ownDay ? ruleDay : null;
+    if (moveTo && !timeChanged && !ownDay) {
+      // No day and no time yet: it becomes an all-day task on that day (9 AM
+      // is only where it sorts; nothing is booked for an all-day task).
+      const [y, m, d] = moveTo.split('-').map((n) => parseInt(n, 10));
+      const fields = {
+        ...also,
+        day_only_task: true,
+        next_reminder: new Date(y, m - 1, d, 9, 0, 0, 0).toISOString(),
+        due_date: new Date(y, m - 1, d, 23, 59, 0, 0).toISOString(),
+        ...(task.reminder_interval ? {} : { reminder_interval: 'once' }),
+      };
+      if (onUpdateTask) onUpdateTask({ ...task, ...fields });
+      Task.update(task.id, fields).catch((error) => {
+        console.error("Error updating the repeat:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
+      return;
+    }
+    if (timeChanged || moveTo) {
       // A task with no rhythm of its own becomes one with a time of its own
       // ('once': what every reminder at a set time is filed as, and what the
       // phone's alarm looks for).
-      if (!task.reminder_interval) also.reminder_interval = 'once';
-      handleReminderDateChange(dayForRepeatTime({ ...task, ...also }, newTime), newTime, { also, notAPush: true });
+      if (timeChanged && !task.reminder_interval) also.reminder_interval = 'once';
+      // A deadline with its own clock time moves to the new day with it.
+      if (moveTo && task.due_date && !task.day_only_task) {
+        const [y, m, d] = moveTo.split('-').map((n) => parseInt(n, 10));
+        const old = new Date(task.due_date);
+        if (!isNaN(old.getTime())) also.due_date = new Date(y, m - 1, d, old.getHours(), old.getMinutes(), 0, 0).toISOString();
+      }
+      handleReminderDateChange(moveTo || dayForRepeatTime({ ...task, ...also }, newTime), timeChanged ? newTime : null, { also, notAPush: true });
       return;
     }
     if (onUpdateTask) onUpdateTask({ ...task, ...also });
@@ -1381,7 +1418,7 @@ export default function TaskCard({
               {/* A repeating task: one pill saying when it repeats. Tap it to
                   change how often and at what time, right here. */}
               {showRepeatPill && (task.status === 'active' ? (
-                <Popover open={repeatOpen} onOpenChange={(o) => { setRepeatOpen(o); if (!o) commitRepeat(); }}>
+                <Popover open={repeatOpen} onOpenChange={(o) => { if (o) { setRepeatPick(task.recurrence_pattern); setRepeatRule(monthlyRuleOf(task)); } setRepeatOpen(o); if (!o) commitRepeat(); }}>
                   <PopoverTrigger asChild>
                     <button
                       type="button"
@@ -1404,13 +1441,19 @@ export default function TaskCard({
                         <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Repeats</label>
                         <select
                           ref={repeatSelectRef}
-                          defaultValue={repeatValueOf(task)}
+                          value={repeatPick || task.recurrence_pattern}
+                          onChange={(e) => { setRepeatPick(e.target.value); if (e.target.value === 'monthly' && !repeatRule) setRepeatRule(monthlyRuleOf(task)); }}
                           className={`w-full border rounded px-3 py-2 text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white'}`}
                         >
                           {repeatChoices.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
                           ))}
                         </select>
+                        {/* Monthly: which day, as a sentence with two blanks
+                             (Anna, Nov 14 2026: "the ____ ____ of every month"). */}
+                        {(repeatPick || task.recurrence_pattern) === 'monthly' && (
+                          <MonthlyRuleFields className="mt-2" rule={repeatRule} task={task} theme={theme} onChange={setRepeatRule} />
+                        )}
                       </div>
                       {repeatHasTime && (
                         <div>
