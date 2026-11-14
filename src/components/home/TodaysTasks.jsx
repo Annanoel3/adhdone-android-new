@@ -29,6 +29,7 @@ import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
 import PendingTaskCards, { usePendingCaptures } from "./PendingTaskCards";
 import HomeSecretLink from "./HomeSecretLink";
 import TaskCard from "../tasks/TaskCard";
+import { repeatShortLabel } from "../utils/repeatTime";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry, onRefreshTasks, onEditTitle, onUncomplete, onSnooze, onDelete, tasksLoaded = true }) {
   const navigate = useNavigate();
