@@ -24,7 +24,7 @@ const KEEP = [
   'classification', 'urgency', 'energy_required', 'takes_time', 'worth_breaking_down', 'prep_worthy', 'prep_note', 'life_area', 'tag',
   'day_only_task', 'deadline_style', 'reminder_interval', 'recurrence_pattern',
   'recurrence_days', 'reminder_wish', 'alert_style', 'quiet_hours_exempt',
-  'follow_up_title', 'follow_up_minutes', 'pictures', 'prep_questions', 'typical_minutes',
+  'pictures', 'prep_questions', 'typical_minutes',
   'task_family', 'original_input',
 ];
 
