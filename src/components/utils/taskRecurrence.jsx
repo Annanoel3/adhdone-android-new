@@ -2,7 +2,7 @@ import { base44 } from '@/api/base44Client';
 import { INTERVAL_MS } from './taskSchedule';
 import { scheduleReminder, cancelScheduledReminder } from './reminderScheduler';
 import { commitNotificationIds } from './notificationOwnership';
-import { nthOfTask, nextMonthNthWeekday } from './repeatTime';
+import { nthOfTask, nextMonthNthWeekday, monthDayWanted, nextMonthSameDay, monthDayToKeep } from './repeatTime';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Until this time a finish still counts toward the day before (see
@@ -21,8 +21,12 @@ function lateNightEndsMin() {
 // and then skips Saturday/Sunday, so a business-days habit never lands on the
 // weekend. `nth` is a monthly task's weekday of the month ("the second
 // Tuesday", nthOfTask): it moves to that weekday of the NEXT month, wherever
-// this round was done; without one, monthly is the same date next month.
-function advance(date, pattern, days, nth = null) {
+// this round was done; without one, monthly is the same DAY of the next month,
+// or that month's last day when it is shorter. `monthDay` is the day the task
+// belongs on (monthDayWanted), so Jan 31 -> Feb 28 -> Mar 31 (Anna, Nov 14
+// 2026: "if someone makes something monthly, they actually mean that same day
+// each month"; adding a month to the date turned Jan 31 into Mar 3 for good).
+function advance(date, pattern, days, nth = null, monthDay = 0) {
   const d = new Date(date);
   const daySet = Array.isArray(days) ? days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   if (pattern === 'daily') {
@@ -44,7 +48,7 @@ function advance(date, pattern, days, nth = null) {
   } else if (pattern === 'monthly' && nth) {
     return nextMonthNthWeekday(d, nth);
   } else if (pattern === 'monthly') {
-    d.setMonth(d.getMonth() + 1);
+    return nextMonthSameDay(d, monthDay || d.getDate());
   } else if (pattern === 'yearly') {
     d.setFullYear(d.getFullYear() + 1);
   }
@@ -168,12 +172,17 @@ export function nextOccurrence(task, now = new Date()) {
   // the end of its day; anything else starts at the time the person named.
   const keepOwnTime = task.classification === 'event' || !!task.day_only_task;
   const at = (d) => (keepOwnTime ? new Date(d) : applyAnchorTime(d, task));
-  let next = advance(base, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
+  // A monthly task on a date: the day of the month it belongs on, carried
+  // through every step (the 31st stays the 31st after a shorter month).
+  const nth = nthOfTask(task);
+  const wantDay = task.recurrence_pattern === 'monthly' && !nth ? monthDayWanted(task, base) : 0;
+  const step = (d) => advance(d, task.recurrence_pattern, task.recurrence_days, nth, wantDay);
+  let next = step(base);
   let guard = 0;
   while (at(next) <= now && guard++ < 1000) {
-    next = advance(next, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
+    next = step(next);
   }
-  if (at(next) <= now) next = advance(now, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
+  if (at(next) <= now) next = step(now);
   // A late finish covers the day it happened. Finishing an occurrence from an
   // earlier day (last night's 9 PM litter box, done at 8:45 the next morning)
   // counts as today's as well, so the next copy is the first one AFTER today.
@@ -186,10 +195,10 @@ export function nextOccurrence(task, now = new Date()) {
   if (dayDelta(base, finishDay) > 0) {
     let lateGuard = 0;
     while (sameLocalDay(at(next), finishDay) && lateGuard++ < 400) {
-      next = advance(next, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
+      next = step(next);
     }
   }
-  return { base, nextDate: at(next) };
+  return { base, nextDate: at(next), monthDay: monthDayToKeep(wantDay) };
 }
 
 // The one reminder a repeating task gets for each occurrence: AT its own time
@@ -350,8 +359,8 @@ async function makeNextCopy(task, opts = {}) {
   // Counted from the real finish when the copy is made later than that; if
   // that occurrence has already gone by too, the first one still ahead.
   const finishedAt = validDate(opts.finishedAt);
-  let { base, nextDate } = nextOccurrence(task, finishedAt && finishedAt < now ? finishedAt : now);
-  if (nextDate <= now) ({ base, nextDate } = nextOccurrence(task, now));
+  let { base, nextDate, monthDay } = nextOccurrence(task, finishedAt && finishedAt < now ? finishedAt : now);
+  if (nextDate <= now) ({ base, nextDate, monthDay } = nextOccurrence(task, now));
 
   // Never twice: this occurrence's copy may already be there (a second tap,
   // or the task was un-checked and checked again).
@@ -431,6 +440,9 @@ async function makeNextCopy(task, opts = {}) {
     recurrence_pattern: task.recurrence_pattern,
     recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
     recurrence_nth_weekday: task.recurrence_nth_weekday || null,
+    // A monthly task on the 29th, 30th or 31st remembers that day, so a round
+    // a shorter month put on its last day goes back to it (repeatTime.js).
+    recurrence_month_day: monthDay ?? null,
     notification_recipient_email: recipient,
     onesignal_notification_ids: [],
     reminder_count: 0,
