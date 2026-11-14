@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: the parser no longer invents a "next step" for a chore and none is saved on a task (Anna: "Remove it").
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Nov 6 2026 (night) so the bundled shared/captureToTasks.ts is picked up: the tracker look runs on the private OpenAI key (shared/privateAi.ts), never used for training.
