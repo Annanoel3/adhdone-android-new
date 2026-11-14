@@ -209,8 +209,6 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
     reminder_wish: task.reminder_wish || null,
     anchor_time: task.anchor_time || null,
     time_stated: task.time_stated === true,
-    follow_up_title: task.follow_up_title || null,
-    follow_up_minutes: task.follow_up_minutes || null,
     task_family: task.task_family || null,
     typical_minutes: task.typical_minutes || null,
     day_only_task: dayOnly,
