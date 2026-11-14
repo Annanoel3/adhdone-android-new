@@ -78,8 +78,6 @@ const TASK_PARSE_SCHEMA = {
     // this is going to be virtual. Meaning they dont go anywhere").
     goes_somewhere: { type: "boolean" },
     life_area: { type: "string", enum: ["work", "personal"] },
-    follow_up_title: { type: ["string", "null"] },
-    follow_up_minutes: { type: ["integer", "null"] },
     reminder_wish: { type: ["string", "null"] },
     recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
   },
@@ -88,7 +86,7 @@ const TASK_PARSE_SCHEMA = {
     "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
-    "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
+    "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "reminder_wish",
     "recurrence_days",
   ],
 };
@@ -241,17 +239,18 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     ? [...new Set(parsed.recurrence_days.map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a: number, b: number) => a - b)
     : [];
   parsed.recurrence_days = parsed.recurrence_pattern === 'weekly' && days.length > 0 ? days : null;
-  // A follow-up only counts when both halves are usable: a real next step and
-  // a wait between 5 minutes and a day.
-  const fuMin = Number(parsed?.follow_up_minutes);
-  const fuTitle = String(parsed?.follow_up_title || '').trim();
-  if (!fuTitle || !Number.isFinite(fuMin) || fuMin < 5 || fuMin > 1440) {
-    parsed.follow_up_title = null;
-    parsed.follow_up_minutes = null;
-  } else {
-    parsed.follow_up_title = fuTitle;
-    parsed.follow_up_minutes = Math.round(fuMin);
-  }
+  // NO "NEXT STEP" IS EVER INVENTED FOR A TASK (removed Nov 14 2026). From
+  // Sept 22 2026 the parser was asked to guess one for chores (washer → "Move
+  // the laundry to the dryer" 60 minutes after Done, oven, dishwasher, parking
+  // meter, sprinklers) and logTaskCompletion sent it after the task was
+  // checked off, as a full-screen alarm for alarm people. Nobody can find Anna
+  // asking for it: no quote in the code, no row in RULES.md. It rang for a
+  // new user an hour after she pressed Done on a laundry reminder, and she
+  // was gone within the hour. Anna, Nov 14 2026: "I would NEVER ask for a
+  // follow up notification on something someone pressed done on. Thats
+  // crazy." and "Remove it". Do not bring it back in any form on a finished
+  // task. Her words on where a next step belongs: "Something like this should
+  // only happen if a user is checking off subtasks" (a task's own steps).
   // The user's own words about how to remind them, if they gave any. Short,
   // trimmed, or nothing — it is shown to the reminder planners verbatim.
   const wish = String(parsed?.reminder_wish || '').trim().replace(/\s+/g, ' ');
