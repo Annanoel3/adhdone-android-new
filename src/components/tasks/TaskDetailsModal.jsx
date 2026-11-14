@@ -1462,6 +1462,21 @@ Return JSON:
   // while editing here sets both. Read either one so a task created with a date
   // never shows an empty "Add due date".
   const dueSource = shownDueISO(task);
+  // Late or not, for the time pill. An all-day task is late once its DAY is
+  // over: one whose time was cleared here keeps its 9 AM anchor as the due
+  // date, and read "Overdue" from 9:01 that morning.
+  const dueLateISO = (() => {
+    if (!task.day_only_task || !dueSource) return dueSource;
+    const d = new Date(dueSource);
+    return isNaN(d.getTime()) ? dueSource : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 0, 0).toISOString();
+  })();
+  const dueIsLate = !!dueLateISO && isPastDue(dueLateISO) && task.status !== 'completed';
+  // A repeat that names its own days (daily, weekdays, "Sat, Sun") has a time
+  // and no date of its own (utils/repeatTime.js): its pill says the time, not
+  // "Due <date>", and its box has no date field. Anna, Nov 14 2026, on a
+  // "Repeats daily" task that read "Due Nov 15, 2026 • 2:00 PM": "if it says
+  // repeats daily up there, you should not be able to set a due date for it."
+  const repeatTimeOnly = currentType === 'repeat' && repeatSetsItsOwnDays(task);
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
@@ -2171,17 +2186,21 @@ Return JSON:
                 <Popover onOpenChange={(o) => { if (!o && dueDirty.current && (reminderDate || reminderTime)) { dueDirty.current = false; handleUpdateReminderTime(reminderTime, reminderDate); } }}>
                   <PopoverTrigger asChild>
                     <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                      dueSource && isPastDue(dueSource) && task.status !== 'completed'
+                      dueIsLate
                         ? theme === 'dark' ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-700'
                         : 'bg-purple-500 text-white'
                     }`}>
                       <Clock className="w-3 h-3" />
-                      {dueSource ? (
-                        isPastDue(dueSource) && task.status !== 'completed'
-                          ? `Overdue • ${formatReminderDate(dueSource)}${task.day_only_task ? '' : ` • ${formatReminderTime(dueSource)}`}`
-                          : task.day_only_task
-                            ? `Due ${formatReminderDate(dueSource)}`
-                            : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
+                      {dueIsLate ? (
+                        `Overdue • ${formatReminderDate(dueSource)}${task.day_only_task ? '' : ` • ${formatReminderTime(dueSource)}`}`
+                      ) : repeatTimeOnly ? (
+                        dueSource && !task.day_only_task
+                          ? `${task.deadline_style === 'by' ? 'By' : 'At'} ${formatReminderTime(dueSource)}`
+                          : 'Add a time'
+                      ) : dueSource ? (
+                        task.day_only_task
+                          ? `Due ${formatReminderDate(dueSource)}`
+                          : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
                       ) : (
                         currentType === 'repeat' ? 'Add a time' : 'Add due date'
                       )}
@@ -2191,6 +2210,9 @@ Return JSON:
                     theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'
                   }`}>
                     <div className="space-y-3">
+                      {/* No date on a repeat that names its own days: the
+                           repeat says which days, this box only says what time. */}
+                      {!repeatTimeOnly && (
                       <div>
                         <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{currentType === 'repeat' ? 'Start date (optional):' : 'Due Date:'}</label>
                         <input
@@ -2200,6 +2222,7 @@ Return JSON:
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
+                      )}
                       <div>
                         <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{currentType === 'repeat' ? 'Time:' : 'Time (optional):'}</label>
                         <input
@@ -2222,7 +2245,7 @@ Return JSON:
                           onClick={() => { dueDirty.current = false; setReminderTime(''); reminderTimeRef.current = ''; handleUpdateReminderTime('', reminderDate); }}
                           className="w-full text-center px-3 py-2 text-sm hover:bg-gray-50 rounded text-gray-600 font-medium"
                         >
-                          Clear time — just due that day
+                          {repeatTimeOnly ? 'Clear the time' : 'Clear time — just due that day'}
                         </button>
                       )}
                     </div>
