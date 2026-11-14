@@ -76,7 +76,7 @@ import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
-import { repeatSetsItsOwnDays, dayForRepeatTime } from "../utils/repeatTime";
+import { repeatSetsItsOwnDays, dayForRepeatTime, repeatFieldsOf, repeatShortLabel, nthWeekdayLabel } from "../utils/repeatTime";
 import { appConfirm } from "@/components/ui/alert-dialog";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
@@ -1480,14 +1480,9 @@ Return JSON:
   // The pill itself says how often, so one look reads "Daily at 2:00 PM"
   // (Anna, the same afternoon, about "Due November 15th at 2 p.m." on a task
   // that had saved as daily: "It does not indicate that its daily at 2 pm. It
-  // lies"). Words as on the card's repeat pill: Daily, Weekdays, "Sat, Sun".
-  const repeatWord = (() => {
-    if (task.recurrence_pattern === 'daily') return 'Daily';
-    if (task.recurrence_pattern === 'weekdays') return 'Weekdays';
-    const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const days = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
-    return days.length ? days.map((n) => names[n]).join(', ') : 'Weekly';
-  })();
+  // lies"). Words as on the card's repeat pill: Daily, Weekdays, "Sat, Sun",
+  // "Monthly 2nd Tue" (utils/repeatTime.js: the one copy of these words).
+  const repeatWord = repeatShortLabel(task);
   // A repeat that keeps a date (monthly, yearly, every other day) isn't "due"
   // once: that date is only its next round. A "by" deadline (a monthly
   // payment) really is due, and keeps the word.
@@ -1707,12 +1702,17 @@ Return JSON:
   //  - An all-day task, a "by 5 PM" deadline or one with no time has no
   //    at-the-time reminder: smart nudges carry it, as before.
   //  - Turning the repeat off changes nothing else: it's the same task.
-  const handleSetRepeat = async (pattern) => {
+  // `value` is the repeat as the picker gives it: a pattern, or 'monthly:2TU'
+  // for a weekday of the month. Both fields are saved together every time, so
+  // "the second Tuesday" never lingers under another repeat (repeatFieldsOf).
+  const handleSetRepeat = async (value) => {
     if (!task) return;
+    const repeat = repeatFieldsOf(value);
+    const pattern = repeat.recurrence_pattern;
     if (!pattern || pattern === 'none') {
-      onUpdate({ ...task, recurrence_pattern: 'none' });
+      onUpdate({ ...task, ...repeat });
       toast({ title: 'Repeat turned off ✓', description: 'This task won\'t come back after you finish it.' });
-      Task.update(task.id, { recurrence_pattern: 'none' }).catch(e => console.error('Error setting repeat:', e));
+      Task.update(task.id, repeat).catch(e => console.error('Error setting repeat:', e));
       return;
     }
     const planIds = (task.reminder_schedule || []).map((r) => r?.notification_id)
@@ -1723,14 +1723,19 @@ Return JSON:
       : [...(task.onesignal_notification_ids || []), ...planIds]
     )).filter((id) => id && !String(id).startsWith('planned_'));
     const updates = {
-      recurrence_pattern: pattern,
+      ...repeat,
       reminder_schedule: [],
       onesignal_notification_ids: isRhythm
         ? (task.onesignal_notification_ids || []).filter((id) => !oldIds.includes(id))
         : [],
     };
     onUpdate({ ...task, ...updates });
-    toast({ title: 'Repeat saved ✓', description: `Repeats ${pattern} — one reminder each time, nothing extra.` });
+    // In words: "every other day", "monthly on the second Tuesday" (it used to
+    // print the saved value, "every_other_day").
+    const repeatSaid = repeat.recurrence_nth_weekday
+      ? `monthly on the ${nthWeekdayLabel(repeat.recurrence_nth_weekday)}`
+      : pattern === 'weekdays' ? 'on weekdays' : String(pattern).replace(/_/g, ' ');
+    toast({ title: 'Repeat saved ✓', description: `Repeats ${repeatSaid} — one reminder each time, nothing extra.` });
     (async () => {
       try {
         if (oldIds.length > 0) {
