@@ -45,11 +45,16 @@ const toastVariants = cva(
 // `open`, `duration` and `onOpenChange` are toast-state props, not DOM
 // attributes — they must be pulled off before spreading onto the div. Honoring
 // `open` here is what actually makes a dismissed toast disappear from screen.
+// data-app-toast marks a toast so an open popup (dialog/sheet) can tell a tap
+// on a toast — its X included — from a tap outside the popup. Without it,
+// closing a toast also closed the card underneath it (Anna, Nov 14 2026: the
+// "Copy made" toast's X closed the new copy's card).
 const Toast = React.forwardRef(({ className, variant, open, duration, onOpenChange, ...props }, ref) => {
   if (open === false) return null;
   return (
     <div
       ref={ref}
+      data-app-toast=""
       className={cn(toastVariants({ variant }), className)}
       {...props}
     />
