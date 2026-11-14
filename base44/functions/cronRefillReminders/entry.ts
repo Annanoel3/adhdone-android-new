@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-13 daily note skips alerted captures', ...look });
+      return Response.json({ success: true, copy: '2026-11-13 due-today check skips day labels and phones that take nothing', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -2439,15 +2439,36 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //    counted). So: a ledger row for the task from local midnight on, sent
   //    or still queued (a cancelled booking leaves the ledger), or a task
   //    whose own next_reminder is still to come, is not a miss.
+  //    Two things are not a miss at all (Nov 13 2026, the 6 PM alert that
+  //    named two tasks, neither one a failure; Anna: "The amount of things
+  //    that aren't working as we gain users is very worrying"):
+  //    - An account nothing can be sent to: the phone doesn't allow
+  //      ADHDone's notifications, or no phone has ever opened it (check 2's
+  //      rule, same words). Check 11 has already told Anna about that person
+  //      by name; one more alert every evening for each task they have says
+  //      nothing new and reads as the planner failing. That day: a new
+  //      account whose phone never allowed notifications, told at 9:23 AM,
+  //      came again at 6 PM as "got no reminder from anything".
+  //    - A day label: an all-day calendar entry judged their work hours, a
+  //      day off or holiday, or private tracking (day_entry_kind; the same
+  //      test as isOverDayLabel in todayTasks.jsx). It has nothing to do and
+  //      nothing to check off. By plan a shift gets one heads-up the evening
+  //      BEFORE, which is before the midnight this check counts from, and
+  //      the other two get nothing. That day: a work-shift entry whose
+  //      heads-up had gone out at 8 PM the evening before. A private entry's
+  //      name must never be printed in this alert either.
+  const DAY_LABELS = new Set(['shift', 'none', 'private']);
+  const dayLabel = (t: any) => DAY_LABELS.has(t?.day_entry_kind) && t?.classification === 'event' && !t?.event_time;
   const unreminded: string[] = [];
   try {
     for (const u of allUsers) {
       if (!u?.email || !realUser(u.email) || !activeLately(u)) continue;
+      if (u.alarm_permissions?.notifications === false || (!u.app_platform && !u.app_build)) continue;
       const tz = userTimeZone(u);
       if (localHourIn(tz, now) !== 19) continue;
       const today = localDateKey(now, tz);
       const dueToday = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
-        && (t.notification_recipient_email || t.created_by) === u.email
+        && (t.notification_recipient_email || t.created_by) === u.email && !dayLabel(t)
         && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
       if (!dueToday.length) continue;
       // Since local midnight for "today"; the 24 hours before that too, for
