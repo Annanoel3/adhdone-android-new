@@ -18,7 +18,6 @@ import { assignTaskFamilies, judgeCompletionHabit, judgeDailyThing } from '../..
 //
 // Deliberately stores no task title or user-written text — only counts, timings
 // and flags.
-// "45 minutes", "an hour", "an hour and a half", "2 hours" — for the follow-up
 // (Until Nov 14 2026 a "next step" push was booked from here when a chore was
 // checked off. Removed: see the note in shared/runTaskParse.ts.)
 
@@ -48,8 +47,6 @@ export default async function (req: Request): Promise<Response> {
         .sort((a, b) => new Date(a.send_at) - new Date(b.send_at));
     }
 
-    // The chore's next step, if the parser found one ("Move the laundry to the
-    // dryer", 60 minutes after this was marked done). Booked here because this
     // NOTHING is booked here (Nov 14 2026): checking a task off never leads
     // to a reminder about it or about a guessed next step.
 
