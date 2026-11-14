@@ -3,6 +3,7 @@ import { lean } from './aiCost.ts';
 import { TASK_PARSE_SYSTEM_PROMPT, buildTaskParsePrompt, nowInTimezone } from "./taskParsePrompt.ts";
 import { fixParsedTaskTitles } from "./fixMisheardVerbs.ts";
 import { resolveParsedDates } from "./resolveDateWords.ts";
+import { cleanNthWeekday, parseNthWeekday, isNthWeekdayKey, firstNthWeekdayOnOrAfter } from "./nthWeekday.ts";
 
 // Single place where task parsing actually runs, shared by parseTask and
 // parseTask — the single parser every add method (typed, voice, quick add,
@@ -80,6 +81,8 @@ const TASK_PARSE_SCHEMA = {
     life_area: { type: "string", enum: ["work", "personal"] },
     reminder_wish: { type: ["string", "null"] },
     recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
+    // "The second Tuesday of every month" = "2TU" (shared/nthWeekday.ts).
+    recurrence_nth_weekday: { type: ["string", "null"] },
   },
   required: [
     "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
@@ -87,7 +90,7 @@ const TASK_PARSE_SCHEMA = {
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "reminder_wish",
-    "recurrence_days",
+    "recurrence_days", "recurrence_nth_weekday",
   ],
 };
 
@@ -239,6 +242,27 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     ? [...new Set(parsed.recurrence_days.map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a: number, b: number) => a - b)
     : [];
   parsed.recurrence_days = parsed.recurrence_pattern === 'weekly' && days.length > 0 ? days : null;
+  // "The second Tuesday of every month" (shared/nthWeekday.ts; Anna, Nov 14
+  // 2026): only on a monthly repeat, and only in its one saved spelling
+  // ("2TU", "-1FR"); anything else is a plain monthly repeat on a date.
+  parsed.recurrence_nth_weekday = parsed.recurrence_pattern === 'monthly' ? cleanNthWeekday(parsed?.recurrence_nth_weekday) : null;
+  // Its first day is counted HERE, never left to the model's date math: the
+  // day the model gave when that really is such a day from the said day on
+  // ("starting in January"), otherwise the first one on or after the day the
+  // words were said.
+  const nthDay = parseNthWeekday(parsed.recurrence_nth_weekday);
+  if (nthDay) {
+    const given = /^\d{4}-\d{2}-\d{2}$/.test(String(parsed?.target_date || '')) ? String(parsed.target_date) : null;
+    if (!(given && given >= saidToday && isNthWeekdayKey(given, nthDay))) {
+      const first = firstNthWeekdayOnOrAfter(saidToday, nthDay);
+      if (first) {
+        console.log(`[runTaskParse] ${parsed.recurrence_nth_weekday}: first day ${parsed.target_date} → ${first}`);
+        // due_date mirrors the day it happens; a separate deadline stays put.
+        if (parsed.due_date && parsed.due_date === parsed.target_date) parsed.due_date = first;
+        parsed.target_date = first;
+      }
+    }
+  }
   // NO "NEXT STEP" IS EVER INVENTED FOR A TASK (removed Nov 14 2026). From
   // Sept 22 2026 the parser was asked to guess one for chores (washer → "Move
   // the laundry to the dryer" 60 minutes after Done, oven, dishwasher, parking
