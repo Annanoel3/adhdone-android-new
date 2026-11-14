@@ -1,3 +1,4 @@
+// Nov 14 2026: a monthly repeat on a weekday of the month ("the second Tuesday", Task.recurrence_nth_weekday, shared/nthWeekday.ts) moves on to that weekday of the next month in the hourly repeat pass (repeatStep); until now every monthly repeat moved to the same DATE (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 13 2026: owner check 2 ("Smart Reminders not re-planning") no longer counts an account Smart Reminders skips by rule (the phone doesn't allow ADHDone's notifications, or no phone has ever opened the account); a new account that was asked about notifications and still has them off an hour after joining is told as that, the same day.
 // Nov 13 2026: owner check 6 (two pushes in the same minute) no longer counts a minute where every push is a different event's own reminder tied to its start (two calendar events at 9:00 AM each got their hour-before at 8:00, as planned).
@@ -32,6 +33,7 @@ import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
 import { seriesPattern, oldSeriesPattern, dayEntryKind } from '../../shared/calendarEntry.ts';
+import { nthOfTask, nextMonthNthWeekdayKey } from '../../shared/nthWeekday.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -220,7 +222,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-14 no next-step follow-up after Done', ...look });
+      return Response.json({ success: true, copy: '2026-11-14 second-Tuesday monthly repeats', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -3182,7 +3184,15 @@ function repeatStep(key: string, task: any): string | null {
       }
       break;
     case 'every_other_week': dt.setUTCDate(dt.getUTCDate() + 14); break;
-    case 'monthly': dt.setUTCMonth(dt.getUTCMonth() + 1); break;
+    case 'monthly': {
+      // A weekday of the month ("the second Tuesday", shared/nthWeekday.ts):
+      // that weekday of the next month. Otherwise the same date next month.
+      const nth = nthOfTask(task);
+      const onNth = nth ? nextMonthNthWeekdayKey(key, nth) : null;
+      if (onNth) return onNth;
+      dt.setUTCMonth(dt.getUTCMonth() + 1);
+      break;
+    }
     case 'yearly': dt.setUTCFullYear(dt.getUTCFullYear() + 1); break;
     default: return null;
   }
