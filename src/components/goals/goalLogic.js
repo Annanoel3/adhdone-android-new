@@ -299,7 +299,7 @@ export async function retargetTask(task, goal, step, steps, habit, oldStep = nul
   if (isRepeatingTask(task)) {
     // A daily-practice goal's old repeating task becomes the weekly one:
     // changed in place (nothing deleted), its timed pushes cancelled.
-    Object.assign(updates, { recurrence_pattern: "none", recurrence_days: null, anchor_time: null, time_stated: false, onesignal_notification_ids: [] });
+    Object.assign(updates, { recurrence_pattern: "none", recurrence_days: null, recurrence_nth_weekday: null, anchor_time: null, time_stated: false, onesignal_notification_ids: [] });
     const ids = task.onesignal_notification_ids || [];
     if (ids.length) import("../utils/reminderScheduler").then((m) => m.cancelScheduledReminder(ids)).catch(() => {});
     refreshAlarmsSoon();

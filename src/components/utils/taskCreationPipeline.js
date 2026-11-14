@@ -576,6 +576,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
       deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
       recurrence_pattern: parsed.recurrence_pattern || 'none',
       recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
+      // "The second Tuesday of every month" ('2TU'; only on a monthly repeat).
+      recurrence_nth_weekday: parsed.recurrence_pattern === 'monthly' ? (parsed.recurrence_nth_weekday || null) : null,
       // The user's own words about how to remind them, and the clock time they
       // named (each new occurrence of a recurring task starts there).
       reminder_wish: parsed.reminder_wish || null,

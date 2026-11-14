@@ -413,9 +413,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       daily: 'Daily', every_other_day: 'Every other day', weekdays: 'Weekdays', weekly: 'Weekly',
       every_other_week: 'Every other week', monthly: 'Monthly', yearly: 'Yearly',
     };
-    const days = t.recurrence_pattern === 'weekly' && Array.isArray(t.recurrence_days) && t.recurrence_days.length
-      ? t.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
-      : words[t.recurrence_pattern] || String(t.recurrence_pattern).replace(/_/g, ' ');
+    // "Daily", "Sat, Sun", "Monthly 2nd Tue" (utils/repeatTime.js: the one
+    // copy of these words); `words` stays as the fallback.
+    const days = repeatShortLabel(t) || words[t.recurrence_pattern] || String(t.recurrence_pattern).replace(/_/g, ' ');
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(t.anchor_time || ''));
     if (!m) return days;
     const h = Number(m[1]);
