@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 (afternoon) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and nthWeekday.ts are picked up: "the second Tuesday of every month" is read as a monthly repeat on that weekday (Task.recurrence_nth_weekday, "2TU") and its first day is counted in code, not by the model (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday, first sunday etc").
 // Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it").
 // Nov 12 2026: { renamed: { from, to } } reads a task's new name after a rename. A short look on gpt-6-astra says whether the new name adds a day, a time or a repeat the old one didn't have; only then is the new name parsed, as of now, by the same parser as a new task. Nothing is saved here (the app applies it: renameReread.js). Admin check of several at once: { renameTry: [{ from, to }] }.
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
@@ -175,7 +176,7 @@ Deno.serve(async (req) => {
             parsed: p ? {
               title: p.title, classification: p.classification, target_date: p.target_date, target_time: p.target_time,
               time_stated: p.time_stated, end_date: p.end_date, deadline_style: p.deadline_style, day_only_task: p.day_only_task,
-              recurrence_pattern: p.recurrence_pattern, recurrence_days: p.recurrence_days, reminder_interval: p.reminder_interval,
+              recurrence_pattern: p.recurrence_pattern, recurrence_days: p.recurrence_days, recurrence_nth_weekday: p.recurrence_nth_weekday, reminder_interval: p.reminder_interval,
               reminder_wish: p.reminder_wish,
             } : null,
           };
@@ -242,6 +243,14 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Call the vet at 3", saidAt: said("2026-10-05T16:00:00-05:00"), expect: { target_date: "2026-10-06", target_time: "15:00" } },
   { text: "Gym every weekday at 6am", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "weekly", recurrence_days: [1, 2, 3, 4, 5], target_time: "06:00", time_stated: true } },
   { text: "Water the plants every other day", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "every_other_day" } },
+  // A weekday of the month (Anna, Nov 14 2026: "second tuesday of every month,
+  // third thursday, first monday, first sunday"). The first day is counted in
+  // code (runTaskParse): said on Sat Nov 14 2026, November's second Tuesday
+  // (the 10th) has gone by, so it starts Dec 8.
+  { text: "Book club the second Tuesday of every month at 6pm", saidAt: said("2026-11-14T15:00:00-06:00"), expect: { recurrence_pattern: "monthly", recurrence_nth_weekday: "2TU", target_date: "2026-12-08", target_time: "18:00" } },
+  { text: "Give the dog his heartworm pill first Sunday every month", saidAt: said("2026-11-14T15:00:00-06:00"), expect: { recurrence_pattern: "monthly", recurrence_nth_weekday: "1SU", target_date: "2026-12-06" } },
+  { text: "Team lunch every third Thursday at noon", saidAt: said("2026-11-14T15:00:00-06:00"), expect: { recurrence_pattern: "monthly", recurrence_nth_weekday: "3TH", target_date: "2026-11-19", target_time: "12:00" } },
+  { text: "Pay rent on the 1st of every month", saidAt: said("2026-11-14T15:00:00-06:00"), expect: { recurrence_pattern: "monthly", recurrence_nth_weekday: null, target_date: "2026-12-01" } },
   { text: "take out the trash tonight", saidAt: said("2026-10-09T15:00:00-05:00"), expect: { target_date: "2026-10-09", target_time: aTime } },
   { text: "Text mom", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { target_date: null, target_time: null, recurrence_pattern: "none" } },
   // An appointment they still have to make has no day and asks for none
