@@ -2,6 +2,7 @@ import { base44 } from '@/api/base44Client';
 import { INTERVAL_MS } from './taskSchedule';
 import { scheduleReminder, cancelScheduledReminder } from './reminderScheduler';
 import { commitNotificationIds } from './notificationOwnership';
+import { nthOfTask, nextMonthNthWeekday } from './repeatTime';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Until this time a finish still counts toward the day before (see
@@ -18,8 +19,10 @@ function lateNightEndsMin() {
 
 // Advance a date by one cycle of the pattern. 'weekdays' steps forward a day
 // and then skips Saturday/Sunday, so a business-days habit never lands on the
-// weekend.
-function advance(date, pattern, days) {
+// weekend. `nth` is a monthly task's weekday of the month ("the second
+// Tuesday", nthOfTask): it moves to that weekday of the NEXT month, wherever
+// this round was done; without one, monthly is the same date next month.
+function advance(date, pattern, days, nth = null) {
   const d = new Date(date);
   const daySet = Array.isArray(days) ? days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   if (pattern === 'daily') {
@@ -38,6 +41,8 @@ function advance(date, pattern, days) {
     d.setDate(d.getDate() + 7);
   } else if (pattern === 'every_other_week') {
     d.setDate(d.getDate() + 14);
+  } else if (pattern === 'monthly' && nth) {
+    return nextMonthNthWeekday(d, nth);
   } else if (pattern === 'monthly') {
     d.setMonth(d.getMonth() + 1);
   } else if (pattern === 'yearly') {
@@ -51,11 +56,11 @@ function advance(date, pattern, days) {
 function getNextRecurrenceDate(task) {
   const baseDate = task.next_reminder ? new Date(task.next_reminder) : new Date();
   const now = new Date();
-  let nextDate = advance(baseDate, task.recurrence_pattern, task.recurrence_days);
+  let nextDate = advance(baseDate, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
 
   // If computed date is still in the past, calculate from now
   if (nextDate <= now) {
-    nextDate = advance(now, task.recurrence_pattern, task.recurrence_days);
+    nextDate = advance(now, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
   }
 
   return nextDate;
@@ -163,12 +168,12 @@ export function nextOccurrence(task, now = new Date()) {
   // the end of its day; anything else starts at the time the person named.
   const keepOwnTime = task.classification === 'event' || !!task.day_only_task;
   const at = (d) => (keepOwnTime ? new Date(d) : applyAnchorTime(d, task));
-  let next = advance(base, task.recurrence_pattern, task.recurrence_days);
+  let next = advance(base, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
   let guard = 0;
   while (at(next) <= now && guard++ < 1000) {
-    next = advance(next, task.recurrence_pattern, task.recurrence_days);
+    next = advance(next, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
   }
-  if (at(next) <= now) next = advance(now, task.recurrence_pattern, task.recurrence_days);
+  if (at(next) <= now) next = advance(now, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
   // A late finish covers the day it happened. Finishing an occurrence from an
   // earlier day (last night's 9 PM litter box, done at 8:45 the next morning)
   // counts as today's as well, so the next copy is the first one AFTER today.
@@ -181,7 +186,7 @@ export function nextOccurrence(task, now = new Date()) {
   if (dayDelta(base, finishDay) > 0) {
     let lateGuard = 0;
     while (sameLocalDay(at(next), finishDay) && lateGuard++ < 400) {
-      next = advance(next, task.recurrence_pattern, task.recurrence_days);
+      next = advance(next, task.recurrence_pattern, task.recurrence_days, nthOfTask(task));
     }
   }
   return { base, nextDate: at(next) };
@@ -425,6 +430,7 @@ async function makeNextCopy(task, opts = {}) {
     next_reminder: nextReminder.toISOString(),
     recurrence_pattern: task.recurrence_pattern,
     recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
+    recurrence_nth_weekday: task.recurrence_nth_weekday || null,
     notification_recipient_email: recipient,
     onesignal_notification_ids: [],
     reminder_count: 0,
@@ -628,6 +634,7 @@ async function createNextBirthday(task) {
     next_reminder: nextDate.toISOString(),
     recurrence_pattern: task.recurrence_pattern,
     recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
+    recurrence_nth_weekday: task.recurrence_nth_weekday || null,
     notification_recipient_email: task.notification_recipient_email || null,
     birthday_person: task.birthday_person || null,
     is_own_birthday: !!task.is_own_birthday,
