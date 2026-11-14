@@ -73,10 +73,10 @@ import LocationField from "./LocationField"; import TaskNotesField from "./TaskN
 import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Cake } from "lucide-react";
+import { Cake, Repeat } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
-import { repeatSetsItsOwnDays, dayForRepeatTime, repeatFieldsOf, repeatValueOf, repeatShortLabel, nthWeekdayLabel, monthlyRuleOf, monthlyRuleValue, dayForMonthlyRule, ordinalWord, WEEKDAY_WORDS } from "../utils/repeatTime";
+import { repeatSetsItsOwnDays, dayForRepeatTime, repeatFieldsOf, repeatValueOf, repeatShortLabel, nthWeekdayLabel, monthlyRuleOf, monthlyRuleValue, dayForMonthlyRule, ordinalWord, WEEKDAY_WORDS, repeatLine } from "../utils/repeatTime";
 import MonthlyRuleFields from "./MonthlyRuleFields";
 import { appConfirm } from "@/components/ui/alert-dialog";
 
@@ -1547,6 +1547,12 @@ Return JSON:
   // once: that date is only its next round. A "by" deadline (a monthly
   // payment) really is due, and keeps the word.
   const dueWord = currentType === 'repeat' && task.deadline_style !== 'by' ? 'Next:' : 'Due';
+  // An event that comes back says so under the Type row ("Repeats yearly").
+  // Its Type pill only ever read "Event" and its date, on 65 live events when
+  // this went in, nearly all of them from phone calendars. The app was already
+  // moving each one on to its next date; the screen never said it would.
+  // It only says it: nothing to tap here (Anna, Nov 14 2026: "Fix all 3").
+  const eventRepeatLine = currentType === 'event' ? repeatLine(task) : '';
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
@@ -2216,6 +2222,12 @@ Return JSON:
                 its start, which this doesn't move. */}
             {monthlySentence && (
               <MonthlyRuleFields rule={monthlyDraft || monthlyRuleOf(task)} task={task} theme={theme} onChange={onMonthlyBlank} />
+            )}
+            {eventRepeatLine && (
+              <p className={`flex items-center gap-1.5 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                <Repeat className="w-3.5 h-3.5 flex-shrink-0" />
+                {eventRepeatLine}
+              </p>
             )}
 
             {/* "You usually finish this around…" waiting for a yes or no. */}
