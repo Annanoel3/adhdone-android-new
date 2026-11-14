@@ -396,7 +396,8 @@ reminder_wish — the user's own instruction about HOW, WHEN or HOW OFTEN to
   reminding (reminding Dad, texting a friend a reminder): that is the task.
 
 recurrence_pattern — "none" unless the thing itself repeats on the calendar
-  ("every Wednesday", "the 1st of every month", "every year on June 3rd"); then
+  ("every Wednesday", "the 1st of every month", "the second Tuesday of every
+  month", "every year on June 3rd"); then
   use daily/every_other_day/weekly/every_other_week/monthly/yearly AND set
   target_date to the next occurrence so the first one isn't lost. A word like
   "Annual" inside an event's NAME ("8th Annual RiverRod 2027") describes that
