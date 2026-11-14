@@ -1497,13 +1497,16 @@ export default function TaskCard({
                   </PopoverTrigger>
                   <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-1">
+                      {/* Minutes and hours only, here and on the Smart Reminders pill
+                          further down. "Daily" and "Every other day" were offered too: the
+                          same words as the Repeat choices, but ONE task pinging once a day
+                          (Anna, Nov 14 2026: "Fix all 3"). A task already on one keeps it,
+                          and its label (formatReminderInterval). */}
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
-                      <PopoverClose asChild><button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button></PopoverClose>
-                      <PopoverClose asChild><button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button></PopoverClose>
                     </div>
@@ -1785,7 +1788,6 @@ export default function TaskCard({
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
-                      <PopoverClose asChild><button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button></PopoverClose>
                     </div>
