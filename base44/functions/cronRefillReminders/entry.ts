@@ -1,3 +1,4 @@
+// Nov 14 2026 (later): a monthly repeat on a date moves to the same DAY next month, or that month's last day when it is shorter, and goes back to its own day after (Jan 31 -> Feb 28 -> Mar 31; Task.recurrence_month_day). Adding a month to the date spilled over (Jan 31 became Mar 3 and stayed on the 3rd). Anna: "if someone makes something monthly, they actually mean that same day each month".
 // Nov 14 2026: a monthly repeat on a weekday of the month ("the second Tuesday", Task.recurrence_nth_weekday, shared/nthWeekday.ts) moves on to that weekday of the next month in the hourly repeat pass (repeatStep); until now every monthly repeat moved to the same DATE (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 13 2026: owner check 2 ("Smart Reminders not re-planning") no longer counts an account Smart Reminders skips by rule (the phone doesn't allow ADHDone's notifications, or no phone has ever opened the account); a new account that was asked about notifications and still has them off an hour after joining is told as that, the same day.
@@ -33,7 +34,7 @@ import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
 import { seriesPattern, oldSeriesPattern, dayEntryKind } from '../../shared/calendarEntry.ts';
-import { nthOfTask, nextMonthNthWeekdayKey } from '../../shared/nthWeekday.ts';
+import { nthOfTask, nextMonthNthWeekdayKey, monthDayWanted, nextMonthSameDayKey, monthDayToKeep } from '../../shared/nthWeekday.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -222,7 +223,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-14 second-Tuesday monthly repeats', ...look });
+      return Response.json({ success: true, copy: '2026-11-14 monthly same day + second Tuesday', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -3164,8 +3165,10 @@ function repeatDayKey(task: any, timeZone: string): string | null {
 }
 
 // The next day the repeat lands on after `key`. Same steps as the app's own
-// (nextDate in taskRecurrence.jsx).
-function repeatStep(key: string, task: any): string | null {
+// (nextDate in taskRecurrence.jsx). `monthDay` is the day of the month a
+// monthly task on a date belongs on (monthDayWanted), carried through every
+// step so the 31st stays the 31st after a shorter month.
+function repeatStep(key: string, task: any, monthDay = 0): string | null {
   const dt = new Date(repeatKeyMs(key));
   const days = Array.isArray(task.recurrence_days)
     ? task.recurrence_days.filter((n: any) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
@@ -3190,6 +3193,11 @@ function repeatStep(key: string, task: any): string | null {
       const nth = nthOfTask(task);
       const onNth = nth ? nextMonthNthWeekdayKey(key, nth) : null;
       if (onNth) return onNth;
+      // The same DAY next month, or that month's last day when it is shorter
+      // (Anna, Nov 14 2026: "they actually mean that same day each month").
+      // Adding a month to the date spilled over: Jan 31 became Mar 3.
+      const sameDay = nextMonthSameDayKey(key, monthDay || dt.getUTCDate());
+      if (sameDay) return sameDay;
       dt.setUTCMonth(dt.getUTCMonth() + 1);
       break;
     }
@@ -3217,7 +3225,7 @@ function repeatShift(v: any, days: number, timeZone: string, hhmm: string | null
 // Otherwise the day it moves on to, and how many days that is: for an event,
 // the first day it happens again from today on; for a task, the day right
 // after, as long as the repeat runs on day after day (see below).
-function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: string; toKey: string; days: number } | null {
+function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: string; toKey: string; days: number; monthDay: number | null } | null {
   const fromKey = repeatDayKey(task, timeZone);
   if (!fromKey) return null;
   // A stated multi-day range (a trip Dec 3–7) is over after its last day. An
@@ -3228,11 +3236,13 @@ function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: s
   const todayKey = localDateKey(new Date(nowMs - REPEAT_DAY_ENDS_MS), timeZone);
   if (lastKey >= todayKey) return null;
   let toKey = fromKey;
+  // A monthly one on a date: the day of the month it belongs on.
+  const wantDay = task.recurrence_pattern === 'monthly' && !nthOfTask(task) ? monthDayWanted(task, fromKey) : 0;
   if (task.classification === 'event') {
     // An event is over once it has happened (there is nothing to check off):
     // on to the next time it happens.
     for (let i = 0; i < 1000 && toKey < todayKey; i++) {
-      const next = repeatStep(toKey, task);
+      const next = repeatStep(toKey, task, wantDay);
       if (!next || next <= toKey) return null;
       toKey = next;
     }
@@ -3250,13 +3260,13 @@ function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: s
     // day-after-day run as far as today, and stops on the last day before a
     // gap.
     for (let i = 0; i < 1000 && toKey < todayKey; i++) {
-      const next = repeatStep(toKey, task);
+      const next = repeatStep(toKey, task, wantDay);
       if (!next || next !== repeatAddDays(toKey, 1)) break;
       toKey = next;
     }
     if (toKey === fromKey) return null;
   }
-  return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS) };
+  return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS), monthDay: monthDayToKeep(wantDay) };
 }
 
 // Every active repeating task or event whose day is over and that moves on
@@ -3304,11 +3314,14 @@ function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: numbe
 
 // The change that moves a copy on to its new day, and the pushes of the old
 // day still ahead that have to be cancelled.
-function repeatMove(fresh: any, owner: any, timeZone: string, roll: { days: number }, nowMs: number): { moved: any; cancel: string[] } {
+function repeatMove(fresh: any, owner: any, timeZone: string, roll: { days: number; monthDay?: number | null }, nowMs: number): { moved: any; cancel: string[] } {
   const days = roll.days;
   const anchor = /^\d{1,2}:\d{2}$/.test(String(fresh.anchor_time || '')) ? String(fresh.anchor_time) : null;
   const rhythm = !!fresh.reminder_interval && fresh.reminder_interval !== 'once';
   const moved: any = { ...REPEAT_FRESH_DAY, prep_questions: [], onesignal_notification_ids: [] };
+  // A monthly one on the 29th, 30th or 31st remembers that day, so a round a
+  // shorter month put on its last day goes back to it (shared/nthWeekday.ts).
+  if (roll.monthDay) moved.recurrence_month_day = roll.monthDay;
   for (const f of ['due_date', 'event_time', 'end_time', 'end_date', 'start_date']) {
     if (fresh[f]) moved[f] = repeatShift(fresh[f], days, timeZone);
   }
