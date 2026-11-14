@@ -1,3 +1,4 @@
+// Nov 13 2026 (night): "How did today go?" may go out from 2 hours before quiet hours, for people who used the app that day (it was the last hour); everyone else keeps the last hour. { "preview": true } (owner) shows who would get the evening push, sending nothing.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 11 2026: the morning summary is gone (Anna: "ok get rid of it"). This function now sends only the evening check-in.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
@@ -39,13 +40,32 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     const now = new Date();
+    // The scheduler sends no body; Test Function may.
+    const body: any = await req.json().catch(() => ({}));
 
     const allUsers = await listAll(base44.asServiceRole.entities.User);
 
+    // A look at who would get the evening push right now, or at "as_of" (an
+    // ISO time), and why not for the rest of the people inside their window.
+    // Sends nothing and claims nothing. With as_of the send ledger isn't
+    // asked (it only knows now). It shows people's emails: the owner's
+    // account only (Test Function in the editor).
+    if (body?.preview === true) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+      const asOf = body.as_of ? new Date(body.as_of) : now;
+      if (isNaN(asOf.getTime())) return Response.json({ error: 'as_of is not a time' }, { status: 400 });
+      const look: any[] = [];
+      await sendEveningWinAsks(base44, allUsers, asOf, look, !!body.as_of);
+      return Response.json({ success: true, preview: true, at: asOf.toISOString(), look });
+    }
+
     // The evening check-in push (Anna, Oct 30 2026: the evening card AND a
     // notification; Oct 31 2026: it asks "How did you feel today?" too). Once
-    // a day, in the hour before their quiet hours start (9 PM with quiet hours
-    // off), a plain push that opens the box with the mood faces and the win
+    // a day, before their quiet hours start (9 PM with quiet hours off): from
+    // 2 hours before for people who used the app that day, in the last hour
+    // for everyone else it reaches (WIN_ASK_LEAD_MIN / OTHERS_LEAD_MIN
+    // below), a plain push that opens the box with the mood faces and the win
     // (data.type 'win_ask', OneSignalInit). Not on someone's first day, not
     // for anyone away a week or paused, not when they already saved a win OR
     // a mood today (they already checked in; don't nag), and never stacked on
@@ -157,7 +177,40 @@ async function comebackToday(base44: any, email: string, sinceISO: string): Prom
   }
 }
 
-async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Promise<number> {
+// How long before their quiet hours start the evening push may first go out.
+// "How did today go?" (people who actually used the app today): 2 hours
+// (Anna, Nov 13 2026: "Lets make the 'whats one win' thing show up earlier.
+// Right now its just 1 hour before quiet hours, right?", then "2 hours
+// before"). It was the last hour, for everyone; hers had come at 10:41 PM, 19
+// minutes before her 11 PM quiet hours (this runs at :11 and :41, and the
+// 10:11 run gave way to her 10 PM reminder: pushes keep 20 minutes apart).
+// It goes at the first run in the window where nothing else is ringing.
+// Everyone else this push reaches keeps the last hour: their lines are for
+// people who need to be brought back, which she didn't ask to move, and
+// whether someone "used the app today" is only fair to judge that late
+// (someone who uses it every evening after 8 would be handed a come-back
+// line at 8:11). Someone who first uses the app inside the 2 hours gets "How
+// did today go?" at the next run.
+const WIN_ASK_LEAD_MIN = 120;
+const OTHERS_LEAD_MIN = 60;
+
+// Whether the app's own evening has begun for them: the window the evening
+// card is on Home (winsStore.eveningWindow, the same sums as eveningDayKey
+// above): from 5 PM, or the 4 hours before quiet hours that start by 5 PM,
+// until quiet hours start. The push never comes before the card it is about
+// (quiet hours from 6 PM: not at 4 PM).
+function inAppEvening(user: any, now: Date, timeZone: string): boolean {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(user?.quiet_hours_start || ''));
+  const end = m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : 22 * 60;
+  const start = end > 17 * 60 ? 17 * 60 : (end - 240 + 1440) % 1440;
+  const at = localMinutesOfDay(now, timeZone);
+  return start < end ? at >= start && at < end : at >= start || at < end;
+}
+
+// look: a preview's list (see { preview: true } above). When given, nothing
+// is claimed or sent. replay: the look is for another time than now, so the
+// send ledger (which only knows now) isn't asked.
+async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date, look: any[] | null = null, replay = false): Promise<number> {
   const DAY = 24 * 60 * 60 * 1000;
   let sent = 0;
   for (const user of allUsers) {
@@ -177,10 +230,12 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     const startMin = quiet.enabled ? quiet.startMin : 21 * 60;
     const nowMin = localMinutesOfDay(now, timeZone);
     const minutesBefore = (startMin - nowMin + 1440) % 1440;
-    if (!(minutesBefore > 0 && minutesBefore <= 60)) continue;
+    if (!(minutesBefore > 0 && minutesBefore <= WIN_ASK_LEAD_MIN)) continue;
+    const skip = (why: string) => { if (look) look.push({ email, minutes_before_quiet: minutesBefore, send: false, why }); };
+    if (!inAppEvening(user, now, timeZone)) { skip('their evening in the app has not started'); continue; }
 
     const dayKey = theirDayKeyFor(user, now, timeZone);
-    if (user.win_ask_date === dayKey) continue;
+    if (user.win_ask_date === dayKey) { skip('already sent today'); continue; }
 
     // Only someone who opened the app today, or who has ever finished a task
     // in it. Someone who signed up, looked for a minute and never came back
@@ -196,9 +251,10 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
         finishedOne = Array.isArray(done) && done.length > 0;
       } catch (e) {
         console.error(`[DIGEST] Finished-task check failed for ${email}:`, (e as any)?.message || e);
+        skip('could not check their finished tasks');
         continue;
       }
-      if (!finishedOne) continue;
+      if (!finishedOne) { skip('has not opened the app today and never finished a task'); continue; }
     }
 
     // Already checked in today: a win or a mood saved for today, as the app
@@ -216,9 +272,10 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     } catch (e) {
       // Can't check (the Win table isn't there yet): don't ask.
       console.error(`[DIGEST] Win check failed for ${email}:`, (e as any)?.message || e);
+      skip('could not check their wins');
       continue;
     }
-    if (haveOne) continue;
+    if (haveOne) { skip('already saved a win today'); continue; }
     try {
       for (const day of days) {
         const moods = await base44.asServiceRole.entities.DayMood.filter({ created_by: email, day }, '-updated_date', 1);
@@ -227,31 +284,40 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     } catch (e) {
       // Can't check the mood: don't ask (same as the win check).
       console.error(`[DIGEST] Mood check failed for ${email}:`, (e as any)?.message || e);
+      skip('could not check their mood');
       continue;
     }
-    if (haveOne) continue;
+    if (haveOne) { skip('already saved a mood today'); continue; }
 
     // Since the start of today: their calendar day, or the day an evening
     // that runs past midnight started on.
     let sinceMs = now.getTime() - (nowMin + 1) * 60 * 1000;
     if (eveningDayKey(user, now, timeZone) !== localDay) sinceMs -= DAY;
     const sinceISO = new Date(sinceMs).toISOString();
-    if (await comebackToday(base44, email, sinceISO)) continue;
+    if (await comebackToday(base44, email, sinceISO)) { skip('a come-back push went out to them today'); continue; }
     // Actually used the app today (shared/usedApp.ts). A check that can't run
     // counts as used, so a brain dump never goes to someone using the app.
-    const usedToday = await usedAppBetween(base44, email, sinceISO, null, true);
+    const usedToday = await usedAppBetween(base44, email, sinceISO, replay ? now.toISOString() : null, true);
+    // Earlier than the last hour only "How did today go?" goes out (see
+    // WIN_ASK_LEAD_MIN). Not claimed, so the later runs look again.
+    if (minutesBefore > OTHERS_LEAD_MIN && !usedToday) { skip('has not used the app yet today: theirs waits for the last hour'); continue; }
 
-    const gate = await ledgerCheck(base44, { email, kind: 'motivation' });
-    if (!gate.allowed) continue;
+    const gate: any = replay ? { allowed: true } : await ledgerCheck(base44, { email, kind: 'motivation' });
+    if (!gate.allowed) { skip(`held for now: ${gate.reason || 'another push is close'}`); continue; }
 
-    // Claim the day before sending, so a second run in the hour can't repeat it.
+    const line = eveningLine(dayKey, usedToday);
+    if (look) {
+      look.push({ email, minutes_before_quiet: minutesBefore, send: true, title: line.title, used_today: usedToday, ledger: replay ? 'not asked (as_of)' : 'clear' });
+      continue;
+    }
+
+    // Claim the day before sending, so a second run in the window can't repeat it.
     try {
       await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: dayKey });
     } catch (e) {
       console.error(`[DIGEST] Could not claim the win ask for ${email}:`, e);
       continue;
     }
-    const line = eveningLine(dayKey, usedToday);
     const id = await sendWinAsk(email, line);
     if (id) {
       // A brain dump is recorded as its own source, so the owner alerts
@@ -262,7 +328,7 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
       try { await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: user.win_ask_date || null }); } catch {}
     }
   }
-  console.log(`[DIGEST] Evening win asks sent: ${sent}`);
+  if (!look) console.log(`[DIGEST] Evening win asks sent: ${sent}`);
   return sent;
 }
 
