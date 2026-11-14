@@ -286,9 +286,11 @@ export async function scheduleMultiReminders({
       // sent together can land in either order, the later one putting back
       // the task as it read it. Nov 13 2026, a test task's time changed seven
       // times on its card: four times the entry saved here was gone a moment
-      // later and the task still listed its reminder at the OLD time (the
-      // push itself was booked right; the stale entry is what Task Details
-      // shows and what Back Burner and un-checking book again from).
+      // later and the task still listed its reminder at the OLD time. The
+      // push itself was booked for the new time; the entry is what Task
+      // Details lists, and what a task brought back from the Back Burner is
+      // booked again from (onTaskUpdate skips an entry that isn't at the
+      // task's own time, so it came back with no reminder at its time).
       if (!overtaken()) await base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
       return id ? [id] : [];
     }
