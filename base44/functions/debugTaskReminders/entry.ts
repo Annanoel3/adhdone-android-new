@@ -1,3 +1,4 @@
+// Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it").
 // Re-saved Nov 10 2026 so the bundled shared/taskParsePrompt.ts is picked up: a shared or pasted confirmation gets a short calendar-style title (no order numbers, order dates, hours or fine print), and a dated visit for care or tests is an event.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4), the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
