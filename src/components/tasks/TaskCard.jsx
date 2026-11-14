@@ -1433,8 +1433,8 @@ export default function TaskCard({
                       {repeatScheduleLabel}
                     </button>
                   </PopoverTrigger>
-                  {/* Wide enough for "Monthly on the second Wednesday" (it was cut
-                       off at "...second Tuesd" at w-64), never wider than the phone. */}
+                  {/* Wide enough for the monthly sentence ("the [2nd] [Wednesday] of
+                       every month"), never wider than the phone. */}
                   <PopoverContent className={`w-80 max-w-[calc(100vw-1.5rem)] p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-3">
                       <div>
