@@ -76,7 +76,8 @@ import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
-import { repeatSetsItsOwnDays, dayForRepeatTime, repeatFieldsOf, repeatShortLabel, nthWeekdayLabel } from "../utils/repeatTime";
+import { repeatSetsItsOwnDays, dayForRepeatTime, repeatFieldsOf, repeatValueOf, repeatShortLabel, nthWeekdayLabel, monthlyRuleOf, monthlyRuleValue, dayForMonthlyRule, ordinalWord, WEEKDAY_WORDS } from "../utils/repeatTime";
+import MonthlyRuleFields from "./MonthlyRuleFields";
 import { appConfirm } from "@/components/ui/alert-dialog";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
@@ -723,9 +724,14 @@ Return JSON:
       // it is worked out from the repeat (utils/repeatTime.js; the repeat pill
       // on the card uses the same rule). Anna, Nov 14 2026: "if it says
       // repeats daily up there, you should not be able to set a due date for it."
-      const timeOnlyRepeat = getCurrentReminderType(task) === 'repeat' && repeatSetsItsOwnDays(task);
+      // `opts.also`: repeat fields saved in the same breath (a monthly rule that
+      // moves the task to its day, handleSetMonthlyRule). Everything below that
+      // depends on the repeat reads the task as it will be (T).
+      const also = opts.also || {};
+      const T = { ...task, ...also };
+      const timeOnlyRepeat = getCurrentReminderType(T) === 'repeat' && repeatSetsItsOwnDays(T);
       const givenDate = selectedDate !== undefined ? selectedDate : currentTaskDate;
-      const effectiveDate = givenDate || (timeOnlyRepeat && effectiveTime ? dayForRepeatTime(task, effectiveTime) : givenDate);
+      const effectiveDate = givenDate || (timeOnlyRepeat && effectiveTime ? dayForRepeatTime(T, effectiveTime) : givenDate);
 
       const _now = new Date();
       const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
@@ -748,7 +754,7 @@ Return JSON:
       if (!effectiveDate && !dayOnly && nextReminder.getTime() <= Date.now() + 2 * 60 * 1000) {
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
-      const isRepeatTask = !!task.recurrence_pattern && task.recurrence_pattern !== 'none';
+      const isRepeatTask = !!T.recurrence_pattern && T.recurrence_pattern !== 'none';
       const isRhythmTask = !!task.reminder_interval && task.reminder_interval !== 'once';
 
       // Past-date guard runs FIRST (synchronously) so we never optimistically
@@ -800,7 +806,14 @@ Return JSON:
       // wait an interval because that time already went by today.
       const namedTime = dayOnly ? null : finalEffectiveTime;
       // First date on a dateless task: a deadline ("by"), see todayTasks.
-      const styleFix = firstDateMakesDeadline(task, nextReminder.toISOString());
+      const styleFix = firstDateMakesDeadline(T, nextReminder.toISOString());
+      // An all-day task is due at the END of its day (11:59 PM), the way every
+      // other place saves one; 9 AM is only where it sorts. Saved as 9 AM here
+      // until Nov 14 2026, so it read "Overdue" from 9:01 that morning. A
+      // rhythm keeps its own start.
+      const dueISO = dayOnly && !isRhythmTask
+        ? new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString()
+        : nextReminder.toISOString();
       const becomesDeadline = styleFix.deadline_style === 'by';
       // A time picked here is one they set themselves: it may go off inside
       // their quiet hours (RULES.md §9 Q4).
@@ -808,7 +821,7 @@ Return JSON:
       // A new task's first booking still on its way cancels itself now
       // instead of ringing the old time (notificationOwnership.js).
       noteTaskTimeChanged(task.id);
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime, time_stated: timeStated, ...styleFix });
+      onUpdate({ ...task, ...also, next_reminder: nextReminder.toISOString(), due_date: dueISO, day_only_task: dayOnly, anchor_time: namedTime, time_stated: timeStated, ...styleFix });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
@@ -817,7 +830,9 @@ Return JSON:
       reminderTimeRef.current = dayOnly ? '' : savedRtNow;
       // A repeating task rings once at its time (see the booking below) —
       // "an hour before and at" was never true for it.
-      if (isRepeatTask && !isRhythmTask && !dayOnly) {
+      if (opts.said) {
+        toast({ title: 'Repeat saved ✓', description: opts.said });
+      } else if (isRepeatTask && !isRhythmTask && !dayOnly) {
         toast({ title: 'Time saved ✓', description: `One reminder at ${nextReminder.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} each time.` });
       } else toast({
         title: "Due date saved ✓",
@@ -874,7 +889,7 @@ Return JSON:
             intervalMs: intervalMs[interval],
             count: 10,
             taskId: task.id,
-            task: { ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), anchor_time: namedTime, time_stated: timeStated },
+            task: { ...task, ...also, next_reminder: nextReminder.toISOString(), due_date: dueISO, anchor_time: namedTime, time_stated: timeStated },
             data: {
               screen: "/TaskNotification",
               taskId: task.id,
@@ -890,8 +905,9 @@ Return JSON:
           newNotificationIds = notificationIds || [];
 
           Task.update(task.id, {
+            ...also,
             next_reminder: nextReminder.toISOString(),
-            due_date: nextReminder.toISOString(),
+            due_date: dueISO,
             day_only_task: dayOnly,
             anchor_time: namedTime,
             time_stated: timeStated,
@@ -909,15 +925,17 @@ Return JSON:
           // it, as with the repeat pill.
           const repeating = {
             ...task,
+            ...also,
             reminder_interval: task.reminder_interval || 'once',
             next_reminder: nextReminder.toISOString(),
-            due_date: nextReminder.toISOString(),
+            due_date: dueISO,
             day_only_task: dayOnly,
             anchor_time: namedTime,
             time_stated: timeStated,
             ...styleFix,
           };
           await Task.update(task.id, {
+            ...also,
             next_reminder: repeating.next_reminder,
             due_date: repeating.due_date,
             day_only_task: dayOnly,
@@ -971,8 +989,9 @@ Return JSON:
           }
 
           Task.update(task.id, {
+            ...also,
             next_reminder: nextReminder.toISOString(),
-            due_date: nextReminder.toISOString(),
+            due_date: dueISO,
             day_only_task: dayOnly,
             anchor_time: namedTime,
             time_stated: timeStated,
@@ -1756,6 +1775,34 @@ Return JSON:
     })();
   };
 
+  // "The [2nd] [Tuesday] of every month" (MonthlyRuleFields; Anna, Nov 14
+  // 2026). The rule names the day, so the task moves to the next such day
+  // unless the day it is on already fits (this month's round stays, late or
+  // not). A move goes through the same save as any date change here
+  // (handleUpdateReminderTime: old reminders down, the one at its time booked
+  // again, the phone's alarm moved), with the repeat saved in the same breath.
+  const handleSetMonthlyRule = (rule) => {
+    if (!task || !rule) return;
+    const value = monthlyRuleValue(rule);
+    if (value === repeatValueOf(task)) return;
+    const repeat = repeatFieldsOf(value);
+    const said = `The ${ordinalWord(rule.ord)} ${rule.unit === 'day' ? 'day' : WEEKDAY_WORDS[rule.unit]} of every month.`;
+    const anchor = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+    const time = task.day_only_task ? '' : anchor ? `${anchor[1].padStart(2, '0')}:${anchor[2]}` : getCurrentReminderTime(task);
+    const at = task.day_only_task ? (task.due_date || task.next_reminder) : (task.next_reminder || task.due_date);
+    const own = at ? (() => { const d = new Date(at); return isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })() : '';
+    const day = dayForMonthlyRule(task, rule, time);
+    if (day === own) {
+      // Already on such a day: only the repeat changes.
+      onUpdate({ ...task, ...repeat });
+      toast({ title: 'Repeat saved ✓', description: said });
+      Task.update(task.id, repeat).catch((e) => console.error('Error setting the monthly day:', e));
+      return;
+    }
+    dueDirty.current = false;
+    handleUpdateReminderTime(time, day, { notAPush: true, also: repeat, said });
+  };
+
   // One entry point for the ReminderTypeSelector — routes each type to the
   // right existing handler so all the cancel/reschedule logic stays in one place.
   const handleChangeReminderType = (type, sub) => {
@@ -2120,6 +2167,14 @@ Return JSON:
               <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Type</span>
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
             </div>
+            {/* A monthly task says which day right here, as a sentence with
+                two blanks (Anna, Nov 14 2026: "the ____ ____ of every month").
+                Not for a task pinging at a rhythm: its pings are booked from
+                its start, which this doesn't move. */}
+            {currentType === 'repeat' && task.recurrence_pattern === 'monthly' && task.status !== 'completed'
+              && !(task.reminder_interval && task.reminder_interval !== 'once') && (
+              <MonthlyRuleFields rule={monthlyRuleOf(task)} task={task} theme={theme} onChange={handleSetMonthlyRule} />
+            )}
 
             {/* "You usually finish this around…" waiting for a yes or no. */}
             {task.habit_suggestion?.time && !task.habit_suggestion?.answer && (
