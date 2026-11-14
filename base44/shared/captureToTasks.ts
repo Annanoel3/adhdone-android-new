@@ -135,6 +135,9 @@ export function buildTaskRecord(
     goes_somewhere: parsed.goes_somewhere === true,
     recurrence_pattern: parsed.recurrence_pattern || "none",
     recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
+    // "The second Tuesday of every month" ('2TU', shared/nthWeekday.ts); only
+    // on a monthly repeat.
+    recurrence_nth_weekday: parsed.recurrence_pattern === "monthly" ? (parsed.recurrence_nth_weekday || null) : null,
     // The user's own words about how to remind them ("keep reminding me until
     // I finish"), read by the reminder planners; and the clock time they named,
     // so each new occurrence of a recurring task starts at the same time.
