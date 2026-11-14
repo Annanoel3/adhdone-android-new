@@ -399,8 +399,6 @@ async function makeNextCopy(task, opts = {}) {
     anchor_time: task.anchor_time || null,
     // Whether they set that time themselves (RULES.md §9 Q4) carries over too.
     time_stated: task.time_stated === true,
-    follow_up_title: task.follow_up_title || null,
-    follow_up_minutes: task.follow_up_minutes || null,
     // The kind of task it is and how long it takes (logTaskCompletion), so the
     // next one doesn't wait to be sorted again.
     task_family: task.task_family || null,
@@ -626,8 +624,6 @@ async function createNextBirthday(task) {
     anchor_time: task.anchor_time || null,
     // Whether they set that time themselves (RULES.md §9 Q4) carries over too.
     time_stated: task.time_stated === true,
-    follow_up_title: task.follow_up_title || null,
-    follow_up_minutes: task.follow_up_minutes || null,
     status: 'active',
     next_reminder: nextDate.toISOString(),
     recurrence_pattern: task.recurrence_pattern,
