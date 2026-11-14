@@ -15,6 +15,7 @@
 // already has its day, and a typo fix changes nothing.
 
 import { deriveSchedule, deadlineWindowStart } from './taskSchedule';
+import { cleanNthWeekday, nthWeekdayLabel } from './repeatTime';
 
 const REPEATS = ['daily', 'every_other_day', 'weekdays', 'weekly', 'every_other_week', 'monthly', 'yearly'];
 // A rhythm the person asked for ("keep reminding me every hour"): its pings
@@ -65,7 +66,7 @@ export function skipsReread(task) {
 }
 
 // → { repeat, when }, each null when the rename changes nothing there.
-//   repeat: { recurrence_pattern, recurrence_days }
+//   repeat: { recurrence_pattern, recurrence_days, recurrence_nth_weekday }
 //   when:   { fields, bookAt, day, time, becameEvent }; `fields` are saved as
 //           they are, `bookAt` is the moment its reminders are planned from
 //           (null: nothing to book now).
@@ -79,12 +80,17 @@ export function planRenameChanges(task, added, parsed, now = new Date()) {
   let pattern = REPEATS.includes(T.recurrence_pattern) ? T.recurrence_pattern : 'none';
   if (added.repeat === true && REPEATS.includes(parsed.recurrence_pattern)) {
     const days = parsed.recurrence_pattern === 'weekly' ? sortedDays(parsed.recurrence_days) : null;
+    // A weekday of the month the new name states ("... every second Tuesday"
+    // = '2TU', see repeatTime.js); only on a monthly repeat.
+    const nth = parsed.recurrence_pattern === 'monthly' ? cleanNthWeekday(parsed.recurrence_nth_weekday) : null;
+    const hadNth = pattern === 'monthly' ? cleanNthWeekday(T.recurrence_nth_weekday) : null;
     const samePattern = parsed.recurrence_pattern === pattern;
     const sameDays = JSON.stringify(days) === JSON.stringify(sortedDays(T.recurrence_days));
     // The same pattern with no weekdays named ("weekly" on a task already set
-    // to every Monday) changes nothing: the name never takes the days away.
-    if (!samePattern || (days && !sameDays)) {
-      plan.repeat = { recurrence_pattern: parsed.recurrence_pattern, recurrence_days: days };
+    // to every Monday, "monthly" on one set to the second Tuesday) changes
+    // nothing: the name never takes the days away.
+    if (!samePattern || (days && !sameDays) || (nth && nth !== hadNth)) {
+      plan.repeat = { recurrence_pattern: parsed.recurrence_pattern, recurrence_days: days, recurrence_nth_weekday: nth };
       pattern = parsed.recurrence_pattern;
     }
   }
@@ -204,7 +210,8 @@ export function planRenameChanges(task, added, parsed, now = new Date()) {
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const repeatWords = (pattern, days) => {
+const repeatWords = (pattern, days, nth) => {
+  if (pattern === 'monthly' && cleanNthWeekday(nth)) return `every month on the ${nthWeekdayLabel(nth)}`;
   if (pattern === 'weekly' && Array.isArray(days) && days.length > 0) {
     if (days.length === 7) return 'every day';
     if (days.join(',') === '1,2,3,4,5') return 'on weekdays';
@@ -232,7 +239,7 @@ export function renameSummary(plan) {
       : dayText);
   }
   if (plan?.repeat) {
-    const how = repeatWords(plan.repeat.recurrence_pattern, plan.repeat.recurrence_days);
+    const how = repeatWords(plan.repeat.recurrence_pattern, plan.repeat.recurrence_days, plan.repeat.recurrence_nth_weekday);
     if (how) parts.push(`repeats ${how}`);
   }
   if (parts.length === 0) return '';
