@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-13 due-today check skips day labels and phones that take nothing', ...look });
+      return Response.json({ success: true, copy: '2026-11-14 no next-step follow-up after Done', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -2883,9 +2883,11 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //      they picked themselves: a scheduled text, a tracker's reminder, the
   //      end of a focus sprint they started.
   //  16. A reminder about a task that was already checked off when it went
-  //      out (more than 2 minutes after). The follow-up "next step" push
-  //      ("Move the laundry to the dryer") is meant to come after and isn't
-  //      counted.
+  //      out (more than 2 minutes after). Nothing is exempt: the "next
+  //      step" follow-up that was let through here was removed on Nov 14
+  //      2026 (Anna: "I would NEVER ask for a follow up notification on
+  //      something someone pressed done on"), so a push of that kind now
+  //      counts like any other.
   //  17. A come-back-style push (a come-back, or the evening brain dump:
   //      ledger source 'comeback' / 'evening_dump') to someone who actually
   //      used the app that day before it went out (shared/usedApp.ts).
@@ -2928,7 +2930,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       }
 
       // 16
-      if (t && r.kind !== 'follow_up' && t.status === 'completed') {
+      if (t && t.status === 'completed') {
         const doneMs = Number.isFinite(msOf(t.finished_at)) ? msOf(t.finished_at) : msOf(t.completed_at);
         if (Number.isFinite(doneMs) && ms - doneMs > 2 * 60 * 1000) {
           doneCases.push({ ms, id: r.notification_id, line: `${nameOf(u)}: ${pushName(r, t)} at ${theirClock(u, ms)}, checked off ${theirClock(u, doneMs)} ${u.email}` });
