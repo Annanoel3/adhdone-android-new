@@ -2199,7 +2199,7 @@ Return JSON:
                             ? (currentType === 'repeat' && !(task.reminder_interval && task.reminder_interval !== 'once')
                               ? 'One reminder at that time, each time it repeats.'
                               : 'A reminder at that time, plus a heads-up before when it earns one.')
-                            : 'No time means done that day. Smart Reminders pick when to nudge.'}
+                            : 'Leave it blank and ADHDone will pick good times to remind you.'}
                         </p>
                       </div>
                       <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
