@@ -176,7 +176,9 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   eventDateRef.current = eventDate;
   eventTimeRef.current = eventTime;
   const flushDirtyDates = () => {
-    if (dueDirty.current && reminderDateRef.current) {
+    // A time with no date saves too (Nov 14 2026): a repeating task's time is
+    // often all there is to set.
+    if (dueDirty.current && (reminderDateRef.current || reminderTimeRef.current)) {
       dueDirty.current = false;
       handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current);
     }
@@ -731,6 +733,14 @@ Return JSON:
       const [year, month, day] = finalEffectiveDate.split('-').map(n => parseInt(n, 10));
       const [hours, minutes] = finalEffectiveTime.split(':').map(n => parseInt(n, 10));
       let nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      // A time with no date means the next time that clock time comes round:
+      // today if it's still ahead, otherwise tomorrow (Nov 14 2026 — a copied
+      // daily pill task had no date, and a time alone never saved).
+      if (!effectiveDate && !dayOnly && nextReminder.getTime() <= Date.now() + 2 * 60 * 1000) {
+        nextReminder.setDate(nextReminder.getDate() + 1);
+      }
+      const isRepeatTask = !!task.recurrence_pattern && task.recurrence_pattern !== 'none';
+      const isRhythmTask = !!task.reminder_interval && task.reminder_interval !== 'once';
 
       // Past-date guard runs FIRST (synchronously) so we never optimistically
       // show a save that we're about to reject.
@@ -791,7 +801,11 @@ Return JSON:
       setReminderTime(dayOnly ? '' : savedRtNow);
       reminderDateRef.current = savedRdNow;
       reminderTimeRef.current = dayOnly ? '' : savedRtNow;
-      toast({
+      // A repeating task rings once at its time (see the booking below) —
+      // "an hour before and at" was never true for it.
+      if (isRepeatTask && !isRhythmTask && !dayOnly) {
+        toast({ title: 'Time saved ✓', description: `One reminder at ${nextReminder.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })} each time.` });
+      } else toast({
         title: "Due date saved ✓",
         description: becomesDeadline
           ? (dayOnly
@@ -872,6 +886,37 @@ Return JSON:
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
           }).then(() => refreshAlarms()).catch(err => console.error("Error updating task:", err));
+        } else if (isRepeatTask) {
+          // A repeating task: ONE reminder at its time, booked the same way as
+          // every next copy and as turning the repeat on (bookAtTimeReminder).
+          // A routine at a set time (pills) gets just the at-time reminder —
+          // the one-time path below could add a lead-time plan to it. No time,
+          // a "by" deadline or a parked task books nothing: smart nudges carry
+          // it, as with the repeat pill.
+          const repeating = {
+            ...task,
+            reminder_interval: task.reminder_interval || 'once',
+            next_reminder: nextReminder.toISOString(),
+            due_date: nextReminder.toISOString(),
+            day_only_task: dayOnly,
+            anchor_time: namedTime,
+            time_stated: timeStated,
+            ...styleFix,
+          };
+          await Task.update(task.id, {
+            next_reminder: repeating.next_reminder,
+            due_date: repeating.due_date,
+            day_only_task: dayOnly,
+            anchor_time: namedTime,
+            time_stated: timeStated,
+            ...styleFix,
+            onesignal_notification_ids: [],
+            reminder_schedule: [],
+          });
+          const { bookAtTimeReminder } = await import('../utils/taskRecurrence');
+          const { schedule } = await bookAtTimeReminder(repeating, currentUser.email);
+          if (schedule.length > 0) onUpdate({ ...repeating, reminder_schedule: schedule });
+          refreshAlarms().catch(() => {});
         } else {
           // One-time reminder — check for multi-reminder category first
           const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
@@ -2109,7 +2154,7 @@ Return JSON:
                    stays editable here. */}
               {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
                 (currentType === 'repeat' || !(task.reminder_schedule && task.reminder_schedule.length > 0)) && (
-                <Popover onOpenChange={(o) => { if (!o && dueDirty.current && reminderDate) { dueDirty.current = false; handleUpdateReminderTime(reminderTime, reminderDate); } }}>
+                <Popover onOpenChange={(o) => { if (!o && dueDirty.current && (reminderDate || reminderTime)) { dueDirty.current = false; handleUpdateReminderTime(reminderTime, reminderDate); } }}>
                   <PopoverTrigger asChild>
                     <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
                       dueSource && isPastDue(dueSource) && task.status !== 'completed'
@@ -2124,7 +2169,7 @@ Return JSON:
                             ? `Due ${formatReminderDate(dueSource)}`
                             : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
                       ) : (
-                        'Add due date'
+                        currentType === 'repeat' ? 'Add a time' : 'Add due date'
                       )}
                     </button>
                   </PopoverTrigger>
@@ -2133,7 +2178,7 @@ Return JSON:
                   }`}>
                     <div className="space-y-3">
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{currentType === 'repeat' ? 'Start date (optional):' : 'Due Date:'}</label>
                         <input
                           type="date"
                           value={reminderDate}
@@ -2142,7 +2187,7 @@ Return JSON:
                         />
                       </div>
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Time (optional):</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{currentType === 'repeat' ? 'Time:' : 'Time (optional):'}</label>
                         <input
                           type="time"
                           value={reminderTime}
@@ -2151,7 +2196,9 @@ Return JSON:
                         />
                         <p className="text-xs text-gray-500 mt-1">
                           {reminderTime
-                            ? 'A reminder at that time, plus a heads-up before when it earns one.'
+                            ? (currentType === 'repeat' && !(task.reminder_interval && task.reminder_interval !== 'once')
+                              ? 'One reminder at that time, each time it repeats.'
+                              : 'A reminder at that time, plus a heads-up before when it earns one.')
                             : 'No time means done that day. Smart Reminders pick when to nudge.'}
                         </p>
                       </div>
