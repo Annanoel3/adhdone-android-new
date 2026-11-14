@@ -986,12 +986,38 @@ export default function TaskCard({
     list.push({ value: 'none', label: "Doesn't repeat" });
     return list;
   })();
-  const repeatHasTime = showRepeatPill && !task.day_only_task && task.deadline_style !== 'by' && !!task.next_reminder;
-  // What the pill shows: the time they named (anchor_time), else the reminder's.
+  // Time is offered on every repeating task except a "by" deadline (that
+  // time is the deadline's own, set in Task Details). A task with no time yet
+  // gets an empty field to ADD one (Anna, Nov 14 2026, on a daily task whose
+  // popup showed Repeats alone: "The option to add a time needs to be in the
+  // pop-up in my screenshot. I shouldn't have to open the task details just
+  // to add a time"). Until then it was offered only when a time was already
+  // set.
+  const repeatHasTime = showRepeatPill && task.deadline_style !== 'by';
+  // What the pill shows: the time they named (anchor_time), else the
+  // reminder's; nothing for an all-day task (its 9 AM is only an anchor).
   const repeatTimeValue = (() => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
-    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : timeValueOf(task.next_reminder);
+    if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+    return task.day_only_task ? '' : timeValueOf(task.next_reminder);
   })();
+  // The day a time set here lands on: the day the task is already on. With no
+  // day at all it is today, or, when that time has already gone by today, the
+  // next day the repeat allows (a 10 AM pill time added at 2:30 PM starts
+  // tomorrow instead of arriving already late).
+  const repeatDayFor = (newTime, pattern) => {
+    if (task.next_reminder) return dateValueOf(task.next_reminder);
+    if (task.due_date) return dateValueOf(task.due_date);
+    const [h, mi] = String(newTime).split(':').map((n) => parseInt(n, 10));
+    const now = new Date();
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, mi, 0, 0);
+    if (at.getTime() <= Date.now() + 2 * 60 * 1000) at.setDate(at.getDate() + 1);
+    const days = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
+    const fits = (x) => (pattern === 'weekdays' ? x.getDay() !== 0 && x.getDay() !== 6
+      : pattern === 'weekly' && days.length ? days.includes(x.getDay()) : true);
+    for (let i = 0; i < 7 && !fits(at); i++) at.setDate(at.getDate() + 1);
+    return dateValueOf(at.toISOString());
+  };
   const commitRepeat = () => {
     if (!showRepeatPill) return;
     const picked = repeatSelectRef.current?.value || '';
@@ -1001,7 +1027,11 @@ export default function TaskCard({
     if (!patternChanged && !timeChanged) return;
     const also = patternChanged ? { recurrence_pattern: picked } : {};
     if (timeChanged) {
-      handleReminderDateChange(null, newTime, { also, notAPush: true });
+      // A task with no rhythm of its own becomes one with a time of its own
+      // ('once': what every reminder at a set time is filed as, and what the
+      // phone's alarm looks for).
+      if (!task.reminder_interval) also.reminder_interval = 'once';
+      handleReminderDateChange(repeatDayFor(newTime, patternChanged ? picked : task.recurrence_pattern), newTime, { also, notAPush: true });
       return;
     }
     if (onUpdateTask) onUpdateTask({ ...task, ...also });
