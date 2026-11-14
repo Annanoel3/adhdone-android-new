@@ -500,6 +500,10 @@
       },
       "description": "With recurrence_pattern 'weekly': the specific weekdays it repeats on, 0 = Sunday \u2026 6 = Saturday (\"every Wednesday and Thursday\" = [3, 4]). The next occurrence is the next listed day after the current one. Empty/unset = plain weekly on the same weekday."
     },
+    "recurrence_nth_weekday": {
+      "type": "string",
+      "description": "With recurrence_pattern 'monthly': the weekday of the month it repeats on, as a number (1 to 4, or -1 for last) and a two-letter day: '2TU' = second Tuesday, '1MO' = first Monday, '3TH' = third Thursday, '-1FR' = last Friday. Empty/unset = the same date each month. Ignored on any other repeat. (Anna, Nov 14 2026: 'second tuesday of every month, third thursday, first monday'.)"
+    },
     "birthday_person": {
       "type": "string",
       "description": "Name of the person whose birthday this is (for yearly birthday reminders)"
