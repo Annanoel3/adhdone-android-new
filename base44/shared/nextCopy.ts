@@ -204,8 +204,8 @@ function atTimeReminderFor(task: any, nowMs: number): { at: number; title: strin
 export function planNextCopy(task: any, owner: any, email: string, nowMs: number, finishedAt?: any) {
   const tz = String(owner?.timezone || 'America/Chicago');
   const fin = validMs(finishedAt);
-  let { base, nextDate } = nextOccurrenceIn(task, fin !== null && fin < nowMs ? fin : nowMs, tz, owner);
-  if (nextDate <= nowMs) ({ base, nextDate } = nextOccurrenceIn(task, nowMs, tz, owner));
+  let { base, nextDate, monthDay } = nextOccurrenceIn(task, fin !== null && fin < nowMs ? fin : nowMs, tz, owner);
+  if (nextDate <= nowMs) ({ base, nextDate, monthDay } = nextOccurrenceIn(task, nowMs, tz, owner));
   const days = dayNum(nextDate, tz) - dayNum(base, tz);
   const interval = ownInterval(task);
   const dayOnly = !!task.day_only_task;
@@ -253,6 +253,9 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
     recurrence_pattern: task.recurrence_pattern,
     recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
     recurrence_nth_weekday: task.recurrence_nth_weekday || null,
+    // A monthly task on the 29th, 30th or 31st remembers that day, so a round
+    // a shorter month put on its last day goes back to it (shared/nthWeekday.ts).
+    recurrence_month_day: monthDay,
     notification_recipient_email: recipient,
     onesignal_notification_ids: [],
     reminder_count: 0,

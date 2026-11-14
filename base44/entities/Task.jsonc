@@ -504,6 +504,10 @@
       "type": "string",
       "description": "With recurrence_pattern 'monthly': the weekday of the month it repeats on, as a number (1 to 4, or -1 for last) and a two-letter day: '2TU' = second Tuesday, '1MO' = first Monday, '3TH' = third Thursday, '-1FR' = last Friday. Empty/unset = the same date each month. Ignored on any other repeat. (Anna, Nov 14 2026: 'second tuesday of every month, third thursday, first monday'.)"
     },
+    "recurrence_month_day": {
+      "type": "integer",
+      "description": "With recurrence_pattern 'monthly' on a date: the day of the month it belongs on when that is the 29th, 30th or 31st. A month that doesn't have the day uses its last day (Jan 31 -> Feb 28) and the round after goes back to this day (-> Mar 31). Only trusted while the task sits on the last day of a shorter month, so a date moved by hand is never pulled back. Empty for days 1 to 28. (Anna, Nov 14 2026: 'if someone makes something monthly, they actually mean that same day each month'.)"
+    },
     "birthday_person": {
       "type": "string",
       "description": "Name of the person whose birthday this is (for yearly birthday reminders)"
