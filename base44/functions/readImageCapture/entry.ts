@@ -1,3 +1,4 @@
+// Nov 14 2026: logs one line per read (share or app, found or nothing, never the words). Nothing else changes.
 // Nov 10 2026: says what they'll actually do (a lab order is a lab visit), what to bring, and leaves out order numbers, order dates, opening hours and fine print. Anna, on a shared lab-order screenshot whose task title carried all of it: "I wish it would have gotten rid of the extra crap in the title. Its a blood drawing."
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
@@ -62,14 +63,23 @@ export default async function (req: Request): Promise<Response> {
     });
 
     const text = String(completion.choices[0]?.message?.content || '').trim();
+    // One line per read, with none of the picture's words in it: where it came
+    // from (the share sheet sends the picture itself, the app sends a link) and
+    // whether anything was found. Nov 14 2026: a photo Anna shared was read
+    // here, nothing was saved from it, and nothing kept said what this
+    // function had answered.
+    const from = file_url ? 'app' : 'share';
     // "NOTHING" is the model's way of saying this photo isn't a task — passed
     // back so the UI can say so instead of creating a junk task from a selfie.
     if (!text || text.toUpperCase().startsWith('NOTHING')) {
+      console.log(`[readImageCapture] ${from}: nothing found`);
       return Response.json({ text: null, nothing_found: true });
     }
 
+    console.log(`[readImageCapture] ${from}: read ${text.length} chars`);
     return Response.json({ text });
   } catch (error) {
+    console.error('[readImageCapture] error:', error?.message || error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
