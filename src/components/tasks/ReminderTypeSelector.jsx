@@ -21,14 +21,33 @@ import {
 // Selecting a type routes to the parent's existing handlers so all the
 // cancel/reschedule logic stays in one place.
 
+// What can be picked here: minutes and hours only. "Daily" and "Every other
+// day" used to be in this list too, the same two words as in the Repeats list
+// right below it but doing something else (ONE task pinging once a day until
+// it's done, against a fresh task each day). Anna, Nov 14 2026: "Fix all 3".
+// No live task was on either one. A task can still land on them from typed or
+// spoken words ("remind me every day"): it keeps working, and keeps its label
+// from INTERVAL_LABELS.
 const INTERVAL_OPTIONS = [
   { value: '10min', label: 'Every 10 minutes' },
   { value: '20min', label: 'Every 20 minutes' },
   { value: '30min', label: 'Every 30 minutes' },
   { value: '1hour', label: 'Every hour' },
-  { value: 'daily', label: 'Daily' },
-  { value: 'every_other_day', label: 'Every other day' },
 ];
+
+// Every pace a task can be on, for the pill: the four above, "Every 2 hours"
+// from the card's own list, and the ones only words can set. (Before, a pace
+// missing from the pick list showed its saved value: "2hours".)
+const INTERVAL_LABELS = {
+  '10min': 'Every 10 minutes',
+  '20min': 'Every 20 minutes',
+  '30min': 'Every 30 minutes',
+  '1hour': 'Every hour',
+  '2hours': 'Every 2 hours',
+  '4hours': 'Every 4 hours',
+  daily: 'Daily',
+  every_other_day: 'Every other day',
+};
 
 const REPEAT_OPTIONS = [
   { value: 'daily', label: 'Daily' },
@@ -64,8 +83,7 @@ const TYPE_META = {
 };
 
 function formatIntervalLabel(value) {
-  const found = INTERVAL_OPTIONS.find((o) => o.value === value);
-  return found ? found.label : value;
+  return INTERVAL_LABELS[value] || value;
 }
 
 export default function ReminderTypeSelector({ task, theme, onChangeType }) {
@@ -156,7 +174,7 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
       </PopoverTrigger>
       <PopoverContent className={`w-72 max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-2 ${isDark ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
         <div className="space-y-0.5">
-          {renderRow('smart', Brain, 'Smart Reminders', 'AI decides when to nudge', false)}
+          {renderRow('smart', Brain, 'Smart Reminders', 'ADHDone picks good times to remind you', false)}
           {renderRow('interval', Timer, 'Interval Reminders', 'Every X minutes / hours', true, () => setExpanded(expanded === 'interval' ? null : 'interval'))}
           {expanded === 'interval' && (
             <div className="ml-6 space-y-0.5">
@@ -167,7 +185,10 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
               ))}
             </div>
           )}
-          {renderRow('repeat', Repeat, 'Repeat on Completion', 'Recreates daily / weekdays / weekly / monthly / yearly', true, () => setExpanded(expanded === 'repeat' ? null : 'repeat'))}
+          {/* "Repeats", not "Repeat on Completion": a daily or weekdays task
+              moves on to the next day by itself, finished or not (Anna, Nov 14
+              2026: "Fix all 3"). */}
+          {renderRow('repeat', Repeat, 'Repeats', 'Daily, weekdays, weekly, monthly or yearly', true, () => setExpanded(expanded === 'repeat' ? null : 'repeat'))}
           {expanded === 'repeat' && (
             <div className="ml-6 space-y-0.5">
               {REPEAT_OPTIONS.map((o) => (
@@ -207,14 +228,14 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
               <Timer className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Interval Reminders</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A fixed schedule (every 10 min, every 2 hours, daily…). Only when you want the same nudge over and over.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A fixed schedule (every 10 minutes, every hour…). Only when you want the same nudge over and over.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <Repeat className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
-                <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Repeat on Completion</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Finish it and a fresh copy appears for the next day, week, month or year.</p>
+                <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Repeats</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Comes back every day, week, month or year. A daily one moves on to the next day by itself; a weekly, monthly or yearly one stays until you finish it, then the next one appears.</p>
               </div>
             </div>
             <div className="flex gap-2">
