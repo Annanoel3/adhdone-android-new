@@ -1495,7 +1495,14 @@ Return JSON:
   // "Due <date>", and its box has no date field. Anna, Nov 14 2026, on a
   // "Repeats daily" task that read "Due Nov 15, 2026 • 2:00 PM": "if it says
   // repeats daily up there, you should not be able to set a due date for it."
-  const repeatTimeOnly = currentType === 'repeat' && repeatSetsItsOwnDays(task);
+  // Monthly says its day in a sentence with two blanks right under the Type
+  // row ("the 2nd Tuesday of every month", MonthlyRuleFields). Not on a
+  // finished task, and not on one pinging at a rhythm (its pings are booked
+  // from its start, which the sentence doesn't move): those keep the date field.
+  const monthlySentence = currentType === 'repeat' && task.recurrence_pattern === 'monthly' && task.status !== 'completed'
+    && !(task.reminder_interval && task.reminder_interval !== 'once');
+  const repeatTimeOnly = currentType === 'repeat' && repeatSetsItsOwnDays(task)
+    && (task.recurrence_pattern !== 'monthly' || monthlySentence);
   // The pill itself says how often, so one look reads "Daily at 2:00 PM"
   // (Anna, the same afternoon, about "Due November 15th at 2 p.m." on a task
   // that had saved as daily: "It does not indicate that its daily at 2 pm. It
@@ -2171,8 +2178,7 @@ Return JSON:
                 two blanks (Anna, Nov 14 2026: "the ____ ____ of every month").
                 Not for a task pinging at a rhythm: its pings are booked from
                 its start, which this doesn't move. */}
-            {currentType === 'repeat' && task.recurrence_pattern === 'monthly' && task.status !== 'completed'
-              && !(task.reminder_interval && task.reminder_interval !== 'once') && (
+            {monthlySentence && (
               <MonthlyRuleFields rule={monthlyRuleOf(task)} task={task} theme={theme} onChange={handleSetMonthlyRule} />
             )}
 
