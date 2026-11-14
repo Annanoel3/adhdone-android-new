@@ -85,6 +85,11 @@ export default function TaskCard({
   const [chipDateOpen, setChipDateOpen] = useState(false);
   const chipDateRef = useRef(null);
   const chipTimeRef = useRef(null);
+  // The open card's repeat pill ("Daily 10 PM") opens a small editor of its
+  // own too: how often it repeats and its time (see commitRepeat).
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const repeatSelectRef = useRef(null);
+  const repeatTimeRef = useRef(null);
 
   const commitDateTime = () => {
     const newDate = dateInputRef.current?.value || '';
@@ -427,15 +432,19 @@ export default function TaskCard({
   const isRepeating = !!task.recurrence_pattern && task.recurrence_pattern !== 'none';
   const isBirthday = task.classification === 'birthday' || !!task.birthday_person;
   const showRepeatPill = isRepeating && !isEvent && !isBirthday;
+  const repeatWords = {
+    daily: 'Daily', every_other_day: 'Every other day', weekdays: 'Weekdays', weekly: 'Weekly',
+    every_other_week: 'Every other week', monthly: 'Monthly', yearly: 'Yearly',
+  };
+  // The weekdays a weekly task is on ("Sat, Sun"), '' when it has none.
+  const repeatDayNames = Array.isArray(task.recurrence_days) && task.recurrence_days.length
+    ? task.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
+    : '';
   const repeatScheduleLabel = (() => {
     if (!isRepeating) return null;
-    const words = {
-      daily: 'Daily', every_other_day: 'Every other day', weekdays: 'Weekdays', weekly: 'Weekly',
-      every_other_week: 'Every other week', monthly: 'Monthly', yearly: 'Yearly',
-    };
-    const days = task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
-      ? task.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
-      : words[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ');
+    const days = task.recurrence_pattern === 'weekly' && repeatDayNames
+      ? repeatDayNames
+      : repeatWords[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ');
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
     if (!m) return days;
     const h = Number(m[1]);
@@ -541,7 +550,11 @@ export default function TaskCard({
     return null;
   })();
 
-  const handleReminderDateChange = async (newDate, newTime) => {
+  // opts.also: other fields saved in the same write as the time (the repeat
+  // pill's editor saves the new repeat this way, so one edit is one save).
+  // opts.notAPush: this isn't putting the task off, so it isn't counted as one
+  // (a repeating task's time moved later is a new time, not a delay).
+  const handleReminderDateChange = async (newDate, newTime, opts = {}) => {
     try {
       let nextReminder;
 
@@ -565,7 +578,7 @@ export default function TaskCard({
       const interval = task.reminder_interval;
 
       // A one-time task's date IS its deadline — moving it later is a push.
-      if (interval === 'once') {
+      if (interval === 'once' && !opts.notAPush) {
         checkDuePushEgg(task, task.next_reminder, nextReminder.toISOString());
       }
 
@@ -587,6 +600,7 @@ export default function TaskCard({
           : allDayMove
             ? { due_date: new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString() }
             : {}),
+        ...(opts.also || {}),
       };
 
       // Optimistic — update UI instantly
@@ -939,6 +953,63 @@ export default function TaskCard({
     if (chipDateKind === 'due') { handleDueDateChange(date); return; }
     handleReminderDateChange(date, chipHasTime && time !== oldTime ? time : null);
   };
+
+  // The open card's repeat pill, tapped (Anna, Nov 13 2026, with "Daily 10 PM"
+  // open on the Tasks page: "I want to be able to click daily at 10 pm to
+  // change it from here"). Until then the pill was plain text and the repeat
+  // could only be changed in Task Details. The editor holds the two things
+  // the pill says: how often, and the time.
+  //  - How often: the same choices Task Details offers, plus whatever the task
+  //    has now if it's one of the others (every other week). Only the repeat
+  //    is saved: this occurrence keeps its day, its reminder and anything they
+  //    added; the new repeat decides when the NEXT copy comes. "Doesn't
+  //    repeat" turns it off, as in Task Details (the same task, nothing else
+  //    changed).
+  //  - The time, for a task with a clock time of its own (not an all-day task
+  //    or a "by" deadline, whose next_reminder isn't its time): saved the way
+  //    the closed card's date chip saves a time (handleReminderDateChange:
+  //    anchor_time, the reminder booked again at the new time, the phone's
+  //    alarm moved), on the day this occurrence is already on.
+  // Saves once, when the editor closes (same reason as commitDateTime).
+  const repeatChoices = (() => {
+    const list = [
+      { value: 'daily', label: repeatWords.daily },
+      { value: 'every_other_day', label: repeatWords.every_other_day },
+      { value: 'weekdays', label: 'Weekdays (Mon–Fri)' },
+      { value: 'weekly', label: repeatDayNames ? `Weekly (${repeatDayNames})` : repeatWords.weekly },
+      { value: 'monthly', label: repeatWords.monthly },
+      { value: 'yearly', label: repeatWords.yearly },
+    ];
+    if (isRepeating && !list.some((o) => o.value === task.recurrence_pattern)) {
+      list.push({ value: task.recurrence_pattern, label: repeatWords[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ') });
+    }
+    list.push({ value: 'none', label: "Doesn't repeat" });
+    return list;
+  })();
+  const repeatHasTime = showRepeatPill && !task.day_only_task && task.deadline_style !== 'by' && !!task.next_reminder;
+  // What the pill shows: the time they named (anchor_time), else the reminder's.
+  const repeatTimeValue = (() => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : timeValueOf(task.next_reminder);
+  })();
+  const commitRepeat = () => {
+    if (!showRepeatPill) return;
+    const picked = repeatSelectRef.current?.value || '';
+    const newTime = repeatHasTime ? (repeatTimeRef.current?.value || '') : '';
+    const patternChanged = !!picked && picked !== task.recurrence_pattern;
+    const timeChanged = !!newTime && newTime !== repeatTimeValue;
+    if (!patternChanged && !timeChanged) return;
+    const also = patternChanged ? { recurrence_pattern: picked } : {};
+    if (timeChanged) {
+      handleReminderDateChange(null, newTime, { also, notAPush: true });
+      return;
+    }
+    if (onUpdateTask) onUpdateTask({ ...task, ...also });
+    Task.update(task.id, also).catch((error) => {
+      console.error("Error updating the repeat:", error);
+      if (onRefreshTasks) onRefreshTasks();
+    });
+  };
   // The chip shrinks (and ellipsizes) before anything else does: on a narrow
   // phone a multi-day date plus a status pill used to squeeze the title to
   // nothing and push the expand arrow off the card (Anna, Oct 3 2026).
@@ -1285,15 +1356,63 @@ export default function TaskCard({
                 </span>
               )}
 
-              {/* A repeating task: one pill saying when it repeats. */}
-              {showRepeatPill && (
+              {/* A repeating task: one pill saying when it repeats. Tap it to
+                  change how often and at what time, right here. */}
+              {showRepeatPill && (task.status === 'active' ? (
+                <Popover open={repeatOpen} onOpenChange={(o) => { setRepeatOpen(o); if (!o) commitRepeat(); }}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(e) => e.stopPropagation()}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                        theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      }`}
+                      aria-label="Change how often it repeats and its time"
+                      title="Change the repeat"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      {repeatScheduleLabel}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Repeats</label>
+                        <select
+                          ref={repeatSelectRef}
+                          defaultValue={task.recurrence_pattern}
+                          className={`w-full border rounded px-3 py-2 text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white'}`}
+                        >
+                          {repeatChoices.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {repeatHasTime && (
+                        <div>
+                          <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Time</label>
+                          <input
+                            type="time"
+                            ref={repeatTimeRef}
+                            defaultValue={repeatTimeValue}
+                            className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                          />
+                        </div>
+                      )}
+                      <Button size="sm" className="w-full" onClick={(e) => { e.stopPropagation(); setRepeatOpen(false); commitRepeat(); }}>
+                        Done
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
                 <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
                   theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                 }`}>
                   <RefreshCw className="w-3 h-3" />
                   {repeatScheduleLabel}
                 </span>
-              )}
+              ))}
 
               {/* Show interval badge for recurring reminders (not on a repeating task) */}
               {task.reminder_interval && task.reminder_interval !== 'once' && !showRepeatPill && (
