@@ -15,6 +15,7 @@ import {
   Check,
   Info,
 } from 'lucide-react';
+import { monthlyChoicesFor, repeatValueOf, nthOfTask, nthWeekdayLabel } from '../utils/repeatTime';
 
 // One consolidated control that replaces the old classification pill, the
 // interval pill, the "Make Recurring" pill, and the "Add Reminder" pill.
@@ -82,11 +83,14 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
     const which = task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
       ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6).map((n) => dayNames[n]).join(', ')
       : '';
+    // A weekday of the month: "Repeats monthly (second Tuesday)".
     pillLabel = which
       ? `Repeats ${which}`
       : task.recurrence_pattern === 'weekdays'
         ? 'Repeats weekdays'
-        : `Repeats ${String(task.recurrence_pattern || '').replace(/_/g, ' ')}`;
+        : nthOfTask(task)
+          ? `Repeats monthly (${nthWeekdayLabel(task.recurrence_nth_weekday)})`
+          : `Repeats ${String(task.recurrence_pattern || '').replace(/_/g, ' ')}`;
   }
   if (currentType === 'once' && task.next_reminder) {
     const d = new Date(task.next_reminder);
@@ -168,8 +172,11 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
           {renderRow('repeat', Repeat, 'Repeat on Completion', 'Recreates daily / weekdays / weekly / monthly / yearly', true, () => setExpanded(expanded === 'repeat' ? null : 'repeat'))}
           {expanded === 'repeat' && (
             <div className="ml-6 space-y-0.5">
-              {REPEAT_OPTIONS.map((o) => (
-                <button key={o.value} onClick={() => handleSelect('repeat', o.value)} className={`w-full text-left px-3 py-1.5 text-sm rounded ${subBtnClass(task.recurrence_pattern === o.value)}`}>
+              {/* Monthly is offered on its date and on a weekday of the month
+                   ("the second Tuesday"), by the day the task is on
+                   (monthlyChoicesFor); the value carries both ('monthly:2TU'). */}
+              {REPEAT_OPTIONS.flatMap((o) => (o.value === 'monthly' ? monthlyChoicesFor(task) : [o])).map((o) => (
+                <button key={o.value} onClick={() => handleSelect('repeat', o.value)} className={`w-full text-left px-3 py-1.5 text-sm rounded ${subBtnClass(repeatValueOf(task) === o.value)}`}>
                   {o.label}
                 </button>
               ))}
