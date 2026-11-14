@@ -1878,12 +1878,8 @@ Return JSON:
     try {
       const { duplicateTask } = await import('../utils/duplicateTask');
       const copy = await duplicateTask(task);
-      toast({
-        title: 'Copy made',
-        description: isEvent
-          ? 'Set the date and time on the copy.'
-          : 'Pick when the copy is due, or leave it to Smart Reminders.',
-      });
+      // Just "Copy made!", gone quickly (Anna, Nov 14 2026).
+      toast({ title: 'Copy made!', duration: 1500 });
       onClose();
       navigate(`/Tasks?taskId=${copy.id}`, { state: { reload: true } });
     } catch (e) {
