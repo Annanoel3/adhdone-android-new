@@ -67,6 +67,7 @@ import RecordingBar from "./components/shared/RecordingBar";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
+import TextAskPopup from "./components/tasks/TextAskPopup";
 import OwnBirthdayPopup from "./components/birthdays/OwnBirthdayPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import SharedImageReceiver from "./components/shared/SharedImageReceiver";
@@ -1359,6 +1360,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <FocusModePrompt user={user} theme={theme} />
         <ScheduledTextSendPopup user={user} theme={theme} />
         <BirthdayTextPromptPopup user={user} theme={theme} />
+        {/* A text-someone task made outside the app: one ask, at the next
+            open, to type the text now (see TextAskPopup). */}
+        <TextAskPopup user={user} theme={theme} />
         <OwnBirthdayPopup user={user} theme={theme} />
         <SharedTextReceiver />
         <SharedImageReceiver />
