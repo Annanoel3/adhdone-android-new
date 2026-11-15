@@ -8,9 +8,9 @@
 //
 //   1. THE EVENT BEFORE IT. An active timed event of theirs at a place, starting
 //      before this one, that ends no more than CHAIN_GAP_MS before this one
-//      starts (its end_time, or ASSUMED_EVENT_MS after its start when it has
-//      none; one that overlaps counts too). The latest such event wins. The
-//      same address as this one means no drive at all (samePlace).
+//      starts (when it ends: eventEndMs below; one that overlaps counts too).
+//      The latest such event wins. The same address as this one means no
+//      drive at all (samePlace).
 //   2. WORK. A work address (not a remote worker) and a shift that day, when this
 //      event starts during the shift or within CHAIN_GAP_MS after it ends.
 //   3. HOME. The home circle's center, as always.
@@ -37,6 +37,7 @@ import { localDateKey } from './commuteSchedule.ts';
 // are chained (it was 3).
 export const CHAIN_GAP_MS = 60 * 60 * 1000;
 export const ASSUMED_EVENT_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface LeaveOrigin {
   origin: string;                     // '' when nothing is known (no home circle either)
@@ -54,6 +55,53 @@ const ms = (v: any): number => {
 
 export function eventStartMs(task: any): number {
   return ms(task?.event_time || task?.next_reminder);
+}
+
+// When an event is over, for this rule only (Anna, Nov 14 2026: "Wish we could
+// tell which events lasted an hour vs which ones last like 5 hours"). The
+// first of these that is known:
+//   1. its own end time (Task.end_time: typed or said with it, or set on the card);
+//   2. how long their phone calendar says it runs (`calendarMs`, read by
+//      calendarLengths below from the import's own record; under a day);
+//   3. Task.event_guess_minutes: the calendar's length saved at import, or the
+//      parser's estimate of how long that kind of event usually runs (a
+//      dentist visit about an hour, a wedding about five). Never shown;
+//   4. one hour (ASSUMED_EVENT_MS).
+export function eventEndMs(e: any, calendarMs?: number): number {
+  const s = eventStartMs(e);
+  if (!Number.isFinite(s)) return NaN;
+  const own = ms(e?.end_time);
+  if (Number.isFinite(own) && own > s) return own;
+  const cal = Number(calendarMs);
+  if (Number.isFinite(cal) && cal > 0 && cal < DAY_MS) return s + cal;
+  const guess = Number(e?.event_guess_minutes);
+  if (Number.isFinite(guess) && guess >= 5 && guess < 24 * 60) return s + guess * 60000;
+  return s + ASSUMED_EVENT_MS;
+}
+
+// How long each of these events runs in the person's phone calendar, by task
+// id, in milliseconds. Only for events that came from a calendar (the import
+// keeps the calendar's start and end on CalendarSyncedEvent and never copies
+// the end onto the task, so its card stays as it is). An all-day entry, one
+// with no end, or one that runs a day or more has no length here. Read-only;
+// never throws.
+export async function calendarLengths(base44: any, events: any[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  try {
+    const ids = [...new Set((events || []).filter((e: any) => e?.id).map((e: any) => String(e.id)))].slice(0, 50);
+    if (!ids.length) return out;
+    const rows = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ adhd_task_id: { $in: ids } }, '-last_synced_at', 100);
+    const clocked = (v: any) => /T\d\d:\d\d/.test(String(v || ''));
+    for (const r of Array.isArray(rows) ? rows : []) {
+      const id = String(r?.adhd_task_id || '');
+      if (!id || out[id] !== undefined || r?.is_all_day || !clocked(r?.start_time) || !clocked(r?.end_time)) continue;
+      const len = Date.parse(String(r.end_time)) - Date.parse(String(r.start_time));
+      if (Number.isFinite(len) && len > 0 && len < DAY_MS) out[id] = len;
+    }
+  } catch (e) {
+    console.log('[leaveOrigin] could not read the calendar lengths:', (e as any)?.message || e);
+  }
+  return out;
 }
 
 const samePlace = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -87,12 +135,14 @@ export function workShiftOn(user: any, shifts: any[], day: Date, timeZone: strin
 }
 
 // Pure: decides from what it is handed. `events` are the person's other active
-// events (any; the unfit ones are sorted out here).
+// events (any; the unfit ones are sorted out here). `calendarMs`: how long
+// each runs in their phone calendar, by task id (calendarLengths).
 export function pickLeaveOrigin(opts: {
   user: any;
   shifts?: any[];
   task: { id?: string; location?: string; start: number };
   events: any[];
+  calendarMs?: Record<string, number>;
 }): LeaveOrigin {
   const { user, task } = opts;
   const here = String(task.location || '').trim();
@@ -110,8 +160,7 @@ export function pickLeaveOrigin(opts: {
     if (!place) continue;
     const s = eventStartMs(e);
     if (!Number.isFinite(s) || s >= start) continue;
-    const endRaw = ms(e.end_time);
-    const end = Number.isFinite(endRaw) && endRaw > s ? endRaw : s + ASSUMED_EVENT_MS;
+    const end = eventEndMs(e, opts.calendarMs?.[String(e.id)]);
     if (start - end > CHAIN_GAP_MS) continue;
     if (s > bestStart) { best = e; bestStart = s; }
   }
@@ -179,7 +228,13 @@ export async function leaveOriginFor(base44: any, user: any, task: { id?: string
         shifts = [];
       }
     }
-    return pickLeaveOrigin({ user, shifts, task: { id: task.id, location: task.location, start }, events: Array.isArray(events) ? events : [] });
+    const list = Array.isArray(events) ? events : [];
+    // The calendar's own length, for the ones that could be the event before
+    // it (at a place, timed, with no end time of their own).
+    const needLength = list.filter((e: any) => e && e.id !== task.id && String(e.location || '').trim()
+      && !e.day_only_task && !(ms(e.end_time) > eventStartMs(e)));
+    const calendarMs = needLength.length ? await calendarLengths(base44, needLength) : {};
+    return pickLeaveOrigin({ user, shifts, task: { id: task.id, location: task.location, start }, events: list, calendarMs });
   } catch (e) {
     console.log('[leaveOrigin] fell back to home:', (e as any)?.message || e);
     return home;
