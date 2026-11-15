@@ -295,6 +295,30 @@
       "type": "number",
       "description": "How long a timed event is taken to run when it has no end time, in minutes. For an event typed, said or shared: the task parser's ESTIMATE of how long that kind of event usually keeps someone there (a dentist visit about 60, a wedding about 300; 5 to 720 minutes). For one imported from a calendar: the calendar's own length at import (under a day), else that estimate. Carried to every round of a repeating event. Never shown anywhere and never becomes end_time. Read by exactly one thing: shared/leaveOrigin.ts (eventEndMs), to judge whether the person is still at this event when their next one starts (Anna, Nov 14 2026: 'Wish we could tell which events lasted an hour vs which ones last like 5 hours'). An end time on the task (end_time) and the calendar's current length for an imported event (CalendarSyncedEvent) win over it; with none of the three the event is taken to last one hour."
     },
+    "texts_someone": {
+      "type": "boolean",
+      "description": "Whether the thing to do IS sending a text or a message to a person or a group ('text Mom about Sunday', 'message the group chat'), judged by the task parser at creation (Nov 15 2026; Anna: 'If someone makes a task to text someone, maybe we should use our ability to press send from the app'). Not a call, an email, or something that could be said in person. A task with this true gets the row's 'Type the text now' line (TextOffer), the text box on its open card and on its reminder page with a Send button that opens the phone's texting app with the number and words filled in (TextAheadBox), and one fact on its line for the Smart Reminders planner. Tasks made before this have no value and are unchanged."
+    },
+    "text_person": {
+      "type": "string",
+      "description": "Who the text is to: the person's own word for them from the task ('Mom', 'the group chat'), or the name of the contact they picked. Only on a texts_someone task."
+    },
+    "text_phone": {
+      "type": "string",
+      "description": "The number the text goes to, picked from the phone's contacts (the system picker, no contacts permission) or typed. Optional: with none, Send opens the texting app with the words and they choose who there."
+    },
+    "text_message": {
+      "type": "string",
+      "description": "The text itself, typed ahead of time by the person (never drafted by AI; Anna, Nov 15 2026: 'there would just be a spot to type the text ahead of time'). Send on the reminder page, the open card or the row opens the texting app with it filled in. Not carried to a repeat's next round (who it's to and the number are)."
+    },
+    "text_offer_dismissed": {
+      "type": "boolean",
+      "description": "The row's 'Type the text now' line was hidden with its \u00d7, so it isn't shown again for this task. The text box stays on the open card and the reminder page."
+    },
+    "text_ask_pending": {
+      "type": "boolean",
+      "description": "Set when a texts_someone task was made outside the app (a share, the widget, a quick capture: captureText). The next time the app is open one popup offers to type the text now (TextAskPopup, through usePopupTurn, never on the reminder page) and clears this, so it is asked once per task. Calendar imports never set it (they arrive in batches)."
+    },
     "prep_note": {
       "type": "string",
       "description": "What to get ready before this event, in the user's own words ('no food after midnight', 'bring the insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."
