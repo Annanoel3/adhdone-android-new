@@ -2374,8 +2374,8 @@ Return JSON:
                            once a time was in it, right where a way out would be
                            (Anna, Nov 14 2026: "Lots of pop ups dont go away on
                            their own and have no way to exit"; earlier that day a
-                           2:00 PM she set on a daily task was cleared 40 minutes
-                           later, the same result as that button). It sits under
+                           2:00 PM she set on a daily task was cleared by a later
+                           save, the same result as that button). It sits under
                            Done now, smaller, and Done never moves. */}
                       <PopoverClose asChild>
                         <button type="button" className="block w-full rounded-md bg-purple-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-purple-700">
