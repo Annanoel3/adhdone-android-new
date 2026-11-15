@@ -31,6 +31,8 @@ const KEEP = [
   'event_guess_minutes', 'goes_somewhere',
   // A text to someone: who it's to, their number and the words typed so far.
   'texts_someone', 'text_person', 'text_phone', 'text_message',
+  // A phone call to make: who it's to and their number.
+  'calls_someone', 'call_person', 'call_phone',
 ];
 
 export async function duplicateTask(task) {
