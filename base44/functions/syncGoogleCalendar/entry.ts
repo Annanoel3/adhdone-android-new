@@ -1515,6 +1515,21 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       // day label (their work hours, a day off, a holiday) leaves Today on
       // its own once its day is over (todayTasks.isOverDayLabel in the app).
       if (isOnce && isAllDay && !titleTimed && taskRecord.classification === 'event') taskRecord.day_entry_kind = dayKind;
+      // How long a timed event runs, for one rule only: where they will be
+      // when their next event starts (shared/leaveOrigin.ts; Anna, Nov 14
+      // 2026: "Wish we could tell which events lasted an hour vs which ones
+      // last like 5 hours"). The calendar's own length when it gives a start
+      // and an end with clock times, under a day; otherwise the parser's
+      // estimate for this kind of event. Never shown, and no end time is put
+      // on the card. Kept on the task so a repeating entry's later rounds
+      // know it too (they have no import record of their own).
+      if (taskRecord.classification === 'event' && taskRecord.event_time) {
+        const calMin = event.start?.dateTime && event.end?.dateTime
+          ? Math.round((Date.parse(event.end.dateTime) - Date.parse(event.start.dateTime)) / 60000) : NaN;
+        const usual = Number(ai?.usual_minutes);
+        if (Number.isFinite(calMin) && calMin >= 5 && calMin < 24 * 60) taskRecord.event_guess_minutes = calMin;
+        else if (Number.isInteger(usual) && usual >= 5 && usual <= 720) taskRecord.event_guess_minutes = usual;
+      }
     }
 
     // Sync-record fields that don't depend on the task — built up front so the
