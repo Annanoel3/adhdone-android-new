@@ -153,7 +153,7 @@ export function TagPill({ task, theme, onUpdateTask, onRefreshTasks }) {
           {task.tag ? task.tag : <Tag className="w-3.5 h-3.5" />}
         </button>
       </PopoverTrigger>
-      <PopoverContent className={`w-64 p-3 ${dark ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <PopoverContent closeLabel="Cancel" className={`w-64 p-3 ${dark ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); commit(draft); }}>
           <div>
             <label className={`text-sm font-medium block mb-1 ${dark ? 'text-gray-200' : ''}`}>Tag</label>
