@@ -27,10 +27,12 @@ export default function AddSubTaskCard({
     return (
       <div className="space-y-2">
         <div className={`text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-          <span>Sub-tasks</span>
+          {/* "Steps", the word the task card uses ("Break into steps", "Add a
+              step"); this card said "Sub-tasks" until Nov 14 2026. */}
+          <span>Steps</span>
           {onAIBreakdown && (
             <button type="button" onClick={onAIBreakdown} className={`normal-case tracking-normal text-xs font-semibold flex items-center gap-1 ${dark ? 'text-purple-300' : 'text-purple-700'}`}>
-              <Sparkles className="w-3 h-3" /> Break it into steps
+              <Sparkles className="w-3 h-3" /> Break into steps
             </button>
           )}
         </div>
@@ -38,7 +40,7 @@ export default function AddSubTaskCard({
           <Input
             value={newSubTask}
             onChange={(e) => setNewSubTask(e.target.value)}
-            placeholder="Add a sub-task…"
+            placeholder="Add a step…"
             className="flex-1"
           />
           <Button
@@ -46,19 +48,19 @@ export default function AddSubTaskCard({
             size="icon"
             variant={mode === 'voice' ? 'default' : 'outline'}
             className="flex-shrink-0"
-            aria-label="Speak sub-tasks"
+            aria-label="Speak your steps"
             onClick={() => setMode(mode === 'voice' ? 'text' : 'voice')}
           >
             <Mic className="w-4 h-4" />
           </Button>
-          <Button type="submit" size="icon" className="flex-shrink-0" aria-label="Add sub-task">
+          <Button type="submit" size="icon" className="flex-shrink-0" aria-label="Add step">
             <Plus className="w-4 h-4" />
           </Button>
         </form>
         {mode === 'voice' ? (
           <div className="flex flex-col gap-2">
             <p className="text-xs text-gray-500 text-center">
-              {isProcessingVoice ? "Processing..." : "Speak your sub-tasks (you can say several at once)"}
+              {isProcessingVoice ? "Processing..." : "Speak your steps (you can say several at once)"}
             </p>
             <div className="flex justify-center">
               <VoiceTaskInput onTranscription={onVoice} theme={theme} inline={false} />
@@ -86,7 +88,7 @@ export default function AddSubTaskCard({
       {boxed && (
         <div className="flex items-center gap-2 mb-3">
           <Plus className="w-5 h-5 text-green-600" />
-          <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>Add Sub-Tasks</h4>
+          <h4 className={`text-sm font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>Add Steps</h4>
         </div>
       )}
 
@@ -130,14 +132,14 @@ export default function AddSubTaskCard({
             <Input
               value={newSubTask}
               onChange={(e) => setNewSubTask(e.target.value)}
-              placeholder="Add a new sub-task..."
+              placeholder="Add a new step..."
               className="flex-1"
             />
             <Button type="submit" size="icon" className="flex-shrink-0">
               <Plus className="w-4 h-4" />
             </Button>
           </form>
-          <p className="text-xs text-gray-500">💡 Tip: Separate multiple sub-tasks with commas</p>
+          <p className="text-xs text-gray-500">💡 Tip: Separate multiple steps with commas</p>
           {onAIBreakdown && (
             <p className="text-xs text-gray-500">✨ Feeling overwhelmed? Tap AI to break this task into steps.</p>
           )}
