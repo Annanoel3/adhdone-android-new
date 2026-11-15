@@ -230,7 +230,7 @@ Return JSON with this structure:
       onClose();
     } catch (error) {
       console.error("Error creating sub-tasks:", error);
-      alert("Failed to create sub-tasks. Please try again.");
+      alert("Couldn't create the steps. Please try again.");
     }
 
     setIsLoading(false);
