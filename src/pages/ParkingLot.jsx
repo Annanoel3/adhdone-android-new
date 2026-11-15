@@ -1573,7 +1573,7 @@ Return ONLY the category name, nothing else.`;
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-48 p-2">
+                      <PopoverContent closeOnPick className="w-48 p-2">
                         <div className="space-y-1">
                           {group.parent.tracker ? (
                           <button
@@ -1756,7 +1756,7 @@ Return ONLY the category name, nothing else.`;
                                 <MoreVertical className="w-3 h-3" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-48 p-2">
+                            <PopoverContent closeOnPick className="w-48 p-2">
                               <div className="space-y-1">
                                 <button
                                   onClick={() => handleConvertToTask(subIdea)}
