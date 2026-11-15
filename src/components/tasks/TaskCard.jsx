@@ -1435,7 +1435,7 @@ export default function TaskCard({
                   </PopoverTrigger>
                   {/* Wide enough for the monthly sentence ("the [2nd] [Wednesday] of
                        every month"), never wider than the phone. */}
-                  <PopoverContent className={`w-80 max-w-[calc(100vw-1.5rem)] p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                  <PopoverContent noClose className={`w-80 max-w-[calc(100vw-1.5rem)] p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-3">
                       <div>
                         <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Repeats</label>
