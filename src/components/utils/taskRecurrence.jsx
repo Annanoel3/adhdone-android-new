@@ -463,6 +463,14 @@ async function makeNextCopy(task, opts = {}) {
       text_phone: task.text_phone || null,
       text_offer_dismissed: task.text_offer_dismissed === true,
     } : {}),
+    // A repeating phone call keeps who it's to and their number, and whether
+    // the row's line was hidden.
+    ...(task.calls_someone === true ? {
+      calls_someone: true,
+      call_person: task.call_person || null,
+      call_phone: task.call_phone || null,
+      call_offer_dismissed: task.call_offer_dismissed === true,
+    } : {}),
     // Also part of what the task is: whether it is all-day, whether its date
     // is an "on" or a "by", how it arrives on the phone (alarm or push), and
     // its attachments. The copy used to drop these, so an all-day chore came
