@@ -1,3 +1,4 @@
+// Nov 15 2026 (later; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser says when a task IS sending someone a text and who it's to (texts_someone, text_person; judgment, no word list), so the app can give it a spot to type the text ahead of time and a Send button (Anna: "If someone makes a task to text someone, maybe we should use our ability to press send from the app"). Self-test cases added.
 // Nov 15 2026 (bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser reads an event's END when the person gave one ("from 2 to 5", "at 3 for two hours": end_time) and, for a timed event with none, estimates how long that kind of event usually runs (usual_minutes; never shown, read only by shared/leaveOrigin.ts). Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours". The admin check of several inputs takes { only: [field names] } to answer with just those fields; self-test cases added.
 // Re-saved Nov 14 2026 (afternoon; once more after shared/nthWeekday.ts gained the same-day-each-month math, unused here) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and nthWeekday.ts are picked up: "the second Tuesday of every month" is read as a monthly repeat on that weekday (Task.recurrence_nth_weekday, "2TU") and its first day is counted in code, not by the model (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday, first sunday etc").
 // Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it").
@@ -317,6 +318,15 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Dentist appointment Friday at 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: (v: any) => Number.isInteger(v) && v >= 30 && v <= 120 } },
   { text: "Jess and Mark's wedding Saturday at 3pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: (v: any) => Number.isInteger(v) && v >= 180 } },
   { text: "Submit the report by Friday 5pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: null } },
+  // A task that IS sending someone a text (Anna, Nov 15 2026: "If someone
+  // makes a task to text someone..."): the app gives it a spot to type the
+  // text ahead of time. A call, something that could be said any other way,
+  // or a task that only has the word in it is not one.
+  { text: "Text Mom about Sunday dinner", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: true, text_person: (v: any) => typeof v === "string" && /mom/i.test(v) } },
+  { text: "Message the group chat the address tomorrow at 5pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: true, text_person: (v: any) => typeof v === "string" && /group chat/i.test(v), target_time: "17:00" } },
+  { text: "Call the pharmacy about the refill", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, text_person: null } },
+  { text: "Tell Alex the plumber is coming Friday", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false } },
+  { text: "Buy the chemistry textbook", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, text_person: null } },
 ];
 
 async function runParserSelfTest(base44: any) {
