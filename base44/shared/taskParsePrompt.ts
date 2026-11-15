@@ -315,9 +315,11 @@ end_time — the clock time it ENDS ("HH:MM", 24-hour), only when the person
   gave one: a range ("from 2 to 5", "6-8pm", "9 until noon", "between 1 and
   3") or how long it runs ("at 3 for two hours" is "17:00", "a 45 minute
   massage at 10" is "10:45"). Null when they said nothing about when it ends:
-  never guess one here. It needs a target_time the person gave. A deadline
-  ("by 5") is not an end, and a range of DAYS is end_date, not this. An end
-  after midnight ("7 PM to 2 AM") is still just its clock time ("02:00").
+  never guess one here. It needs a target_time the person gave. It is when
+  the thing itself is over: a deadline ("by 5"), a shop's closing time or a
+  window for getting something done ("sometime between 9 and 5") is not an
+  end, and a range of DAYS is end_date, not this. An end after midnight
+  ("7 PM to 2 AM") is still just its clock time ("02:00").
 
 usual_minutes — only for an EVENT that has a target_time and no end_time:
   your best estimate, in whole minutes, of how long this kind of event
