@@ -1589,7 +1589,7 @@ Return ONLY the category name, nothing else.`;
                             className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
                           >
                             <CheckCircle2 className="w-4 h-4" />
-                            Convert to Task
+                            Make it a task
                           </button>
                           )}
                           <button
@@ -1763,7 +1763,7 @@ Return ONLY the category name, nothing else.`;
                                   className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  Convert to Task
+                                  Make it a task
                                 </button>
                                 <button
                                   onClick={() => {
@@ -1898,15 +1898,22 @@ Return ONLY the category name, nothing else.`;
                     <FileText className="w-4 h-4" />
                     Details
                   </Button>
+                  {/* What an idea is here for is on the card's face: "Make it
+                      a task" (the same as the ⋮ menu's). Delete used to sit
+                      here in red, one tap from gone, and again in ⋮; it is
+                      only in ⋮ now (Nov 14 2026). A tracker has no task to
+                      become, so it gets no button here. */}
+                  {!group.parent.tracker && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(group.parent.id)}
-                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                    onClick={() => handleConvertToTask(group.parent)}
+                    className={`flex items-center gap-1 ${theme === 'dark' ? 'text-purple-300 hover:text-purple-200' : 'text-purple-700 hover:text-purple-800'}`}
                   >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
+                    <CheckCircle2 className="w-4 h-4" />
+                    Make it a task
                   </Button>
+                  )}
                   <label>
                     <input
                       type="file"
