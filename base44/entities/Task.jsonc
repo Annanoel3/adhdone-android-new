@@ -319,6 +319,22 @@
       "type": "boolean",
       "description": "Set when a texts_someone task was made outside the app (a share, the widget, a quick capture: captureText). The next time the app is open one popup offers to type the text now (TextAskPopup, through usePopupTurn, never on the reminder page) and clears this, so it is asked once per task. Calendar imports never set it (they arrive in batches)."
     },
+    "calls_someone": {
+      "type": "boolean",
+      "description": "Whether the thing to do IS making a phone call to a person or a place ('call the pharmacy about the refill', 'call Mom'), judged by the task parser at creation (Nov 15 2026; Anna, on the text-task picker with a Call button: 'And do calls?'). Not a text, an email, a video meeting, or a scheduled call they join (that is an event). A task with this true gets the row's 'Add the number now' line (CallOffer), and the call box on its open card and on its reminder page with a Call button (CallBox). Only ever on a plain to-do, never together with texts_someone. No popup and nothing in Smart Reminders reads it."
+    },
+    "call_person": {
+      "type": "string",
+      "description": "Who the call is to: the person's own word for them from the task ('Mom', 'the pharmacy'), or the name of the contact they picked. Only on a calls_someone task."
+    },
+    "call_phone": {
+      "type": "string",
+      "description": "The number to call, picked from the phone's contacts (the system picker, no contacts permission) or typed. Call hands it to the phone's own dialer; the person starts the call there. The app never places a call by itself."
+    },
+    "call_offer_dismissed": {
+      "type": "boolean",
+      "description": "The row's 'Add the number now' line was hidden with its \u00d7, so it isn't shown again for this task. The call box stays on the open card and the reminder page."
+    },
     "prep_note": {
       "type": "string",
       "description": "What to get ready before this event, in the user's own words ('no food after midnight', 'bring the insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."
