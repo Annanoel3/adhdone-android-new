@@ -1,3 +1,4 @@
+// Nov 14 2026 (night): owner check 14 ("repeating task has no next copy") says what really happens next. It said "Nothing will ring for it until they next open the app" for everyone; an Android phone on build 48 or later makes the copy by itself at its next 12-hour check-in, so the alert now says when that is and whether the task is next due before or after it (shared/nextCopy.ts planNextCopy, now bundled here too: re-save this function when that file changes). Anna, on the second such alert: "Why does this keep happening".
 // Nov 14 2026 (afternoon, later): a monthly repeat on a date moves to the same DAY next month, or that month's last day when it is shorter, and goes back to its own day after (Jan 31 -> Feb 28 -> Mar 31; Task.recurrence_month_day). Adding a month to the date spilled over (Jan 31 became Mar 3 and stayed on the 3rd). Anna: "if someone makes something monthly, they actually mean that same day each month".
 // Nov 14 2026: a monthly repeat on a weekday of the month ("the second Tuesday", Task.recurrence_nth_weekday, shared/nthWeekday.ts) moves on to that weekday of the next month in the hourly repeat pass (repeatStep); until now every monthly repeat moved to the same DATE (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday").
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
@@ -35,6 +36,7 @@ import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS }
 import { usedAppBetween } from '../../shared/usedApp.ts';
 import { seriesPattern, oldSeriesPattern, dayEntryKind } from '../../shared/calendarEntry.ts';
 import { nthOfTask, nextMonthNthWeekdayKey, monthDayWanted, nextMonthSameDayKey, monthDayToKeep } from '../../shared/nthWeekday.ts';
+import { planNextCopy } from '../../shared/nextCopy.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -2856,11 +2858,39 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const key = `nocopy:${t.id}`;
       if (marks[key]) continue;
       const u = userByEmail[t.created_by] || userByEmail[email];
+      // What happens next, said as it is (Nov 14 2026: this alert said
+      // "Nothing will ring for it until they next open the app" about a daily
+      // 7 PM task on an Android phone that checks in every 12 hours and makes
+      // the copy then, hours before the task was next due; Anna: "Why does
+      // this keep happening"). A phone on Android build 48 or later reports in
+      // from the background every 12 hours (PushHealthWorker ->
+      // cancelTaskNotifications, mode push_state) and that request, the
+      // person's own, makes the missing copy with its reminder
+      // (shared/nextCopy.ts). So for such a phone that has reported in the
+      // last 12 hours: when the next report is due at the latest (12 hours
+      // after the last one), and whether the task is next due before or after
+      // it. Anyone else (an iPhone, a browser, an older build, a phone that
+      // has stopped reporting) keeps the plain sentence: only their next open
+      // makes it.
+      let whatNext = 'Nothing will ring for it until they next open the app, which makes the copy on its own; nothing on the server can make it for them (RULES §8.5)';
+      try {
+        const ps = u?.phone_push_state;
+        const reportMs = Date.parse(String(ps?.at || '')) || 0;
+        if (u && ps?.platform === 'android' && Number(ps?.build) >= 48 && reportMs > 0 && nowMs - reportMs < 12 * H_HOUR) {
+          const checkMs = reportMs + 12 * H_HOUR;
+          const dueMs = planNextCopy(t, u, email, nowMs, t.completed_at).nextDate;
+          if (Number.isFinite(dueMs) && dueMs > nowMs) {
+            whatNext = dueMs > checkMs
+              ? `Their phone makes the copy by itself when it next checks in, by about ${theirClock(u, checkMs)} (their time; it checks in every 12 hours), or sooner if they open the app. The task is next due ${theirClock(u, dueMs)}, after that, so nothing should be missed`
+              : `The task is next due ${theirClock(u, dueMs)} (their time), BEFORE their phone next checks in (by about ${theirClock(u, checkMs)}) and makes the copy by itself: unless they open the app first, that one will not ring`;
+          }
+        }
+      } catch (_) { /* the plain sentence stands */ }
       // The person's name in the title: the "told already?" check goes by
       // title, so one generic title would hide a second person's case.
       problems.push({
         title: `⚠️ ADHDone: ${u ? nameOf(u) : email}'s repeating task has no next copy`,
-        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. Nothing will ring for it until they next open the app, which makes the copy on its own; nothing on the server can make it for them (RULES §8.5), and we never contact a person about it. ${email}`,
+        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the app didn't make the next one. ${whatNext}. We never contact a person about it. ${email}`,
         sinceMs: doneMs,
         mark: { key, value: new Date(doneMs).toISOString() },
       });
