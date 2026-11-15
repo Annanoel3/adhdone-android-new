@@ -14,6 +14,7 @@ import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 import { formatTimeRange } from "../components/utils/timeRangeLabel";
 import PrepNoteBox from "../components/tasks/PrepNoteBox";
 import TextAheadBox from "../components/tasks/TextAheadBox";
+import CallBox from "../components/tasks/CallBox";
 
 // A check-off that can't reach the server is tried again instead of dropped
 // (Anna, Oct 17 2026: "Add the retry"). Done on an alarm or on a reminder in
@@ -492,6 +493,22 @@ export default function TaskNotification() {
                 task={task}
                 theme={theme}
                 showSend
+                onSaved={(fields) => setTask((t) => ({ ...t, ...fields }))}
+              />
+            </div>
+          )}
+
+          {/* A task that IS making a phone call: who it's to and the number
+              (saved ahead of time, or typed now), and Call, which hands the
+              number to the phone's own dialer. Part of the page, never a
+              popup. They check the task off themselves once the call is
+              made. */}
+          {task.calls_someone === true && !task.birthday_person && task.status !== 'completed' && (
+            <div className="mb-4">
+              <CallBox
+                task={task}
+                theme={theme}
+                showCall
                 onSaved={(fields) => setTask((t) => ({ ...t, ...fields }))}
               />
             </div>
