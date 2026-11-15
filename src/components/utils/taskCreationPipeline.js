@@ -352,7 +352,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
         // Whether it means going somewhere: a video call gets no "Add the
         // address" line (AddAddressOffer; Anna, Nov 5 2026). Shares and
         // calendar imports already saved this; events typed here did not.
-        ...(typeof mainTaskParsed.goes_somewhere === 'boolean' ? { goes_somewhere: mainTaskParsed.goes_somewhere } : {}),
+        // Only on an event: a to-do that later becomes one is offered as before.
+        ...(mainTaskParsed.classification === 'event' && typeof mainTaskParsed.goes_somewhere === 'boolean' ? { goes_somewhere: mainTaskParsed.goes_somewhere } : {}),
         reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
@@ -613,7 +614,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
       // Whether it means going somewhere: a video call gets no "Add the
       // address" line (AddAddressOffer; Anna, Nov 5 2026). Shares and
       // calendar imports already saved this; events typed here did not.
-      ...(typeof parsed.goes_somewhere === 'boolean' ? { goes_somewhere: parsed.goes_somewhere } : {}),
+      // Only on an event: a to-do that later becomes one is offered as before.
+      ...(parsed.classification === 'event' && typeof parsed.goes_somewhere === 'boolean' ? { goes_somewhere: parsed.goes_somewhere } : {}),
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       takes_time: parsed.takes_time === true,
