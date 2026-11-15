@@ -482,16 +482,11 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
             <Clock className="w-5 h-5" />
             Today's Focus
           </CardTitle>
+          {/* "View All" used to sit here too; it opened the same page as the
+              "See all" button under the list, and on a phone it squeezed the
+              title onto two lines (Nov 14 2026). */}
           <div className="flex items-center gap-2">
             <TaskSortDropdown />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(createPageUrl("Tasks"))}
-              className={`text-sm ${theme === 'dark' ? 'text-gray-300 hover:text-gray-100' : ''}`}
-            >
-              View All
-            </Button>
           </div>
         </div>
       </CardHeader>
