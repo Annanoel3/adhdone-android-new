@@ -3,7 +3,8 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
 import {
   CalendarDays,
   RefreshCw,
@@ -300,6 +301,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
 }
 
 export default function Calendar() {
+  const navigate = useNavigate();
   const [theme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
   const [connected, setConnected] = useState(false);
@@ -496,7 +498,19 @@ export default function Calendar() {
                 (syncedEvents) are just the sync's bookkeeping. Drawing them too
                 showed recently imported events twice, and kept showing events
                 the user had already checked off or deleted. */}
-            <CalendarGrid tasks={tasks} isDark={isDark} onItemOpen={handleItemOpen} user={user} />
+            <CalendarGrid
+              tasks={tasks}
+              isDark={isDark}
+              onItemOpen={handleItemOpen}
+              user={user}
+              onOpenTasks={() => navigate(createPageUrl('Tasks'))}
+              onAddForDay={(day) => {
+                // The Add page takes the day as YYYY-MM-DD (its presetDate).
+                const d = new Date(day);
+                const presetDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                navigate(createPageUrl('AddTask'), { state: { presetDate } });
+              }}
+            />
           </CardContent>
         </Card>
 
