@@ -604,16 +604,6 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''}
           </Badge>
         </div>
-        {selectedIsToday && undatedCount > 0 && (
-          <p className={`text-sm mb-3 ${textSecondary}`}>
-            {undatedCount} {undatedCount === 1 ? 'task has' : 'tasks have'} no day set.{' '}
-            {onOpenTasks && (
-              <button type="button" onClick={onOpenTasks} className={`underline font-medium ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
-                See {undatedCount === 1 ? 'it' : 'them'} in Tasks
-              </button>
-            )}
-          </p>
-        )}
         {selectedItems.length === 0 ? (
           <p className={`text-sm ${textSecondary}`}>Nothing scheduled this day.</p>
         ) : (
@@ -647,6 +637,28 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
               );
             })}
           </ul>
+        )}
+        {selectedIsToday && undatedCount > 0 && (
+          <p className={`text-sm mt-3 ${textSecondary}`}>
+            {undatedCount} {undatedCount === 1 ? 'task has' : 'tasks have'} no day set.{' '}
+            {onOpenTasks && (
+              <button type="button" onClick={onOpenTasks} className={`underline font-medium ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                See {undatedCount === 1 ? 'it' : 'them'} in Tasks
+              </button>
+            )}
+          </p>
+        )}
+        {/* Add something for the day that's open (Nov 14 2026: a day's panel
+            had no way to add to it). Today and later only; the Add page gets
+            the day, as the Tasks page's "Add task..." rows hand it over. */}
+        {onAddForDay && !selectedIsPast && (
+          <button
+            type="button"
+            onClick={() => onAddForDay(selected)}
+            className={`mt-3 flex items-center gap-1 text-sm font-medium ${isDark ? 'text-blue-300 hover:text-blue-200' : 'text-blue-600 hover:text-blue-700'}`}
+          >
+            <Plus className="w-4 h-4" /> Add for this day
+          </button>
         )}
       </div>
       )}
