@@ -19,6 +19,14 @@ const getPlugins = () => {
   return { ShareBridge: p.ShareBridge, NotifyBridge: p.NotifyBridge, AlarmBridge: p.AlarmBridge };
 };
 
+// Whether the card below shows at all on this device: the same test it makes
+// itself. Settings uses it so its "Adding tasks" heading isn't left standing
+// over nothing (Nov 14 2026: it was, on the website and in the iPhone app).
+export function quickCaptureOffered() {
+  const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
+  return !!p.ShareBridge?.setQuickCaptureEnabled && onThisPhone('pinnedCapture');
+}
+
 export default function QuickCaptureCard({ theme }) {
   const { ShareBridge, NotifyBridge } = getPlugins();
   const [enabled, setEnabled] = useState(false);
