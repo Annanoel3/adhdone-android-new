@@ -2880,9 +2880,11 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
           const checkMs = reportMs + 12 * H_HOUR;
           const dueMs = planNextCopy(t, u, email, nowMs, t.completed_at).nextDate;
           if (Number.isFinite(dueMs) && dueMs > nowMs) {
+            // With its date: a weekly task's next day can be a week off.
+            const due = new Intl.DateTimeFormat('en-US', { timeZone: userTimeZone(u), weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(dueMs));
             whatNext = dueMs > checkMs
-              ? `Their phone makes the copy by itself when it next checks in, by about ${theirClock(u, checkMs)} (their time; it checks in every 12 hours), or sooner if they open the app. The task is next due ${theirClock(u, dueMs)}, after that, so nothing should be missed`
-              : `The task is next due ${theirClock(u, dueMs)} (their time), BEFORE their phone next checks in (by about ${theirClock(u, checkMs)}) and makes the copy by itself: unless they open the app first, that one will not ring`;
+              ? `Their phone makes the copy by itself when it next checks in, by about ${theirClock(u, checkMs)} (their time; it checks in every 12 hours), or sooner if they open the app. The task is next due ${due}, after that, so nothing should be missed`
+              : `The task is next due ${due} (their time), BEFORE their phone next checks in (by about ${theirClock(u, checkMs)}) and makes the copy by itself: unless they open the app first, that one will not ring`;
           }
         }
       } catch (_) { /* the plain sentence stands */ }
