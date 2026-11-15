@@ -1,3 +1,4 @@
+// Re-saved Nov 15 2026 (evening, later) so the bundled shared/nextCopy.ts is picked up: a repeating call-someone task's next copy keeps who it's to and their number (Task.calls_someone, call_person, call_phone). Only the wording of owner check 14 reads that plan here.
 // Nov 15 2026 (evening): owner check 11's "phone stopped taking notifications" alert, for a phone with no check-in on record, now names that person's build and says whether a check-in was even due (a new install's first one comes about 12 hours after first open), instead of the stock "(only Android builds after 47 check in)" (Anna: "Did this person never update to 48?"). Alert wording only.
 // Re-saved Nov 15 2026 (afternoon) so the bundled shared/nextCopy.ts is picked up: a repeating text-someone task's next copy keeps who it's to and their number (Task.texts_someone, text_person, text_phone). Only the wording of owner check 14 reads that plan here; nothing is made or changed by this job.
 // Re-saved Nov 15 2026 so the bundled shared/nextCopy.ts is picked up: a repeating event's next copy keeps how long it runs (Task.event_guess_minutes) and whether it means going somewhere (goes_somewhere). Only the wording of owner check 14 reads that plan here; nothing is made or changed by this job.
@@ -228,7 +229,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-15 eve: stopped-phone alert names the build', ...look });
+      return Response.json({ success: true, copy: '2026-11-15 eve: stopped-phone alert names the build; call tasks', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
