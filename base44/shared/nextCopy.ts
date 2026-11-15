@@ -236,6 +236,11 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
     time_stated: task.time_stated === true,
     task_family: task.task_family || null,
     typical_minutes: task.typical_minutes || null,
+    // Part of what the event is, so every round keeps it: how long it runs
+    // when it has no end time (shared/leaveOrigin.ts only, never shown) and
+    // whether it means going somewhere (the row's "Add the address" line).
+    event_guess_minutes: task.event_guess_minutes || null,
+    ...(typeof task.goes_somewhere === 'boolean' ? { goes_somewhere: task.goes_somewhere } : {}),
     day_only_task: dayOnly,
     deadline_style: task.deadline_style || null,
     alert_style: task.alert_style || null,
