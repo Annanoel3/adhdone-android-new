@@ -1,3 +1,4 @@
+// Re-saved Nov 15 2026 so the bundled shared/nextCopy.ts is picked up: a repeating event's next copy keeps how long it runs (Task.event_guess_minutes) and whether it means going somewhere (goes_somewhere). Only the wording of owner check 14 reads that plan here; nothing is made or changed by this job.
 // Nov 14 2026 (night): owner check 14 ("repeating task has no next copy") says what really happens next. It said "Nothing will ring for it until they next open the app" for everyone; an Android phone on build 48 or later makes the copy by itself at its next 12-hour check-in, so the alert now says when that is and whether the task is next due before or after it (shared/nextCopy.ts planNextCopy, now bundled here too: re-save this function when that file changes). Anna, on the second such alert: "Why does this keep happening".
 // Nov 14 2026 (afternoon, later): a monthly repeat on a date moves to the same DAY next month, or that month's last day when it is shorter, and goes back to its own day after (Jan 31 -> Feb 28 -> Mar 31; Task.recurrence_month_day). Adding a month to the date spilled over (Jan 31 became Mar 3 and stayed on the 3rd). Anna: "if someone makes something monthly, they actually mean that same day each month".
 // Nov 14 2026: a monthly repeat on a weekday of the month ("the second Tuesday", Task.recurrence_nth_weekday, shared/nthWeekday.ts) moves on to that weekday of the next month in the hourly repeat pass (repeatStep); until now every monthly repeat moved to the same DATE (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday").
@@ -225,7 +226,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-14 night: no-next-copy alert says what happens next', ...look });
+      return Response.json({ success: true, copy: '2026-11-15: next copies keep event length', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
