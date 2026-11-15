@@ -449,6 +449,11 @@ async function makeNextCopy(task, opts = {}) {
     // next one doesn't wait to be sorted again.
     task_family: task.task_family || null,
     typical_minutes: task.typical_minutes || null,
+    // Part of what the event is, so every round keeps it: how long it runs
+    // when it has no end time (shared/leaveOrigin.ts only, never shown) and
+    // whether it means going somewhere (the row's "Add the address" line).
+    event_guess_minutes: task.event_guess_minutes || null,
+    ...(typeof task.goes_somewhere === 'boolean' ? { goes_somewhere: task.goes_somewhere } : {}),
     // Also part of what the task is: whether it is all-day, whether its date
     // is an "on" or a "by", how it arrives on the phone (alarm or push), and
     // its attachments. The copy used to drop these, so an all-day chore came
