@@ -20,12 +20,18 @@ import { trackFire } from '@/lib/appTrack';
 // saved | hide) counts how it's used.
 
 // One look at the account per app load: every card asks the same question.
+// `work`: a work address on a non-remote account, the one case where the drive
+// can start from work (shared/leaveOrigin.ts); only used to word the note in
+// the address box below.
 let homeLook = null;
-function accountHasHome() {
+function accountPlaces() {
   if (!homeLook) {
     homeLook = base44.auth.me()
-      .then((u) => u?.home_lat != null && u?.home_lng != null)
-      .catch(() => false);
+      .then((u) => ({
+        home: u?.home_lat != null && u?.home_lng != null,
+        work: !!String(u?.work_address || '').trim() && !u?.work_remote,
+      }))
+      .catch(() => ({ home: false, work: false }));
   }
   return homeLook;
 }
@@ -34,12 +40,13 @@ if (typeof window !== 'undefined') window.addEventListener('home-base-saved', ()
 
 export default function AddAddressOffer({ task, theme, onRefreshTasks }) {
   const [hasHome, setHasHome] = useState(false);
+  const [hasWork, setHasWork] = useState(false);
   const [editing, setEditing] = useState(false);
   const [gone, setGone] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    accountHasHome().then((v) => { if (alive) setHasHome(!!v); });
+    accountPlaces().then((p) => { if (alive) { setHasHome(!!p?.home); setHasWork(!!p?.work); } });
     return () => { alive = false; };
   }, []);
 
@@ -82,6 +89,16 @@ export default function AddAddressOffer({ task, theme, onRefreshTasks }) {
     return (
       <div className="mt-2" onClick={(e) => e.stopPropagation()}>
         <LocationField task={task} theme={theme} onSave={saved} startEditing onCancel={() => setEditing(false)} />
+        {/* Where the drive is timed FROM, said where there is room for it
+            (Anna, Nov 14 2026: "Maybe we note that we can time when to leave
+            from home"). It is home unless they'll be somewhere else: the
+            event right before this one, or work during a shift or just after
+            (shared/leaveOrigin.ts, her Nov 4 2026 rule), so the pill itself
+            can't just say "from home". Work is only named on an account
+            that has a work address. */}
+        <p className={`mt-1.5 text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+          I time the drive from home{hasWork ? ', or from work or the event right before it' : ', or from the event right before it'} if that's where you'll be.
+        </p>
       </div>
     );
   }
