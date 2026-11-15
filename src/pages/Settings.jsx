@@ -24,7 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import PlacesSection from '@/components/places/PlacesSection';
-import QuickCaptureCard, { AlarmCard, NotifySoundCard } from '@/components/settings/QuickCaptureCard';
+import QuickCaptureCard, { AlarmCard, NotifySoundCard, quickCaptureOffered } from '@/components/settings/QuickCaptureCard';
+import { usePluginPresent } from '@/components/shared/WidgetTaskSync';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
 import { refreshAlarms, alarmPermissionStatus, pushNotifySound } from '@/components/utils/widgetBridge';
 import { onThisPhone } from '@/lib/phonePlatform';
@@ -142,6 +143,12 @@ export default function Settings() {
     places: { title: 'Places', blurb: 'Home area, work address and work hours, so "leave now" comes with a real drive time.' },
   };
   const page = SECTIONS[section] || null;
+  // "Adding tasks" holds one card, the pinned quick-capture shortcut, which
+  // only some phones have (not the iPhone app, not the website): the heading
+  // shows only where the card does. The plugin can land a moment after the
+  // first paint, hence the hook.
+  const shareBridgeHere = usePluginPresent('ShareBridge');
+  const showAddingTasks = shareBridgeHere && quickCaptureOffered();
   useEffect(() => { window.scrollTo(0, 0); }, [section]);
   // /settings#quick-capture and /settings?section=reminders#quiet-hours — the
   // App Guide's "in Settings" links — land on that card, not the top of the page.
@@ -777,8 +784,10 @@ export default function Settings() {
         </>)}
 
         {!page && (<>
+        {showAddingTasks && (<>
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Adding tasks</p>
         <div id="quick-capture"><QuickCaptureCard theme={theme} /></div>
+        </>)}
 
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Account</p>
         {/* Account Settings */}
