@@ -1304,7 +1304,7 @@ Return JSON:
   };
 
   const handleDelete = async () => {
-    if (!task || !(await appConfirm(`Delete "${task.title}" and all its sub-tasks?`, { okText: 'Delete', destructive: true }))) return;
+    if (!task || !(await appConfirm(`Delete "${task.title}" and all its steps?`, { okText: 'Delete', destructive: true }))) return;
 
     // Optimistic — close dialog and notify parent immediately
     dropDirtyDates();
@@ -1742,7 +1742,7 @@ Return JSON:
     toast({
       title: newSilenced ? 'On the back burner 🔇' : 'Reminders back on 🔔',
       description: newSilenced
-        ? 'No more notifications for this task until you reactivate it.'
+        ? 'No more notifications for this task until you turn it back on.'
         : 'Notifications resumed for this task.',
     });
     // Save in the background. Parking it leaves a permanent mark, so finishing
@@ -1970,6 +1970,21 @@ Return JSON:
       )}
     </>
   );
+  // Personal or work, changeable here as on the task's card (Nov 14 2026: it
+  // was only on the card, so Task Details neither showed it nor let you change
+  // it). Not on events or birthdays, as on the card.
+  const lifeAreaControl = (!isEvent && task.classification !== 'birthday' && !task.birthday_person) ? (
+    <button
+      type="button"
+      onClick={() => handleUpdateField('life_area', task.life_area === 'work' ? 'personal' : 'work')}
+      title={task.life_area === 'work' ? 'Marked as work. Tap to make it personal' : 'Marked as personal. Tap to make it work'}
+      className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium ${
+        theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'
+      }`}
+    >
+      {task.life_area === 'work' ? '💼 Work' : '🏠 Personal'}
+    </button>
+  ) : null;
   const priorityControl = (
     <>
       <Popover>
@@ -2624,6 +2639,7 @@ Return JSON:
                 <div className="flex flex-wrap gap-2">
                   {energyControl}
                   {priorityControl}
+                  {lifeAreaControl}
                 </div>
                 <div className="flex flex-wrap gap-4">
                   {!(v2NotesOpen || hasNotes) && (
@@ -2688,7 +2704,7 @@ Return JSON:
               {subTasks.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Sub-tasks</h4>
+                    <h4 className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Steps</h4>
                     <div className="flex items-center gap-2">
                       {subTasks.length < 3 && (
                         <Button
@@ -2777,7 +2793,7 @@ Return JSON:
                   theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : 'text-purple-600'
                 }`} />
                 <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                  All sub-tasks complete! 🎉
+                  All steps done! 🎉
                 </h3>
                 <p className={theme === 'dark' ? 'text-gray-400 mb-4' : 'text-gray-600 mb-4'}>
                   You're ready to mark this main task as done.
