@@ -332,6 +332,18 @@ usual_minutes — only for an EVENT that has a target_time and no end_time:
   sees this number: it only helps the app judge where they will be when
   their next thing starts.
 
+texts_someone — true only when the thing to do IS sending a text or a message
+  to a person or a group ("text Mom about Sunday", "message the group chat
+  the address", "send Sam a text when I land"). The app then gives them a
+  spot to type that text ahead of time. False for a call, an email, a letter
+  or a post; for something that could just as well be said in person or any
+  other way ("tell Dad", "let Sam know", "reply to Holly"); and for a task
+  that only mentions a text ("read Sam's text", "get the textbook"). Judge by
+  what they mean, never by one word.
+
+text_person — who that text is to, in their own words ("Mom", "Chris", "the
+  group chat"). Null when texts_someone is false or they named no one.
+
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
   day_only_task is true, so the task actually shows a date in the app.
@@ -526,6 +538,8 @@ Return JSON with exactly these keys:
   "time_stated": boolean,
   "end_time": "HH:MM" | null,
   "usual_minutes": integer | null,
+  "texts_someone": boolean,
+  "text_person": string | null,
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
