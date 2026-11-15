@@ -100,7 +100,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: LayoutDashboard,
       title: "Home",
-      description: "Today's tasks, a daily tip, and tiles for what you use most. Edit shortcuts (under the tiles) adds, removes and reorders them."
+      description: "Today's tasks, a daily tip, and tiles for what you use most. Edit shortcuts (under the tiles) adds, removes and reorders them, and sets how many sit in a row."
     },
     {
       icon: ListTodo,
