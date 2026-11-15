@@ -88,7 +88,13 @@ export default function TextAskPopup({ user, theme }) {
 
   return (
     <Dialog open={shown} onOpenChange={(open) => { if (!open) close('not_now'); }}>
-      <DialogContent className={`max-w-md ${dark ? 'bg-gray-900 text-white border-gray-700' : ''}`}>
+      {/* Nothing takes the cursor when it opens: the keyboard stays down
+          until they tap a box, and the name already filled in is not left
+          selected for the next keystroke to wipe out. */}
+      <DialogContent
+        className={`max-w-md ${dark ? 'bg-gray-900 text-white border-gray-700' : ''}`}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${dark ? 'bg-sky-900/50' : 'bg-sky-100'}`}>
