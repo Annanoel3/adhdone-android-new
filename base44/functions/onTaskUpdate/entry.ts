@@ -1,3 +1,4 @@
+// Nov 15 2026 (bundled shared/leaveOrigin.ts picked up too): the event before it is taken to last as long as it really does: its own end time, else its length in the phone's calendar, else the parser's estimate for that kind of event (Task.event_guess_minutes), else one hour (Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours"). Here: the events judged again after a change are the ones starting up to an hour after this one ENDS by that same measure (never fewer than before), and a changed end time on an event with an address has them judged again too.
 // Re-saved Nov 14 2026 (night) so the bundled shared/leaveOrigin.ts is picked up: an event's "leave now" is timed from the event before it, or from work, only when that ended no more than ONE hour earlier (it was two; Anna: "Seems like too long"). The events judged again after an address or time change are now the ones in the 2 hours after it (was 3; same two constants).
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 12 2026: a task that turned into a one-time reminder while a reschedule here was still running (a rename the app then read a day or a time from, renameReread.js) is left to the app, which books it; before, that path would have booked one stray push and failed on an invalid date.
@@ -23,7 +24,7 @@ import { orderSameMinuteAlarms } from '../../shared/alarmOrder.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
-import { leaveOriginFor, fromWords, CHAIN_GAP_MS, ASSUMED_EVENT_MS } from '../../shared/leaveOrigin.ts';
+import { leaveOriginFor, fromWords, CHAIN_GAP_MS, ASSUMED_EVENT_MS, eventEndMs, calendarLengths } from '../../shared/leaveOrigin.ts';
 import { withPrep, prepNoteOf, rewordEntryForPrep } from '../../shared/prepNote.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
@@ -598,7 +599,13 @@ async function retimeLeadForAddress(base44: any, data: any, old_data: any, id: s
     const oldStart = utcMs(old_data?.event_time || old_data?.next_reminder);
     const newStart = utcMs(data.event_time || data.next_reminder);
     const timeChanged = Number.isFinite(oldStart) && Number.isFinite(newStart) && Math.abs(oldStart - newStart) >= 60000;
-    if (!placeChanged && !timeChanged) return;
+    // Its end moved (set, changed or cleared on the card) while it sits at a
+    // place: whether they are still here when the next event starts may have
+    // changed with it.
+    const oldEnd = utcMs(old_data?.end_time);
+    const newEnd = utcMs(data.end_time);
+    const endChanged = !!after && (Number.isFinite(oldEnd) || Number.isFinite(newEnd)) && !(Math.abs(oldEnd - newEnd) < 60000);
+    if (!placeChanged && !timeChanged && !endChanged) return;
     const email = String(data.notification_recipient_email || data.created_by || '').trim();
     if (!email) return;
     const owner = (await base44.asServiceRole.entities.User.filter({ email }))?.[0];
@@ -614,7 +621,12 @@ async function retimeLeadForAddress(base44: any, data: any, old_data: any, id: s
     const starts = [newStart, oldStart].filter((x) => Number.isFinite(x));
     if (!starts.length) return;
     const lo = new Date(Math.min(...starts)).toISOString();
-    const hi = new Date(Math.max(...starts) + ASSUMED_EVENT_MS + CHAIN_GAP_MS).toISOString();
+    // Up to the chain gap after this event is over (leaveOrigin.eventEndMs: its
+    // end time, the calendar's length, the estimate, or an hour), as it is now
+    // and as it was; never a shorter window than the hour it always was.
+    const calMs = (await calendarLengths(base44, [{ id }]))[String(id)];
+    const ends = [eventEndMs(data, calMs), eventEndMs(old_data, calMs), Math.max(...starts) + ASSUMED_EVENT_MS].filter((x) => Number.isFinite(x));
+    const hi = new Date(Math.max(...ends) + CHAIN_GAP_MS).toISOString();
     let followers: any[] = [];
     try {
       followers = await base44.asServiceRole.entities.Task.filter({
@@ -627,7 +639,7 @@ async function retimeLeadForAddress(base44: any, data: any, old_data: any, id: s
     }
     for (const f of followers || []) {
       if (!f || f.id === id || !String(f.location || '').trim()) continue;
-      await retimeLead(base44, owner, f, `"${String(data.title || '').trim() || 'the event before it'}" ${placeChanged ? 'moved its address' : 'moved its time'}`);
+      await retimeLead(base44, owner, f, `"${String(data.title || '').trim() || 'the event before it'}" ${placeChanged ? 'moved its address' : timeChanged ? 'moved its time' : 'changed its end time'}`);
     }
   } catch (e) {
     console.error('[onTaskUpdate] could not re-time the lead reminders around this event:', (e as any)?.message || e);
