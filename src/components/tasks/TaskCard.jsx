@@ -37,6 +37,8 @@ import BreakItDownOffer from "./BreakItDownOffer";
 import AddAddressOffer from "./AddAddressOffer";
 import PrepOffer, { prepOfferWanted } from "./PrepOffer";
 import PrepNoteBox from "./PrepNoteBox";
+import TextOffer, { textOfferWanted, TextReadyLine } from "./TextOffer";
+import TextAheadBox from "./TextAheadBox";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1301,10 +1303,17 @@ export default function TaskCard({
             and I'll time when to leave" (the drive-timed reminder needs a
             place). The address line comes back once the prep is answered
             or hidden. */}
+        {/* A task that IS sending someone a text (texts_someone): while
+            nothing is typed its row offers "Type the text now so it's ready
+            to send" (TextOffer, in the one offer spot below); once the words
+            are typed the row says it's ready and sends it in one tap. */}
+        {!expanded && <TextReadyLine task={task} theme={theme} />}
         {!expanded && (
           prepOfferWanted(task)
             ? <PrepOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
-            : <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+            : textOfferWanted(task)
+              ? <TextOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+              : <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
         )}
 
         {/* Expanded section: all other info + inline editing */}
@@ -1337,6 +1346,13 @@ export default function TaskCard({
                 flagged (prep_worthy) or any event that already has a note. */}
             {isEvent && task.status === 'active' && !isCancelled && (task.prep_worthy === true || String(task.prep_note || '').trim()) && (
               <PrepNoteBox task={task} theme={theme} compact onSaved={() => { if (onRefreshTasks) onRefreshTasks(); }} />
+            )}
+
+            {/* The text for a text-someone task, typed ahead of time and
+                editable here; Send opens the texting app with it filled in
+                (TextAheadBox). */}
+            {task.texts_someone === true && task.status === 'active' && !task.parent_task_id && (
+              <TextAheadBox task={task} theme={theme} compact showSend onSaved={() => { if (onRefreshTasks) onRefreshTasks(); }} />
             )}
 
             {/* Badges / inline editors */}
