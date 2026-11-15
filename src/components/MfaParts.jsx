@@ -139,7 +139,7 @@ function DialCodePicker({ value, onChange }) {
           <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[140px] p-0" align="start" side="bottom" avoidCollisions={false}>
+      <PopoverContent noClose className="w-[140px] p-0" align="start" side="bottom" avoidCollisions={false}>
         <Command filter={(item, text) => (matchesSearch(item, text) ? 1 : 0)}>
           <CommandInput placeholder="Search..." className="h-9" onValueChange={(text) => { search.current = text; }} />
           <CommandList>
