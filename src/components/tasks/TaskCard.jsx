@@ -1375,6 +1375,7 @@ export default function TaskCard({
                   </div>
                 </PopoverContent>
               </Popover>
+              )}
 
               {!isEvent && task.classification !== 'birthday' && !task.birthday_person && (
                 <LifeAreaPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
