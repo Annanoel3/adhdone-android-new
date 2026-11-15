@@ -331,8 +331,8 @@ async function findNextCopy(task, nextDate) {
 // to need three trips to the server AFTER Done had saved (the task's record,
 // the same-name lookup, then the copy itself); when the app was gone before
 // the third, the repeat ended there (Nov 6 2026, a daily medication; Nov 14
-// 2026, a daily 7 PM task: Done saved at 7:49:45 PM, the app was in front for
-// about a second, no copy). With the lookups made while Done is still saving,
+// 2026, a daily 7 PM task: Done saved at 7:49:45 PM, nothing more came from
+// the app after 7:49:47, no copy). With the lookups made while Done is still saving,
 // the copy is the very next request once it has. Makes nothing and changes
 // nothing by itself; null for a task that gets no copy this way.
 export function prepareNextCopy(task, now = new Date()) {
