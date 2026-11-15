@@ -241,6 +241,15 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
     // whether it means going somewhere (the row's "Add the address" line).
     event_guess_minutes: task.event_guess_minutes || null,
     ...(typeof task.goes_somewhere === 'boolean' ? { goes_somewhere: task.goes_somewhere } : {}),
+    // A repeating text to someone keeps who it's to and their number, and
+    // whether the row's line was hidden. The words are typed fresh each
+    // round, and the next-open popup is not asked again.
+    ...(task.texts_someone === true ? {
+      texts_someone: true,
+      text_person: task.text_person || null,
+      text_phone: task.text_phone || null,
+      text_offer_dismissed: task.text_offer_dismissed === true,
+    } : {}),
     day_only_task: dayOnly,
     deadline_style: task.deadline_style || null,
     alert_style: task.alert_style || null,
