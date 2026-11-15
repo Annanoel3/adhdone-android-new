@@ -56,8 +56,11 @@ const TASK_PARSE_SCHEMA = {
     // a timed event with none, the model's estimate of how long that kind of
     // event runs. Anna, Nov 14 2026: "Wish we could tell which events lasted
     // an hour vs which ones last like 5 hours" (cleaned further down).
-    end_time: { type: ["string", "null"] },
-    usual_minutes: { type: ["integer", "null"] },
+    // Each says what it is right here too: the app's own copy of the prompt
+    // can be older than this file for a moment after a publish, and an end
+    // time made up with no instructions would show on the card.
+    end_time: { type: ["string", "null"], description: "HH:MM (24-hour) the event ENDS, only when the person's own words say when it ends or how long it runs. Null otherwise: never guess one." },
+    usual_minutes: { type: ["integer", "null"], description: "For a timed event with no stated end: your estimate, in minutes, of how long this kind of event usually keeps someone there. Null for anything else." },
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
@@ -246,8 +249,11 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
     return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${String(Number(m[1])).padStart(2, '0')}:${m[2]}` : null;
   };
+  // Events only: a to-do's "between 9 and 5" is a window for getting it done,
+  // not a block of the day, and its card keeps its one time.
   const endClock = clockOf(parsed?.end_time);
-  parsed.end_time = endClock && parsed.time_stated === true && !parsed?.day_only_task && endClock !== clockOf(parsed?.target_time)
+  parsed.end_time = endClock && parsed?.classification === 'event' && parsed.time_stated === true
+    && !parsed?.day_only_task && endClock !== clockOf(parsed?.target_time)
     ? endClock : null;
   // How long this kind of event usually runs, when no end was given: the
   // model's estimate, for a timed event only, 5 minutes to 12 hours. It is
