@@ -1219,7 +1219,7 @@ export default function TaskCard({
           )}
 
           <h3
-            className={`flex-1 min-w-[4.5rem] line-clamp-2 break-words text-sm font-medium leading-snug ${
+            className={`flex-1 min-w-[4.5rem] ${expanded ? '' : 'line-clamp-2'} break-words text-sm font-medium leading-snug ${
               task.status === 'completed' || isCancelled ? 'line-through opacity-60' : ''
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
@@ -1310,7 +1310,12 @@ export default function TaskCard({
         {/* Expanded section: all other info + inline editing */}
         {expanded && (
           <div className={`mt-3 pt-3 border-t space-y-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-            {isEditingTitle ? (
+            {/* The open card used to say the title a second time here, with
+                the rename pencil beside it. The row above now shows the whole
+                title while the card is open (it stops at two lines only when
+                closed), and renaming is the "Rename" pill in the row of pills
+                below (Nov 14 2026). */}
+            {isEditingTitle && (
               <Input
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
@@ -1318,19 +1323,6 @@ export default function TaskCard({
                 onKeyDown={handleKeyDown}
                 autoFocus
               />
-            ) : (
-              <div className="flex items-center gap-2 min-w-0">
-                <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' || isCancelled ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                  {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.life_area === 'work' && <span className="mr-1">💼</span>}{task.title}
-                </h3>
-                <button
-                  onClick={() => setIsEditingTitle(true)}
-                  className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
-                  aria-label="Edit task title"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </div>
             )}
 
             {task.description && (
@@ -1349,6 +1341,23 @@ export default function TaskCard({
 
             {/* Badges / inline editors */}
             <div className="flex flex-wrap items-center gap-2">
+              {!isEditingTitle && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }}
+                  aria-label="Edit task title"
+                  className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                    theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <Pencil className="w-3 h-3" />
+                  Rename
+                </button>
+              )}
+              {/* The priority is the pill on the row above, which is also its
+                  picker. It is only repeated here when the row has none: a
+                  task on the Back Burner or a cancelled event. */}
+              {(task.silenced || isCancelled) && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -1867,10 +1876,14 @@ export default function TaskCard({
                         ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
                         : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
                     }`}
-                    title={task.silenced ? 'Reactivate reminders' : 'Silence reminders (back burner)'}
+                    title={task.silenced ? 'Take it off the Back Burner: its reminders come back' : 'Put it on the Back Burner: its reminders pause'}
                   >
+                    {/* One name for this everywhere: "Back Burner" to put it
+                        there, "Turn back on" to bring it back, as Task Details
+                        says (the card said "Silence" / "Reactivate" until Nov
+                        14 2026). */}
                     {task.silenced ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                    {task.silenced ? 'Reactivate' : 'Silence'}
+                    {task.silenced ? 'Turn back on' : 'Back Burner'}
                   </Button>
                 )}
                 <Button
