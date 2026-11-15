@@ -4,13 +4,19 @@ import { Button } from "@/components/ui/button";
 import TaskCard from "./TaskCard";
 import { isBirthdayTask } from "../utils/birthdayHelpers";
 
+// The names say where each group ends (Nov 14 2026). "Upcoming" and "Later"
+// didn't: Upcoming is 7 to 29 days out, Later is 30 days out or more (see
+// categorizeTask). Only the labels changed; the keys, and with them each
+// person's saved open/closed sections, are the same.
+const UPCOMING_LABEL = "Next 30 Days";
+const LATER_LABEL = "After 30 Days";
 const SECTIONS = [
   { key: "today", label: "Today" },
   { key: "backburner", label: "🔥 Back Burner" },
   { key: "tomorrow", label: "Tomorrow" },
   { key: "next7days", label: "Next 7 Days" },
-  { key: "upcoming", label: "Upcoming" },
-  { key: "later", label: "Later" },
+  { key: "upcoming", label: UPCOMING_LABEL },
+  { key: "later", label: LATER_LABEL },
   { key: "birthdays", label: "🎂 Birthdays" },
 ];
 
@@ -97,15 +103,16 @@ function buildDaySections() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
-    const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
+    // With its date: "Mon, Nov 16" (a bare "Monday" didn't say which one).
+    const dayName = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
     let label = dayName;
     if (i === 0) label = `${dayName} · Today`;
     else if (i === 1) label = `${dayName} · Tomorrow`;
     sections.push({ key: `day_${i}`, label });
     if (i === 0) sections.push({ key: "backburner", label: "🔥 Back Burner" });
   }
-  sections.push({ key: "upcoming", label: "Upcoming" });
-  sections.push({ key: "later", label: "Later" });
+  sections.push({ key: "upcoming", label: UPCOMING_LABEL });
+  sections.push({ key: "later", label: LATER_LABEL });
   sections.push({ key: "birthdays", label: "🎂 Birthdays" });
   return sections;
 }
