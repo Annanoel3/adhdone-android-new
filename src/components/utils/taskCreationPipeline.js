@@ -354,6 +354,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
         // calendar imports already saved this; events typed here did not.
         // Only on an event: a to-do that later becomes one is offered as before.
         ...(mainTaskParsed.classification === 'event' && typeof mainTaskParsed.goes_somewhere === 'boolean' ? { goes_somewhere: mainTaskParsed.goes_somewhere } : {}),
+        // A task that IS sending someone a text: its row offers a spot to
+        // type the text ahead of time (TextOffer / TextAheadBox).
+        ...textTaskFields(mainTaskParsed),
         reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
@@ -616,6 +619,12 @@ export async function processAndCreateTask(inputText, opts = {}) {
       // calendar imports already saved this; events typed here did not.
       // Only on an event: a to-do that later becomes one is offered as before.
       ...(parsed.classification === 'event' && typeof parsed.goes_somewhere === 'boolean' ? { goes_somewhere: parsed.goes_somewhere } : {}),
+      // A task that IS sending someone a text (the parser's texts_someone;
+      // Anna, Nov 15 2026): its row offers a spot to type the text ahead of
+      // time, and its reminder page gets a Send button that opens the
+      // texting app with it filled in (TextOffer / TextAheadBox). Made here
+      // in the app, so there is no popup about it: the line is on its row.
+      ...textTaskFields(parsed),
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       takes_time: parsed.takes_time === true,
@@ -748,6 +757,16 @@ export async function processAndCreateTask(inputText, opts = {}) {
     });
     return { status: 'error', message: error.message };
   }
+}
+
+// What a "text someone" task carries from the parser: the flag, and who it's
+// to in their own words. Only on a plain to-do. The server twin is in
+// buildTaskRecord (base44/shared/captureToTasks.ts), which also marks the
+// task for the next-open popup because it was made outside the app.
+function textTaskFields(parsed) {
+  if (!parsed || parsed.texts_someone !== true || (parsed.classification && parsed.classification !== 'task')) return {};
+  const who = String(parsed.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return { texts_someone: true, ...(who ? { text_person: who } : {}) };
 }
 
 // Priority sets URGENCY ONLY — the smart nudge cron decides when to remind.
