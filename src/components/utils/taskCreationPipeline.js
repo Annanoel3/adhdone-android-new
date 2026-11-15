@@ -357,6 +357,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
         // A task that IS sending someone a text: its row offers a spot to
         // type the text ahead of time (TextOffer / TextAheadBox).
         ...textTaskFields(mainTaskParsed),
+        // A task that IS making a phone call: its row offers a spot to save
+        // the number ahead of time (CallOffer / CallBox).
+        ...callTaskFields(mainTaskParsed),
         reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
@@ -625,6 +628,12 @@ export async function processAndCreateTask(inputText, opts = {}) {
       // texting app with it filled in (TextOffer / TextAheadBox). Made here
       // in the app, so there is no popup about it: the line is on its row.
       ...textTaskFields(parsed),
+      // A task that IS making a phone call (the parser's calls_someone; Anna,
+      // Nov 15 2026: "And do calls?"): its row offers a spot to save the
+      // number ahead of time, and its open card and reminder page get a Call
+      // button that hands the number to the phone's dialer (CallOffer /
+      // CallBox).
+      ...callTaskFields(parsed),
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       takes_time: parsed.takes_time === true,
@@ -767,6 +776,15 @@ function textTaskFields(parsed) {
   if (!parsed || parsed.texts_someone !== true || (parsed.classification && parsed.classification !== 'task')) return {};
   const who = String(parsed.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
   return { texts_someone: true, ...(who ? { text_person: who } : {}) };
+}
+
+// The same for a "call someone" task: the flag, and who it's to. Only on a
+// plain to-do, and never on a task already marked as a text. The server twin
+// is in buildTaskRecord (base44/shared/captureToTasks.ts).
+function callTaskFields(parsed) {
+  if (!parsed || parsed.calls_someone !== true || parsed.texts_someone === true || (parsed.classification && parsed.classification !== 'task')) return {};
+  const who = String(parsed.call_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return { calls_someone: true, ...(who ? { call_person: who } : {}) };
 }
 
 // Priority sets URGENCY ONLY — the smart nudge cron decides when to remind.
