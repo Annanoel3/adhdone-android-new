@@ -29,6 +29,8 @@ const KEEP = [
   // What the event is: how long it usually runs (shared/leaveOrigin.ts only,
   // never shown) and whether it means going somewhere (the address line).
   'event_guess_minutes', 'goes_somewhere',
+  // A text to someone: who it's to, their number and the words typed so far.
+  'texts_someone', 'text_person', 'text_phone', 'text_message',
 ];
 
 export async function duplicateTask(task) {
