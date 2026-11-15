@@ -472,7 +472,9 @@ export default function Tasks() {
                 <span className="truncate">{filtersOn.length ? filtersOn.join(' · ') : 'Filter & sort'}</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className={`w-72 p-3 space-y-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
+            {/* Never taller than the room under the button: on a short screen
+                it scrolls inside itself, so Close stays reachable. */}
+            <PopoverContent align="start" className={`w-72 p-3 space-y-3 max-h-[var(--radix-popover-content-available-height)] overflow-y-auto ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
               <div className="space-y-1">
                 <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Show</p>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
