@@ -289,11 +289,19 @@ export async function isAlreadyCompleted(task) {
 // named time on the same day (the time keeps two same-named tasks apart —
 // pills at 8 AM and pills at 8 PM).
 async function findNextCopy(task, nextDate) {
-  let recordedId = task.next_occurrence_id || null;
-  try {
-    const fresh = await base44.entities.Task.get(task.id);
-    if (fresh?.next_occurrence_id) recordedId = fresh.next_occurrence_id;
-  } catch (e) { /* the lookup below still runs */ }
+  // The two reads go out together (Nov 14 2026): the task's own record, for a
+  // copy it has written down, and that person's tasks with the same rhythm,
+  // for one by the same name. One after the other, each was a full trip to
+  // the server before the copy could be made (see prepareNextCopy).
+  const [fresh, sameRhythm] = await Promise.all([
+    base44.entities.Task.get(task.id).catch(() => null),
+    base44.entities.Task.filter(
+      { recurrence_pattern: task.recurrence_pattern },
+      '-created_date',
+      100
+    ).catch(() => null),
+  ]);
+  const recordedId = fresh?.next_occurrence_id || task.next_occurrence_id || null;
   if (recordedId) {
     try {
       const copy = await base44.entities.Task.get(recordedId);
@@ -307,21 +315,37 @@ async function findNextCopy(task, nextDate) {
   // state (a copy already there and already finished still counts). Nov 6
   // 2026 (Anna: "Make sure whatever sent that isn't going to make a duplicate").
   const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-  try {
-    const rows = await base44.entities.Task.filter(
-      { recurrence_pattern: task.recurrence_pattern },
-      '-created_date',
-      100
-    );
-    return (rows || []).find((t) =>
-      t.id !== task.id && !t.parent_task_id &&
-      norm(t.title) === norm(task.title) &&
-      (t.anchor_time || null) === (task.anchor_time || null) &&
-      sameLocalDay((t.classification === 'event' && t.event_time) || (t.day_only_task && t.due_date) || t.next_reminder, nextDate)
-    ) || null;
-  } catch (e) {
-    return null;
-  }
+  return (sameRhythm || []).find((t) =>
+    t.id !== task.id && !t.parent_task_id &&
+    norm(t.title) === norm(task.title) &&
+    (t.anchor_time || null) === (task.anchor_time || null) &&
+    sameLocalDay((t.classification === 'event' && t.event_time) || (t.day_only_task && t.due_date) || t.next_reminder, nextDate)
+  ) || null;
+}
+
+// The lookups a next copy needs before it can be made (is one already there?
+// whose phone is it for?), started AHEAD of the finish. Only the reminder
+// page's Done uses it (TaskNotification.handleComplete), for this reason:
+// Done on a reminder or an alarm opens the app just to tick the task off, and
+// the person puts the phone away again, often within a second. The copy used
+// to need three trips to the server AFTER Done had saved (the task's record,
+// the same-name lookup, then the copy itself); when the app was gone before
+// the third, the repeat ended there (Nov 6 2026, a daily medication; Nov 14
+// 2026, a daily 7 PM task: Done saved at 7:49:45 PM, the app was in front for
+// about a second, no copy). With the lookups made while Done is still saving,
+// the copy is the very next request once it has. Makes nothing and changes
+// nothing by itself; null for a task that gets no copy this way.
+export function prepareNextCopy(task, now = new Date()) {
+  if (!task?.id || task.parent_task_id || isBirthday(task)
+    || !task.recurrence_pattern || task.recurrence_pattern === 'none') return Promise.resolve(null);
+  let nextDate = null;
+  try { ({ nextDate } = nextOccurrence(task, now)); } catch (e) { return Promise.resolve(null); }
+  const recipient = task.notification_recipient_email
+    ? Promise.resolve(task.notification_recipient_email)
+    : base44.auth.me().then((u) => u?.email || null).catch(() => null);
+  return Promise.all([findNextCopy(task, nextDate), recipient])
+    .then(([existing, email]) => ({ nextDate, existing, recipient: email }))
+    .catch(() => null);
 }
 
 // A completion that is still making its copy, by task id. A second tap on the
@@ -333,6 +357,8 @@ const makingCopy = new Map();
 // opts.finishedAt: when the task was really finished, for a copy made later
 // than that (repairMissingRepeats): the next day is counted from then, so a
 // repair the next morning doesn't skip that morning's dose as "finished today".
+// opts.prepared: what prepareNextCopy(task) found a moment ago, used in place
+// of looking again (the reminder page's Done; never pass it to a second try).
 export function createNextRecurrence(task, opts = {}) {
   if (!task || !task.recurrence_pattern || task.recurrence_pattern === 'none') return Promise.resolve(null);
   if (!task.id) return isBirthday(task) ? createNextBirthday(task) : Promise.resolve(null);
@@ -363,8 +389,14 @@ async function makeNextCopy(task, opts = {}) {
   if (nextDate <= now) ({ base, nextDate, monthDay } = nextOccurrence(task, now));
 
   // Never twice: this occurrence's copy may already be there (a second tap,
-  // or the task was un-checked and checked again).
-  if (await findNextCopy(task, nextDate)) return null;
+  // or the task was un-checked and checked again). Looked up now, unless the
+  // caller already did a moment ago for this same day (opts.prepared).
+  let ahead = null;
+  if (opts.prepared) {
+    try { ahead = await opts.prepared; } catch (e) { ahead = null; }
+    if (ahead && !sameLocalDay(ahead.nextDate, nextDate)) ahead = null;
+  }
+  if (ahead ? ahead.existing : await findNextCopy(task, nextDate)) return null;
 
   const days = dayDelta(base, nextDate);
   const interval = ownInterval(task);
@@ -379,7 +411,7 @@ async function makeNextCopy(task, opts = {}) {
       : nextDate;
   const endOfNewDay = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate(), 23, 59, 0, 0);
 
-  let recipient = task.notification_recipient_email || null;
+  let recipient = task.notification_recipient_email || ahead?.recipient || null;
   if (!recipient) {
     // Finishing a task clears its recipient on the server; the copy is the
     // signed-in user's either way.
