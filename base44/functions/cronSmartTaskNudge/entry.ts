@@ -1,3 +1,4 @@
+// Nov 15 2026 (later; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up too): a task that IS sending someone a text (Task.texts_someone, the parser's call) shows the planner one fact on its line: not typed yet (the app has a spot on the task to type the text ahead of time, and one reminder may offer that in passing, once) or already typed and ready to send. Anna: "mention drafting the text in one of the reminders. (But not the actual reminder at the time of)", then "i meant for the drafting a text mention to go in smart reminders". A fact on the line, like FIRST WIN: the planner still decides everything; the brief (her doc) is unchanged, and the reminder at a time they set is booked elsewhere and never sees it.
 // Re-saved Nov 15 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser reads an event's end when the person gave one ("from 2 to 5") and, for a timed event with none, estimates how long that kind of event usually runs (never shown; read only by shared/leaveOrigin.ts). Nothing here reads either.
 // Re-saved Nov 14 2026 (afternoon; once more after shared/nthWeekday.ts gained the same-day-each-month math, unused here) so the bundled shared/runTaskParse.ts and nthWeekday.ts are picked up: the parser reads "the second Tuesday of every month" as a monthly repeat on that weekday (nothing about Smart Reminders changes).
 // Re-saved Nov 14 2026 so the bundled shared/runTaskParse.ts is picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it"). Nothing about Smart Reminders changes.
@@ -2443,6 +2444,21 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (tag) parts.push(`tag: "${tag}"`);
       const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
       if (wish) parts.push(`reminder wish: "${wish}"`);
+      // A task that IS sending someone a text (Task.texts_someone). The app
+      // has a spot on it to type the text ahead of time, and the reminder
+      // page a Send button. Anna, Nov 15 2026: "mention drafting the text in
+      // one of the reminders. (But not the actual reminder at the time of)",
+      // then "i meant for the drafting a text mention to go in smart
+      // reminders". One fact on the line, like FIRST WIN below: whether, when
+      // and in what words is the planner's call, and it sees what it already
+      // said about the task (pastNudgesFor), so "once" is its to keep. The
+      // reminder at a time they set is booked elsewhere and never sees this.
+      if (t.texts_someone === true) {
+        const textTo = String(t.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+        parts.push(String(t.text_message || '').trim()
+          ? `a text to send${textTo ? ` to ${textTo}` : ''}: they already typed it out in the app, so it is ready and all that's left is to press send`
+          : `a text to send${textTo ? ` to ${textTo}` : ''}: not typed yet. The app has a spot on this task to type the text ahead of time; one reminder about it may offer that in passing ("want to type it out now so it's ready to send?"), once, never in every reminder`);
+      }
       if (ctx.firstWin && t.id === ctx.firstWin.taskId) {
         // Only on the numbered list once its window has opened (held before).
         const fwPick = ctx.firstWin.pick === 'later_today' ? 'Later today' : 'Sometime tomorrow';
