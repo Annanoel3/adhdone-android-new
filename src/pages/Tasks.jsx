@@ -385,6 +385,17 @@ export default function Tasks() {
   // harvest, fall and winter, so on those five it fell back to the plain light
   // look: a white card and black text sitting on the wallpaper.
   const isSeasonalTheme = () => isSeasonal(specialMode);
+  // Sections / Days in the dark theme: the chosen one is a lighter pill with
+  // white text, the other is dimmer text. Anna, Nov 14 2026, with the Tasks
+  // page open in dark mode: "Sections and days have text too dark when
+  // selected in dark mode". WHY: the dark theme set its dark `--secondary`
+  // and `--accent` colours in Layout.jsx but never their text colours, so a
+  // chosen pill was near-black text on a near-black pill (fixed there too,
+  // which also covers the highlighted row of every dropdown list). Other
+  // themes keep the button's own look.
+  const viewPill = (chosen) => (theme !== 'dark' ? '' : chosen
+    ? 'bg-gray-700 text-white hover:bg-gray-600'
+    : 'text-gray-300 hover:bg-gray-800 hover:text-white');
   // What the Filter button says is on, when anything is (see the button).
   const filtersOn = [
     { completed: 'Completed', snoozed: 'Snoozed' }[statusFilter],
@@ -560,7 +571,7 @@ export default function Tasks() {
               size="sm"
               onClick={() => chooseViewMode('sections')}
               className={`h-8 px-3 text-xs ${
-                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
+                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : viewPill(viewMode === 'sections')
               }`}
             >
               <List className="w-3.5 h-3.5 mr-1" />
@@ -571,7 +582,7 @@ export default function Tasks() {
               size="sm"
               onClick={() => chooseViewMode('days')}
               className={`h-8 px-3 text-xs ${
-                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
+                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : viewPill(viewMode === 'days')
               }`}
             >
               <CalendarDays className="w-3.5 h-3.5 mr-1" />
