@@ -52,6 +52,12 @@ const TASK_PARSE_SCHEMA = {
     target_date: { type: ["string", "null"] },
     target_time: { type: ["string", "null"] },
     time_stated: { type: "boolean" },
+    // The end the person gave ("from 2 to 5", "at 3 for two hours"), and for
+    // a timed event with none, the model's estimate of how long that kind of
+    // event runs. Anna, Nov 14 2026: "Wish we could tell which events lasted
+    // an hour vs which ones last like 5 hours" (cleaned further down).
+    end_time: { type: ["string", "null"] },
+    usual_minutes: { type: ["integer", "null"] },
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
@@ -86,7 +92,7 @@ const TASK_PARSE_SCHEMA = {
   },
   required: [
     "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
-    "target_date", "target_time", "time_stated", "end_date", "due_date",
+    "target_date", "target_time", "time_stated", "end_time", "usual_minutes", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "reminder_wish",
@@ -232,6 +238,24 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   }
   // A time can only be "stated" when there is one.
   parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
+  // The end they gave ("from 2 to 5"): kept as a clock time, and only beside a
+  // START clock time they gave themselves (a start the model picked from
+  // "tonight" can still be moved out of quiet hours below, which would leave
+  // an end hanging). Never on an all-day thing, never equal to the start.
+  const clockOf = (v: any) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
+    return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? `${String(Number(m[1])).padStart(2, '0')}:${m[2]}` : null;
+  };
+  const endClock = clockOf(parsed?.end_time);
+  parsed.end_time = endClock && parsed.time_stated === true && !parsed?.day_only_task && endClock !== clockOf(parsed?.target_time)
+    ? endClock : null;
+  // How long this kind of event usually runs, when no end was given: the
+  // model's estimate, for a timed event only, 5 minutes to 12 hours. It is
+  // never shown and never becomes an end time; shared/leaveOrigin.ts is its
+  // one reader (where will they be when their next thing starts?).
+  const usual = Math.round(Number(parsed?.usual_minutes));
+  parsed.usual_minutes = parsed?.classification === 'event' && !!parsed?.target_time && !parsed.end_time
+    && Number.isFinite(usual) && usual >= 5 && usual <= 720 ? usual : null;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'every_other_day', 'weekly', 'every_other_week', 'monthly', 'yearly'];
