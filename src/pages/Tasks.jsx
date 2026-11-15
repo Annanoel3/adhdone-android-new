@@ -526,7 +526,7 @@ export default function Tasks() {
                   onClick={() => { setStatusFilter('active'); setUrgencyFilter('all'); setTypeFilter('all'); }}
                   className={`text-sm font-medium underline ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`}
                 >
-                  Show everything again
+                  Clear filters
                 </button>
               )}
               <Button
