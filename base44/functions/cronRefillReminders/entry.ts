@@ -1,3 +1,4 @@
+// Nov 15 2026 (evening): owner check 11's "phone stopped taking notifications" alert, for a phone with no check-in on record, now names that person's build and says whether a check-in was even due (a new install's first one comes about 12 hours after first open), instead of the stock "(only Android builds after 47 check in)" (Anna: "Did this person never update to 48?"). Alert wording only.
 // Re-saved Nov 15 2026 (afternoon) so the bundled shared/nextCopy.ts is picked up: a repeating text-someone task's next copy keeps who it's to and their number (Task.texts_someone, text_person, text_phone). Only the wording of owner check 14 reads that plan here; nothing is made or changed by this job.
 // Re-saved Nov 15 2026 so the bundled shared/nextCopy.ts is picked up: a repeating event's next copy keeps how long it runs (Task.event_guess_minutes) and whether it means going somewhere (goes_somewhere). Only the wording of owner check 14 reads that plan here; nothing is made or changed by this job.
 // Nov 14 2026 (night): owner check 14 ("repeating task has no next copy") says what really happens next. It said "Nothing will ring for it until they next open the app" for everyone; an Android phone on build 48 or later makes the copy by itself at its next 12-hour check-in, so the alert now says when that is and whether the task is next due before or after it (shared/nextCopy.ts planNextCopy, now bundled here too: re-save this function when that file changes). Anna, on the second such alert: "Why does this keep happening".
@@ -2717,7 +2718,27 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       } : {
         title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
-        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. The app hasn't checked in from that phone since, so it may be uninstalled, or its push sign-up broke (only Android builds after 47 check in). Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        // No check-in from this phone on record at all. Said from what is
+        // known about THIS phone, not one stock line: Anna, Nov 15 2026, about
+        // someone who had installed build 48 that same morning, "Did this
+        // person never update to 48?" (the line used to end "(only Android
+        // builds after 47 check in)" for everyone). A new install's first
+        // background check-in comes about 12 hours after its first open: the
+        // check that runs at first open has no account to report to yet
+        // (PushHealthWorker / Base44Api.phoneReport), and the next is 12
+        // hours on.
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes. ${(() => {
+          const buildNo = Number(u.app_build) || 0;
+          const joinedMs = msOf(u.created_date);
+          if (u.app_platform === 'android' && buildNo >= 48) {
+            return Number.isFinite(joinedMs) && goneMs - joinedMs < 13 * H_HOUR
+              ? `They are on build ${buildNo} and joined ${theirClock(u, joinedMs)}: a new install's first background check-in comes about 12 hours after its first open, so none was due yet. No check-in by ${theirClock(u, joinedMs + 13 * H_HOUR)} reads as an uninstall`
+              : `They are on build ${buildNo}, which checks in every 12 hours, and that phone never has: this reads as an uninstall`;
+          }
+          return u.app_platform === 'android' && buildNo
+            ? `Their build (${buildNo}) doesn't check in from the background, so there is nothing from the phone to go by: this reads as an uninstall`
+            : 'That phone has never checked in from the background, so there is nothing from it to go by: this reads as an uninstall';
+        })()}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       });
