@@ -123,6 +123,37 @@ export function deadlineWindowStart(parsed, dueISO, now = new Date()) {
   return dayOf(due) > dayOf(now) ? now.toISOString() : null;
 }
 
+// How long an event runs (Anna, Nov 14 2026: "Wish we could tell which events
+// lasted an hour vs which ones last like 5 hours"). Both are for a timed
+// EVENT only (`eventTimeISO` is its saved start; null for anything else).
+// The server twins are eventEndISO and buildTaskRecord in
+// base44/shared/captureToTasks.ts: change them together.
+//
+// The end they gave ("from 2 to 5", "at 3 for two hours") as a moment: on the
+// event's own day, or the next morning when that would not be after its
+// start ("7 PM to 2 AM"). Its card then reads "2:00 PM – 5:00 PM", the same
+// as an end set on the card. Null when they gave none.
+export function endTimeISO(parsed, eventTimeISO) {
+  if (!parsed || parsed.classification !== 'event' || !eventTimeISO) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(parsed.end_time || '').trim());
+  const start = new Date(eventTimeISO);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59 || isNaN(start.getTime())) return null;
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), Number(m[1]), Number(m[2]), 0, 0);
+  if (end.getTime() <= start.getTime()) end.setDate(end.getDate() + 1);
+  return end.getTime() > start.getTime() ? end.toISOString() : null;
+}
+
+// With no end given, the parser's estimate of how long that kind of event
+// usually runs, in minutes (a dentist visit about 60, a wedding about 300).
+// A guess: never shown and never an end time. Its one reader is
+// base44/shared/leaveOrigin.ts (are they still there when their next event
+// starts?).
+export function eventGuessMinutes(parsed, eventTimeISO) {
+  if (!parsed || parsed.classification !== 'event' || !eventTimeISO || endTimeISO(parsed, eventTimeISO)) return null;
+  const n = Number(parsed.usual_minutes);
+  return Number.isInteger(n) && n >= 5 && n <= 720 ? n : null;
+}
+
 // Turns a parsed task into its concrete schedule fields.
 export function deriveSchedule(parsed, now = new Date()) {
   const out = { interval: parsed?.reminder_interval || null, nextReminder: null, dueDateISO: null, endDateISO: null, eventTimeISO: null };
