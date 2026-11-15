@@ -38,7 +38,6 @@ export default function QuickActions({ theme, user }) {
   const [picking, setPicking] = useState(false);
   const canRecordNotes = usePluginPresent('RecorderBridge');
   const L = COLS[cols] || COLS[2];
-  const nextCols = () => setCols(saveTileCols(TILE_COLS[(TILE_COLS.indexOf(cols) + 1) % TILE_COLS.length]));
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -172,22 +171,12 @@ export default function QuickActions({ theme, user }) {
       </div>
 
       {/* Pick more tiles. A quiet text link, not a tile: the tiles are the
-          person's, this is the door to them. Beside it, the tiny per-row
-          switch: tap to go 2 → 3 → 4 → 2. */}
+          person's, this is the door to them. How many sit in a row (2, 3 or
+          4) is chosen inside it, as "Tiles per row"; until Nov 14 2026 that
+          was a tiny icon and a bare number beside this link, which nothing
+          explained on a phone. */}
       <div className="flex justify-end items-center gap-1 mt-1.5">
         <HomeSecretLink theme={theme} spot="tiles" className="mr-auto pl-1" />
-        <button
-          type="button"
-          onClick={nextCols}
-          aria-label={`Tiles per row: ${cols}. Tap to change`}
-          title={`${cols} per row`}
-          className={`flex items-center gap-0.5 text-xs px-2 py-1 rounded-md ${
-            specialMode !== 'normal' ? '' : dark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-800'
-          }`}
-        >
-          <L.Icon className="w-3.5 h-3.5" />
-          <span className="tabular-nums">{cols}</span>
-        </button>
         <button
           type="button"
           onClick={() => setPicking(true)}
@@ -211,6 +200,31 @@ export default function QuickActions({ theme, user }) {
             </DialogDescription>
           </DialogHeader>
           <div className="py-1 max-h-[60vh] overflow-y-auto space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className={`text-sm font-medium ${dark ? 'text-gray-200' : 'text-gray-800'}`}>Tiles per row</p>
+              <div className={`inline-flex rounded-lg border overflow-hidden ${dark ? 'border-gray-700' : 'border-gray-200'}`} role="group" aria-label="Tiles per row">
+                {TILE_COLS.map((n) => {
+                  const Icon = (COLS[n] || COLS[2]).Icon;
+                  return (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setCols(saveTileCols(n))}
+                      aria-pressed={cols === n}
+                      aria-label={`${n} per row`}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-sm tabular-nums transition-colors ${
+                        cols === n
+                          ? 'bg-purple-600 text-white'
+                          : dark ? 'bg-gray-800 text-gray-200 hover:bg-gray-700' : 'bg-white text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {n}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {chosen.length > 0 && (
               <div className={`rounded-lg border divide-y ${dark ? 'border-gray-700 divide-gray-700' : 'border-gray-200 divide-gray-200'}`}>
                 {chosen.map((s, i) => (
