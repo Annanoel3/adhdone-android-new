@@ -355,9 +355,13 @@ export default function FocusTimer() {
           {/* A plain bar, not a giant ring: the time, which block this is, and
               how far through it you are. */}
           <div className="flex flex-col items-center">
+            {/* Spicy Brains: its cards are white, so everything on them is dark
+                (Nov 14 2026: the time was white, "Focus Time" pale yellow and
+                the bar white-on-white there; they were written for a blue
+                card). */}
             <div
-              className={`text-5xl md:text-6xl font-bold tabular-nums ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
-              style={{ textShadow: theme === 'colorful' || theme === 'spicybrains' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
+              className={`text-5xl md:text-6xl font-bold tabular-nums ${theme === 'dark' ? 'text-white' : theme === 'spicybrains' ? 'text-blue-900' : 'text-gray-900'}`}
+              style={{ textShadow: theme === 'colorful' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
             >
               {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
             </div>
@@ -365,8 +369,8 @@ export default function FocusTimer() {
             <motion.div animate={isActive ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 2, repeat: Infinity }}
               className={`mt-2 text-lg font-medium flex items-center gap-2 ${
                 mode === 'work'
-                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
-                  : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-teal-900'
+                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-amber-700' : 'text-purple-900'
+                  : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : theme === 'spicybrains' ? 'text-blue-700' : 'text-teal-900'
               }`}
             >
               {mode === 'work' ? <><Sparkles className="w-5 h-5" />Focus Time</> : <><Coffee className="w-5 h-5" />Break Time</>}
@@ -374,11 +378,11 @@ export default function FocusTimer() {
 
             <div
               className="w-full h-3 rounded-full overflow-hidden mt-4 md:mt-6"
-              style={{ backgroundColor: theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : '#ffffff80' }}
+              style={{ backgroundColor: theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : theme === 'spicybrains' ? '#dbeafe' : '#ffffff80' }}
             >
               <motion.div
                 className="h-full rounded-full"
-                style={{ backgroundColor: theme === 'minimalist' ? (mode === 'work' ? '#16a34a' : '#3b82f6') : theme === 'dark' ? (mode === 'work' ? '#22c55e' : '#3b82f6') : theme === 'spicybrains' ? (mode === 'work' ? '#fde047' : '#93c5fd') : '#ffffff' }}
+                style={{ backgroundColor: theme === 'minimalist' ? (mode === 'work' ? '#16a34a' : '#3b82f6') : theme === 'dark' ? (mode === 'work' ? '#22c55e' : '#3b82f6') : theme === 'spicybrains' ? (mode === 'work' ? '#f59e0b' : '#3b82f6') : '#ffffff' }}
                 initial={false}
                 animate={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
                 transition={{ duration: 1, ease: 'linear' }}
@@ -386,7 +390,7 @@ export default function FocusTimer() {
             </div>
 
             {sessionCount > 0 && (
-              <div className={`text-sm mt-3 font-medium ${theme === 'dark' || theme === 'spicybrains' ? 'text-gray-200' : 'text-gray-600'}`}>
+              <div className={`text-sm mt-3 font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-600'}`}>
                 🍅 {sessionCount} pomodoro{sessionCount !== 1 ? 's' : ''} completed
               </div>
             )}
@@ -428,15 +432,15 @@ export default function FocusTimer() {
 
             <div className="relative z-10 flex flex-col items-center justify-center py-10 md:py-12">
               <div className={`text-6xl md:text-7xl font-bold mb-4 tabular-nums ${
-                theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'
+                theme === 'dark' ? 'text-white' : theme === 'spicybrains' ? 'text-blue-900' : 'text-gray-900'
               }`}>
                 {formatStopwatchTime(stopwatchElapsed)}
               </div>
 
               <div className={`text-lg font-medium flex items-center gap-2 ${
                 stopwatchRunning
-                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
-                  : theme === 'dark' ? 'text-gray-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-gray-600'
+                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-amber-700' : 'text-purple-900'
+                  : theme === 'dark' ? 'text-gray-400' : theme === 'spicybrains' ? 'text-blue-700' : 'text-gray-600'
               }`}>
                 {stopwatchRunning ? <><Sparkles className="w-5 h-5" />Running</> : <><Clock className="w-5 h-5" />Ready</>}
               </div>
