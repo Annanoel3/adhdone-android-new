@@ -99,6 +99,24 @@ export function localToUTC(date: string, time: string | null, tz: string): strin
   return new Date(naive.getTime() - offsetMs).toISOString();
 }
 
+// The end the person gave for an event ("17:00") as a real moment: on the
+// event's own day, or the day after when that would not be after its start.
+// Null when there is no usable end. The app's twin is endTimeISO in
+// src/components/utils/taskSchedule.js.
+export function eventEndISO(date: string, endClock: any, startISO: string, tz: string): string | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(endClock || "").trim());
+  const startMs = Date.parse(startISO);
+  if (!date || !m || Number(m[1]) > 23 || Number(m[2]) > 59 || !Number.isFinite(startMs)) return null;
+  const clock = `${m[1].padStart(2, "0")}:${m[2]}`;
+  let end = localToUTC(date, clock, tz);
+  if (end && Date.parse(end) <= startMs) {
+    const [y, mo, d] = date.split("-").map(Number);
+    const next = new Date(Date.UTC(y, mo - 1, d + 1)).toISOString().slice(0, 10);
+    end = localToUTC(next, clock, tz);
+  }
+  return end && Date.parse(end) > startMs ? end : null;
+}
+
 // ── Parsed fields → Task record ────────────────────────────────────────────
 export function buildTaskRecord(
   parsed: any,
@@ -171,6 +189,19 @@ export function buildTaskRecord(
   if (dueISO) record.due_date = dueISO;
   if (eventISO && parsed.target_time) record.event_time = eventISO;
   if (parsed.end_date) record.end_date = localToUTC(parsed.end_date, "23:59", tz);
+  // An event's end, when they gave one ("from 2 to 5", "at 3 for two hours"):
+  // its card reads "2:00 PM – 5:00 PM", the same as an end set on the card. An
+  // end at or before the start is the next morning ("7 PM to 2 AM"). And for
+  // an event with none, the parser's estimate of how long that kind of event
+  // runs: never shown, read only by shared/leaveOrigin.ts (Anna, Nov 14 2026:
+  // "Wish we could tell which events lasted an hour vs which ones last like
+  // 5 hours").
+  if (record.classification === "event" && eventISO && parsed.target_time) {
+    const endISO = eventEndISO(parsed.target_date, parsed.end_time, eventISO, tz);
+    if (endISO) record.end_time = endISO;
+    const usual = Number(parsed.usual_minutes);
+    if (!endISO && Number.isInteger(usual) && usual >= 5 && usual <= 720) record.event_guess_minutes = usual;
+  }
 
   // "Sometime this week", "by Friday": a DEADLINE, not the day it happens.
   // The task is on Today from now until that day, the way a task with a
