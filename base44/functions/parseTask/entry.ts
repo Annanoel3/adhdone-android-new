@@ -1,3 +1,4 @@
+// Nov 15 2026 (evening; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser says when a task IS making a phone call and who it's to (calls_someone, call_person; a plain to-do only, never together with texts_someone), for the app's call box with a Call button (Anna: "And do calls?"). Self-test: 3 new sentences and the call checks added to 3 old ones.
 // Nov 15 2026 (later; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser says when a task IS sending someone a text and who it's to (texts_someone, text_person; judgment, no word list), so the app can give it a spot to type the text ahead of time and a Send button (Anna: "If someone makes a task to text someone, maybe we should use our ability to press send from the app"). Self-test cases added.
 // Nov 15 2026 (bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser reads an event's END when the person gave one ("from 2 to 5", "at 3 for two hours": end_time) and, for a timed event with none, estimates how long that kind of event usually runs (usual_minutes; never shown, read only by shared/leaveOrigin.ts). Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours". The admin check of several inputs takes { only: [field names] } to answer with just those fields; self-test cases added.
 // Re-saved Nov 14 2026 (afternoon; once more after shared/nthWeekday.ts gained the same-day-each-month math, unused here) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and nthWeekday.ts are picked up: "the second Tuesday of every month" is read as a monthly repeat on that weekday (Task.recurrence_nth_weekday, "2TU") and its first day is counted in code, not by the model (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday, first sunday etc").
@@ -322,11 +323,17 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // makes a task to text someone..."): the app gives it a spot to type the
   // text ahead of time. A call, something that could be said any other way,
   // or a task that only has the word in it is not one.
-  { text: "Text Mom about Sunday dinner", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: true, text_person: (v: any) => typeof v === "string" && /mom/i.test(v) } },
+  { text: "Text Mom about Sunday dinner", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: true, text_person: (v: any) => typeof v === "string" && /mom/i.test(v), calls_someone: false, call_person: null } },
   { text: "Message the group chat the address tomorrow at 5pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: true, text_person: (v: any) => typeof v === "string" && /group chat/i.test(v), target_time: "17:00" } },
-  { text: "Call the pharmacy about the refill", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, text_person: null } },
-  { text: "Tell Alex the plumber is coming Friday", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false } },
+  { text: "Call the pharmacy about the refill", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, text_person: null, calls_someone: true, call_person: (v: any) => typeof v === "string" && /pharmacy/i.test(v) } },
+  { text: "Tell Alex the plumber is coming Friday", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, calls_someone: false } },
   { text: "Buy the chemistry textbook", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { texts_someone: false, text_person: null } },
+  // A task that IS making a phone call (Anna, Nov 15 2026: "And do calls?"):
+  // the app gives it a spot to save the number and a Call button. A set call
+  // they join is an event, and an email is neither a call nor a text.
+  { text: "Call Mom tomorrow at 6pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { calls_someone: true, call_person: (v: any) => typeof v === "string" && /mom/i.test(v), texts_someone: false, target_time: "18:00" } },
+  { text: "Team call Thursday at 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { calls_someone: false, call_person: null } },
+  { text: "Email the landlord about the lease", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { calls_someone: false, texts_someone: false } },
 ];
 
 async function runParserSelfTest(base44: any) {
