@@ -344,6 +344,22 @@ texts_someone — true only when the thing to do IS sending a text or a message
 text_person — who that text is to, in their own words ("Mom", "Priya", "the
   group chat"). Null when texts_someone is false or they named no one.
 
+calls_someone — true only when the thing to do IS making a phone call to a
+  person or a place ("call the pharmacy about the refill", "call Mom", "phone
+  the dentist to reschedule", "ring Dana back"). The app then gives them a
+  spot to save the number ahead of time and a Call button. False for a text,
+  an email or a video meeting; for a call that is a set meeting they join
+  ("team call at 2pm", "phone interview Tuesday at 10"), which is an event;
+  for something that could just as well be done any other way ("ask Alex",
+  "check with the vet", "contact the landlord", "make a dentist
+  appointment"); and for a task that only mentions a call ("wait for the
+  doctor's call", "listen to the voicemail"). Judge by what they mean, never
+  by one word.
+
+call_person — who that call is to, in their own words ("Mom", "the
+  pharmacy", "the dentist"). Null when calls_someone is false or they named
+  no one.
+
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
   day_only_task is true, so the task actually shows a date in the app.
@@ -540,6 +556,8 @@ Return JSON with exactly these keys:
   "usual_minutes": integer | null,
   "texts_someone": boolean,
   "text_person": string | null,
+  "calls_someone": boolean,
+  "call_person": string | null,
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
