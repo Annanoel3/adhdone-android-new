@@ -7,7 +7,8 @@
 // went out (NotificationLedger for the last 3 days, AppEvent reminder_sent /
 // reminder_unreached before that) and the User record.
 //
-// Read-only: it changes nothing and sends nothing. Owner (admin) only.
+// Read-only: it changes nothing and sends nothing. Owner (admin) only: run it
+// from the editor's Test Function.
 //   {}                          -> totals, cross-tabs and one line per account
 //   { "since": "2026-10-15" }   -> only accounts first seen on or after that day
 //   { "email": "..." }          -> that account's first-week timeline, event by event
