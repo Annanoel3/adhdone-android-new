@@ -141,7 +141,7 @@ export default function AddTask() {
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
-  }, [textInput, mode]);
+  }, [textInput, inputMode]);
   const handleTextKeyDown = (e) => {
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent?.isComposing) return;
     handleTextSubmit(e);
