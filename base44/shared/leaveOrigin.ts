@@ -25,7 +25,17 @@ import { getHomeOrigin } from './homeOrigin.ts';
 import { localParts, wallClockToUtc } from './timezoneReminders.ts';
 import { localDateKey } from './commuteSchedule.ts';
 
-export const CHAIN_GAP_MS = 2 * 60 * 60 * 1000;
+// How long after the event before it ends (or after a shift ends) they are
+// still taken to be THERE. One hour since Nov 14 2026 (Anna: "Idk if 2 hours
+// is too long. Seems like too long. Are we sure I said that", then "Ok sounds
+// good" to one hour). It was 2 hours from Nov 4 2026, a number picked when
+// this was built; her words that day were "two events in a row" and "during
+// work hours or right after", with no number. With two hours between things
+// many people go home first, and the drive was then timed from the wrong
+// place. An event with no end time is still taken to last an hour
+// (ASSUMED_EVENT_MS), so two such events up to 2 hours apart, start to start,
+// are chained (it was 3).
+export const CHAIN_GAP_MS = 60 * 60 * 1000;
 export const ASSUMED_EVENT_MS = 60 * 60 * 1000;
 
 export interface LeaveOrigin {
