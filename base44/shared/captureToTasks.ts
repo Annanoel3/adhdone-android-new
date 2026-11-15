@@ -215,6 +215,15 @@ export function buildTaskRecord(
     if (who) record.text_person = who;
     record.text_ask_pending = true;
   }
+  // A task that IS making a phone call (the parser's calls_someone; Anna, Nov
+  // 15 2026: "And do calls?"): its row offers a spot to save the number ahead
+  // of time, and its open card and reminder page get a Call button (CallOffer
+  // / CallBox in the app). No popup for calls: nobody asked for one.
+  if (parsed.calls_someone === true && record.classification === "task" && record.texts_someone !== true) {
+    record.calls_someone = true;
+    const who = String(parsed.call_person || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (who) record.call_person = who;
+  }
 
   // "Sometime this week", "by Friday": a DEADLINE, not the day it happens.
   // The task is on Today from now until that day, the way a task with a
