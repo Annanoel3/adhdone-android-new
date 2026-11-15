@@ -6,7 +6,7 @@ import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromKind } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
-import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStart, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStart, anchorToDaytime, wantsRhythmFromTime, endTimeISO, eventGuessMinutes } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds, dropBookingIfMoved } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
@@ -344,6 +344,15 @@ export async function processAndCreateTask(inputText, opts = {}) {
         start_date: presetDate ? null : deadlineWindowStart(mainTaskParsed, sched.dueDateISO, now),
         end_date: sched.endDateISO,
         event_time: sched.eventTimeISO,
+        // An event's end when they gave one ("from 2 to 5"), or else the
+        // parser's estimate of its usual length, which is never shown
+        // (taskSchedule.endTimeISO / eventGuessMinutes).
+        end_time: endTimeISO(mainTaskParsed, sched.eventTimeISO),
+        event_guess_minutes: eventGuessMinutes(mainTaskParsed, sched.eventTimeISO),
+        // Whether it means going somewhere: a video call gets no "Add the
+        // address" line (AddAddressOffer; Anna, Nov 5 2026). Shares and
+        // calendar imports already saved this; events typed here did not.
+        ...(typeof mainTaskParsed.goes_somewhere === 'boolean' ? { goes_somewhere: mainTaskParsed.goes_somewhere } : {}),
         reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
@@ -594,6 +603,17 @@ export async function processAndCreateTask(inputText, opts = {}) {
       start_date: presetDate ? null : deadlineWindowStart(parsed, dueDateISO, now),
       end_date: endDateISO,
       event_time: eventTimeISO,
+      // An event's end when they gave one ("from 2 to 5": the card reads
+      // "2:00 PM – 5:00 PM"), or else the parser's estimate of its usual
+      // length, which is never shown and only helps judge where they'll be
+      // when their next event starts (taskSchedule.endTimeISO /
+      // eventGuessMinutes; Anna, Nov 14 2026).
+      end_time: endTimeISO(parsed, eventTimeISO),
+      event_guess_minutes: eventGuessMinutes(parsed, eventTimeISO),
+      // Whether it means going somewhere: a video call gets no "Add the
+      // address" line (AddAddressOffer; Anna, Nov 5 2026). Shares and
+      // calendar imports already saved this; events typed here did not.
+      ...(typeof parsed.goes_somewhere === 'boolean' ? { goes_somewhere: parsed.goes_somewhere } : {}),
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       takes_time: parsed.takes_time === true,
