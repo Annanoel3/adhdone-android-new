@@ -402,7 +402,14 @@ Answer plainly and practically, then stop.`;
 
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col min-h-0">
-          <Card className={`border-none shadow-lg flex-shrink-0 ${
+          {/* Before the first message: the message box comes FIRST and this
+              note sits under it, short (order-1 / order-2 below; Nov 14 2026).
+              The note was a full paragraph in a box in a card above the
+              message box, and on a phone it filled the first screen. What it
+              must still say: it's a tool for ADHD, the day and the app, and a
+              real person is the better call for the heavy stuff (the title
+              card above already says "not a friend or therapist"). */}
+          <Card className={`border-none shadow-lg flex-shrink-0 order-2 mt-3 ${
             specialMode === 'normal' ? (
               theme === 'minimalist' 
                 ? 'bg-white/90 backdrop-blur-sm' 
@@ -411,24 +418,16 @@ Answer plainly and practically, then stop.`;
                   : 'bg-gradient-to-br from-purple-50 to-pink-50'
             ) : `bg-white/70 backdrop-blur-md border border-purple-400/30 ${specialMode}-card`
           }`}>
-            <CardContent className="p-6">
-              <div className={`p-4 rounded-lg ${
-                theme === 'minimalist'
-                  ? 'bg-purple-50 border border-purple-200'
-                  : theme === 'dark'
-                    ? 'bg-purple-900/20 border border-purple-800'
-                    : 'bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-200'
-              }`}>
-                <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  🛠️ <strong>Ask about ADHD, your day, or this app.</strong> Stuck starting something, ADHD causing friction with someone, unsure how a feature works — all fair game. Just know it's an AI tool, not a person or a relationship: it won't replace friends, family, a therapist, or a doctor, and for the really heavy stuff or big life decisions a real person is still the better call.
-                </p>
-              </div>
+            <CardContent className="px-4 py-3">
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <strong>Ask about ADHD, your day, or this app.</strong> For the heavy stuff, a real person is still the better call.
+              </p>
             </CardContent>
           </Card>
 
-          <div className="flex-1" />
+          <div className="flex-1 order-3" />
 
-          <Card className={`border-none shadow-lg flex-shrink-0 mt-4 ${
+          <Card className={`border-none shadow-lg flex-shrink-0 order-1 ${
             specialMode === 'normal' ? (
               theme === 'minimalist' 
                 ? 'bg-white/90 backdrop-blur-sm' 
