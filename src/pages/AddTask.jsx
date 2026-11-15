@@ -140,7 +140,11 @@ export default function AddTask() {
     const el = textRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+    // The box's own border isn't in scrollHeight; without it the box came out
+    // 2px short and showed a scrollbar it didn't need.
+    const wanted = el.scrollHeight + (el.offsetHeight - el.clientHeight);
+    el.style.height = `${Math.min(wanted, 220)}px`;
+    el.style.overflowY = wanted > 220 ? 'auto' : 'hidden';
   }, [textInput, inputMode]);
   const handleTextKeyDown = (e) => {
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent?.isComposing) return;
