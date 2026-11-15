@@ -387,7 +387,7 @@ export default function DeleteAccount() {
                   <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
-                    Every task you've created, including sub-tasks, descriptions, and all associated reminders.
+                    Every task you've created, including its steps, descriptions, and all associated reminders.
                   </p>
                 </div>
 
