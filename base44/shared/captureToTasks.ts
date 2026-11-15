@@ -202,6 +202,19 @@ export function buildTaskRecord(
     const usual = Number(parsed.usual_minutes);
     if (!endISO && Number.isInteger(usual) && usual >= 5 && usual <= 720) record.event_guess_minutes = usual;
   }
+  // A task that IS sending someone a text (the parser's texts_someone): the
+  // app gives it a spot to type the text ahead of time and a Send button on
+  // its reminder (TextAheadBox). This one was made outside the app (a share,
+  // the widget, a quick capture), so the next time the app is open one popup
+  // offers to type it now (text_ask_pending, TextAskPopup). Anna, Nov 15
+  // 2026: "if its added from outside the app, it could have a popup next time
+  // they open".
+  if (parsed.texts_someone === true && record.classification === "task") {
+    record.texts_someone = true;
+    const who = String(parsed.text_person || "").replace(/\s+/g, " ").trim().slice(0, 60);
+    if (who) record.text_person = who;
+    record.text_ask_pending = true;
+  }
 
   // "Sometime this week", "by Friday": a DEADLINE, not the day it happens.
   // The task is on Today from now until that day, the way a task with a
