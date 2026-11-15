@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles, Mic, Loader2, ImagePlus } from "lucide-react";
 import PhotoTaskInput from "@/components/addtask/PhotoTaskInput";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { enqueueCapture } from "@/lib/pendingCaptures";
@@ -129,6 +129,22 @@ export default function AddTask() {
     const input = textInput;
     setTextInput('');
     submitCapture(input);
+  };
+
+  // The typing box grows with what's typed (Nov 14 2026: it was one line,
+  // about 20 characters wide on a phone, so a full sentence scrolled off and
+  // only its last words showed). Enter still adds, as the line above the box
+  // says; Shift+Enter starts a new line.
+  const textRef = useRef(null);
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [textInput, mode]);
+  const handleTextKeyDown = (e) => {
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent?.isComposing) return;
+    handleTextSubmit(e);
   };
 
   return (
@@ -306,19 +322,23 @@ export default function AddTask() {
                       Enter each task and press Enter to add - AI will organize it with smart reminders
                     </p>
                   </div>
-                  <form onSubmit={handleTextSubmit} className="max-w-xl mx-auto">
-                    <div className="flex gap-3">
-                      <Input
+                  <form onSubmit={handleTextSubmit} className="w-full max-w-xl mx-auto">
+                    <div className="flex flex-col gap-3">
+                      <Textarea
+                        ref={textRef}
                         value={textInput}
                         onChange={(e) => setTextInput(e.target.value)}
+                        onKeyDown={handleTextKeyDown}
                         placeholder='e.g., "Call dentist tomorrow at 2pm" or "Water plants every day"'
-                        className="h-14 text-lg flex-1"
+                        rows={2}
+                        enterKeyHint="done"
+                        className="min-h-[3.5rem] text-lg leading-snug resize-none"
                         autoFocus
                       />
                       <Button
                         type="submit"
                         disabled={!textInput.trim()}
-                        className={`h-14 px-8 ${
+                        className={`h-14 w-full px-8 ${
                           theme === 'minimalist'
                             ? 'bg-green-600 hover:bg-green-700'
                             : theme === 'spicybrains'
