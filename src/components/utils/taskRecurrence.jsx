@@ -454,6 +454,15 @@ async function makeNextCopy(task, opts = {}) {
     // whether it means going somewhere (the row's "Add the address" line).
     event_guess_minutes: task.event_guess_minutes || null,
     ...(typeof task.goes_somewhere === 'boolean' ? { goes_somewhere: task.goes_somewhere } : {}),
+    // A repeating text to someone keeps who it's to and their number, and
+    // whether the row's line was hidden. The words are typed fresh each
+    // round, and the next-open popup is not asked again.
+    ...(task.texts_someone === true ? {
+      texts_someone: true,
+      text_person: task.text_person || null,
+      text_phone: task.text_phone || null,
+      text_offer_dismissed: task.text_offer_dismissed === true,
+    } : {}),
     // Also part of what the task is: whether it is all-day, whether its date
     // is an "on" or a "by", how it arrives on the phone (alarm or push), and
     // its attachments. The copy used to drop these, so an all-day chore came
