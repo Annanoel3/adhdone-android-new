@@ -12,6 +12,12 @@
 //   {}                          -> totals, cross-tabs and one line per account
 //   { "since": "2026-10-15" }   -> only accounts first seen on or after that day
 //   { "email": "..." }          -> that account's first-week timeline, event by event
+//   { "ai": true }              -> what the app's AI calls added up to, day by day and
+//                                  feature by feature (AppEvent ai_usage, kept since
+//                                  Nov 6 2026), and every burst of calls close together:
+//                                  a parser self-test or a calendar import shows as one.
+//                                  Anna, Nov 15 2026: "Are all of your tests while fixing
+//                                  things causing my usage to sky rocket?"
 //
 // What it CAN'T see, so nobody reads more into it than is there: anyone who
 // installed and never signed in (Google Play has those numbers, this app has
@@ -20,7 +26,7 @@
 // they did and what the app did to them, in order.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { platformRequest } from '../../shared/sdkRetry.ts';
-import { listAll } from '../../shared/listAll.ts';
+import { listAll, filterAll } from '../../shared/listAll.ts';
 
 const NOT_REAL = new Set([
   'annanoelwenballew@gmail.com', 'annanoelbusinessemail@gmail.com', 's2kap2chick@gmail.com',
@@ -69,6 +75,47 @@ Deno.serve(async (req) => {
     const nowMs = Date.now();
     const sinceMs = body?.since ? Date.parse(`${String(body.since).slice(0, 10)}T00:00:00Z`) : 0;
     const oneEmail = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+
+    if (body?.ai === true) {
+      const rows = (await filterAll(svc.AppEvent, { event: 'ai_usage' }))
+        .map((ev: any) => ({ ts: utcMs(ev.created_date), p: ev?.props || {} }))
+        .filter((x: any) => Number.isFinite(x.ts))
+        .sort((a: any, b: any) => a.ts - b.ts);
+      const dayOf = (ms: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+      const clock = (ms: number) => new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
+      const add = (t: any, p: any) => { t.calls++; t.input += Number(p.input) || 0; t.cached += Number(p.cached) || 0; t.write += Number(p.write) || 0; t.output += Number(p.output) || 0; };
+      const blank = () => ({ calls: 0, input: 0, cached: 0, write: 0, output: 0 });
+      const byDay: Record<string, Record<string, any>> = {};
+      const models: Record<string, any> = {};
+      for (const x of rows) {
+        const d = dayOf(x.ts);
+        const key = `${x.p.fn || '?'}|${x.p.model || '?'}|${x.p.project || '?'}`;
+        byDay[d] ||= {};
+        add((byDay[d][key] ||= blank()), x.p);
+        add((models[String(x.p.model || '?')] ||= blank()), x.p);
+      }
+      // Calls of one feature close together (30 seconds or less apart, 12 or more).
+      const bursts: any[] = [];
+      const byFn: Record<string, any[]> = {};
+      for (const x of rows) (byFn[String(x.p.fn || '?')] ||= []).push(x);
+      for (const [fn, list] of Object.entries(byFn)) {
+        let run: any[] = [];
+        const close = () => {
+          if (run.length >= 12) {
+            const t = blank();
+            for (const x of run) add(t, x.p);
+            bursts.push({ fn, from: clock(run[0].ts), to: clock(run[run.length - 1].ts), day: dayOf(run[0].ts), ...t });
+          }
+          run = [];
+        };
+        for (const x of list) {
+          if (run.length && x.ts - run[run.length - 1].ts > 30 * 1000) close();
+          run.push(x);
+        }
+        close();
+      }
+      return Response.json({ success: true, as_of: iso(nowMs), rows: rows.length, first: rows.length ? iso(rows[0].ts) : null, models, byDay, bursts });
+    }
 
     const [users, events, ledger] = await Promise.all([
       listAll(svc.User),
