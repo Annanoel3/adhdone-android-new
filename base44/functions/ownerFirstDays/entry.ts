@@ -44,6 +44,15 @@ function utcMs(v: any): number {
   return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
 }
 const iso = (ms: number) => (Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 16) + 'Z' : null);
+// Which calendar day a moment falls on where the person lives, as a day count.
+function localDay(ms: number, tz: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz || 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+    return Math.floor(Date.parse(`${parts}T00:00:00Z`) / D);
+  } catch {
+    return Math.floor((ms - 6 * H) / D);
+  }
+}
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 // Rows the server writes about a push, not something the person did.
@@ -165,6 +174,11 @@ Deno.serve(async (req) => {
       const s1End = s1 ? s1.end : firstMs;
       const backSameDay = presentAt.some((ts) => ts - s1End >= 30 * 60 * 1000 && day0(ts));
       const days = [...new Set(presentAt.map((ts) => Math.floor((ts - firstMs) / D)))].sort((a, b) => a - b);
+      // The way the industry counts "day 1": seen on the calendar day after
+      // the day they joined, by their own clock.
+      const tz = String(u?.timezone || 'America/Chicago');
+      const day0Local = localDay(firstMs, tz);
+      const localDays = [...new Set(presentAt.map((ts) => localDay(ts, tz) - day0Local))].sort((a, b) => a - b);
       const d0Push = sent.filter((x) => day0(x.ts));
       const kinds: Record<string, number> = {};
       for (const x of d0Push) kinds[x.kind] = (kinds[x.kind] || 0) + 1;
@@ -194,6 +208,8 @@ Deno.serve(async (req) => {
         back_same_day: backSameDay,
         days: days.slice(0, 14),
         n_days: days.length,
+        next_day: localDays.includes(1),
+        cal_days: localDays.slice(0, 14),
         last_h: r1((lastMs - firstMs) / H),
         all_made: count('task_created', () => true),
         all_done: count('task_completed', () => true),
@@ -222,6 +238,7 @@ Deno.serve(async (req) => {
       accounts_on_record: rows.length,
       first_day_on_record: covered.length,
       came_back_same_day_30min_later: rate(covered.filter((r) => old(r, 1)), (r) => r.back_same_day),
+      seen_the_next_calendar_day: rate(m2, (r) => r.next_day),
       seen_in_hours_24_to_48: rate(m2, (r) => inWindow(r, 1, 2)),
       seen_any_time_after_first_24h: rate(m2, backAfterDay0),
       seen_day_2_to_7: rate(m8, (r) => inWindow(r, 2, 8)),
@@ -248,6 +265,26 @@ Deno.serve(async (req) => {
       split('an app error in the first 24h', (r) => r.d0_err > 0),
       split('got 3 or more pushes in the first 24h (accounts since Nov 1 only)', (r) => (r._first < Date.parse('2026-10-29T00:00:00Z') ? null : r.push_d0 >= 3)),
     ];
+    // The same counts by when they joined. Small numbers: read them as counts.
+    const cohorts = [
+      ['Sep 19 - Oct 15', '2026-09-19', '2026-10-16'],
+      ['Oct 16 - Oct 31', '2026-10-16', '2026-11-01'],
+      ['Nov 1 - Nov 8', '2026-11-01', '2026-11-09'],
+      ['Nov 9 on', '2026-11-09', '2027-01-01'],
+    ].map(([label, from, to]) => {
+      const list = covered.filter((r) => r._first >= Date.parse(`${from}T00:00:00Z`) && r._first < Date.parse(`${to}T00:00:00Z`));
+      const two = list.filter((r) => old(r, 2));
+      const eight = list.filter((r) => old(r, 8));
+      return {
+        joined: label, accounts: list.length,
+        next_calendar_day: rate(two, (r) => r.next_day),
+        any_time_after_first_24h: rate(two, backAfterDay0),
+        back_within_days_1_to_7: rate(eight, (r) => inWindow(r, 1, 8)),
+        made_no_task_first_24h: rate(list, (r) => r.d0_made === 0),
+        notifications_not_allowed: rate(list, (r) => r.perm === false),
+        marked_uninstalled: rate(list, (r) => r.gone),
+      };
+    });
     const s1Bucket = (sec: number | null) => (sec === null ? 'no visit on record' : sec < 30 ? 'under 30s' : sec < 120 ? '30s-2min' : sec < 600 ? '2-10min' : '10min+');
     const firstVisit: Record<string, { n: number; came_back: number }> = {};
     for (const r of m2) {
@@ -270,6 +307,7 @@ Deno.serve(async (req) => {
       as_of: iso(nowMs),
       events_read: events.length,
       totals,
+      cohorts,
       first_visit_length_vs_came_back: firstVisit,
       welcome_chat_last_step_in_first_visit_vs_came_back: lastBeat,
       splits,
