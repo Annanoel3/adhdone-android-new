@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-15 pm: next copies keep who a text is to', ...look });
+      return Response.json({ success: true, copy: '2026-11-15 eve: stopped-phone alert names the build', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
