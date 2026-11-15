@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { base44 } from '@/api/base44Client';
@@ -89,7 +89,7 @@ function sameDayKey(a, b) {
   return dateKey(a) === dateKey(b);
 }
 
-export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen, user }) {
+export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen, user, onAddForDay, onOpenTasks }) {
   // Always open on today — browsing into the past/future never sticks between
   // app opens.
   const [cursor, setCursor] = useState(() => {
@@ -335,6 +335,19 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   // The tapped day in full, finished things included, but nothing on the back
   // burner (Anna, Oct 12 2026), the same as the week view.
   const selectedItems = (itemsByDate.get(dateKey(selected)) || []).filter((it) => !it.silenced);
+  // Tasks with no day at all. The Tasks page lists them under Today; this grid
+  // only has dated things, so today read "Nothing scheduled this day" beside a
+  // Tasks page saying "Today (4)" (Nov 14 2026). Today's panel now says how
+  // many there are and links to them. Same test as the Tasks page's sections
+  // (TaskSections.getTaskMeta): no start, due or reminder date; not a step,
+  // a birthday or something on the Back Burner.
+  const undatedCount = useMemo(() => tasks.filter((t) =>
+    t.status === 'active' && !t.parent_task_id && !t.silenced
+    && t.classification !== 'birthday' && !t.birthday_person
+    && !t.start_date && !t.due_date && !t.next_reminder).length, [tasks]);
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const selectedIsToday = sameDayKey(selected, new Date());
+  const selectedIsPast = selected.getTime() < todayStart.getTime() && !selectedIsToday;
 
   const cellBase = isDark ? 'bg-gray-800/60 border-gray-700' : 'bg-white border-gray-100';
   const cellMuted = isDark ? 'bg-gray-900/40' : 'bg-gray-50/60';
@@ -591,6 +604,16 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             {selectedItems.length} item{selectedItems.length !== 1 ? 's' : ''}
           </Badge>
         </div>
+        {selectedIsToday && undatedCount > 0 && (
+          <p className={`text-sm mb-3 ${textSecondary}`}>
+            {undatedCount} {undatedCount === 1 ? 'task has' : 'tasks have'} no day set.{' '}
+            {onOpenTasks && (
+              <button type="button" onClick={onOpenTasks} className={`underline font-medium ${isDark ? 'text-blue-300' : 'text-blue-600'}`}>
+                See {undatedCount === 1 ? 'it' : 'them'} in Tasks
+              </button>
+            )}
+          </p>
+        )}
         {selectedItems.length === 0 ? (
           <p className={`text-sm ${textSecondary}`}>Nothing scheduled this day.</p>
         ) : (
