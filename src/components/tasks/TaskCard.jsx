@@ -39,6 +39,8 @@ import PrepOffer, { prepOfferWanted } from "./PrepOffer";
 import PrepNoteBox from "./PrepNoteBox";
 import TextOffer, { textOfferWanted, TextReadyLine } from "./TextOffer";
 import TextAheadBox from "./TextAheadBox";
+import CallOffer, { callOfferWanted, CallReadyLine } from "./CallOffer";
+import CallBox from "./CallBox";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1308,12 +1310,19 @@ export default function TaskCard({
             to send" (TextOffer, in the one offer spot below); once the words
             are typed the row says it's ready and sends it in one tap. */}
         {!expanded && <TextReadyLine task={task} theme={theme} />}
+        {/* The same for a task that IS making a phone call (calls_someone):
+            "Add the number now so it's one tap to call" in the one offer
+            spot (CallOffer); once a number is saved the row calls it in one
+            tap (CallReadyLine). */}
+        {!expanded && <CallReadyLine task={task} theme={theme} />}
         {!expanded && (
           prepOfferWanted(task)
             ? <PrepOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
             : textOfferWanted(task)
               ? <TextOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
-              : <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+              : callOfferWanted(task)
+                ? <CallOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+                : <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
         )}
 
         {/* Expanded section: all other info + inline editing */}
@@ -1353,6 +1362,12 @@ export default function TaskCard({
                 (TextAheadBox). */}
             {task.texts_someone === true && task.status === 'active' && !task.parent_task_id && (
               <TextAheadBox task={task} theme={theme} compact showSend onSaved={() => { if (onRefreshTasks) onRefreshTasks(); }} />
+            )}
+
+            {/* The number for a call-someone task, saved ahead of time and
+                editable here; Call hands it to the phone's dialer (CallBox). */}
+            {task.calls_someone === true && task.status === 'active' && !task.parent_task_id && (
+              <CallBox task={task} theme={theme} showCall onSaved={() => { if (onRefreshTasks) onRefreshTasks(); }} />
             )}
 
             {/* Badges / inline editors */}
