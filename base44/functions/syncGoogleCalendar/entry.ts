@@ -1531,6 +1531,16 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         if (Number.isFinite(calMin) && calMin >= 5 && calMin < 24 * 60) taskRecord.event_guess_minutes = calMin;
         else if (Number.isInteger(usual) && usual >= 5 && usual <= 720) taskRecord.event_guess_minutes = usual;
       }
+      // A calendar entry that IS sending someone a text (the parser's
+      // texts_someone, Nov 15 2026): its row offers a spot to type the text
+      // ahead of time and its reminder page a Send button (TextOffer /
+      // TextAheadBox in the app). No popup for these: imports arrive in
+      // batches, so text_ask_pending is never set here.
+      if (taskRecord.classification === 'task' && ai?.texts_someone === true) {
+        taskRecord.texts_someone = true;
+        const who = String(ai?.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (who) taskRecord.text_person = who;
+      }
     }
 
     // Sync-record fields that don't depend on the task — built up front so the
