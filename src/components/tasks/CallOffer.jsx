@@ -34,8 +34,8 @@ export function CallReadyLine({ task, theme }) {
         onClick={() => callTaskNumber(task)}
         className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${
           dark
-            ? 'border-emerald-700 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+            ? 'border-sky-700 bg-sky-900/30 text-sky-300 hover:bg-sky-900/50'
+            : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
         }`}
       >
         <Phone className="w-3 h-3" />
@@ -80,8 +80,8 @@ export default function CallOffer({ task, theme, onRefreshTasks }) {
         onClick={() => { trackFire('call_offer', { props: { action: 'open', task_id: task.id } }); setEditing(true); }}
         className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors text-left ${
           dark
-            ? 'border-emerald-700 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50'
-            : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+            ? 'border-sky-700 bg-sky-900/30 text-sky-300 hover:bg-sky-900/50'
+            : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100'
         }`}
       >
         <Phone className="w-3 h-3 flex-shrink-0" />

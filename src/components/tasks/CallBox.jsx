@@ -101,16 +101,16 @@ export default function CallBox({ task, theme, autoFocus = false, showCall = fal
   const who = next.call_person;
   const field = `w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 ${
     dark
-      ? 'border-gray-700 bg-gray-900 text-gray-100 placeholder:text-gray-500 focus:ring-emerald-700'
-      : 'border-emerald-200 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-300'
+      ? 'border-gray-700 bg-gray-900 text-gray-100 placeholder:text-gray-500 focus:ring-sky-700'
+      : 'border-sky-200 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-sky-300'
   }`;
 
   return (
     <div
-      className={`rounded-xl border p-3 ${dark ? 'border-emerald-800/60 bg-emerald-900/15' : 'border-emerald-200 bg-emerald-50/70'}`}
+      className={`rounded-xl border p-3 ${dark ? 'border-sky-800/60 bg-sky-900/15' : 'border-sky-200 bg-sky-50/70'}`}
       onClick={(e) => e.stopPropagation()}
     >
-      <label className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mb-2 ${dark ? 'text-emerald-300' : 'text-emerald-800'}`}>
+      <label className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide mb-2 ${dark ? 'text-sky-300' : 'text-sky-800'}`}>
         <Phone className="w-3.5 h-3.5" />
         Call to make
       </label>
@@ -165,7 +165,7 @@ export default function CallBox({ task, theme, autoFocus = false, showCall = fal
             onClick={save}
             disabled={!changed || saving}
             className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 ${
-              dark ? 'bg-emerald-700 text-white hover:bg-emerald-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              dark ? 'bg-sky-700 text-white hover:bg-sky-600' : 'bg-sky-600 text-white hover:bg-sky-700'
             }`}
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Save'}
@@ -178,7 +178,7 @@ export default function CallBox({ task, theme, autoFocus = false, showCall = fal
           onClick={call}
           disabled={saving}
           className={`mt-3 w-full h-12 rounded-xl text-base font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
-            dark ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            dark ? 'bg-sky-600 text-white hover:bg-sky-500' : 'bg-sky-600 text-white hover:bg-sky-700'
           }`}
         >
           <Phone className="w-5 h-5" />
