@@ -13,6 +13,7 @@ import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeT
 import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 import { formatTimeRange } from "../components/utils/timeRangeLabel";
 import PrepNoteBox from "../components/tasks/PrepNoteBox";
+import TextAheadBox from "../components/tasks/TextAheadBox";
 
 // A check-off that can't reach the server is tried again instead of dropped
 // (Anna, Oct 17 2026: "Add the retry"). Done on an alarm or on a reminder in
@@ -478,6 +479,22 @@ export default function TaskNotification() {
               <Sparkles className="w-5 h-5 mr-2" />
               Draft Birthday Text 🎂
             </Button>
+          )}
+
+          {/* A task that IS sending someone a text: the words they typed
+              ahead of time (or the spot to type them now), and Send, which
+              opens the texting app with the number and the words filled in.
+              Part of the page, never a popup. They check the task off
+              themselves once it's sent. */}
+          {task.texts_someone === true && !task.birthday_person && task.status !== 'completed' && (
+            <div className="mb-4">
+              <TextAheadBox
+                task={task}
+                theme={theme}
+                showSend
+                onSaved={(fields) => setTask((t) => ({ ...t, ...fields }))}
+              />
+            </div>
           )}
 
           {prepBox && (
