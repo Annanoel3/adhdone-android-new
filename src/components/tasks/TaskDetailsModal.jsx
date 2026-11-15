@@ -1959,7 +1959,7 @@ Return JSON:
             {task.energy_required} energy
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-48 p-2">
+        <PopoverContent closeOnPick className="w-48 p-2">
           <div className="space-y-1">
             <button onClick={() => handleUpdateField('energy_required', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Energy</button>
             <button onClick={() => handleUpdateField('energy_required', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Energy</button>
@@ -1983,7 +1983,7 @@ Return JSON:
             {task.urgency} priority
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-48 p-2">
+        <PopoverContent closeOnPick className="w-48 p-2">
           <div className="space-y-1">
             <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
             <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
