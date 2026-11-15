@@ -226,7 +226,7 @@ export default function DeleteData() {
                   <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
-                    All tasks, sub-tasks, and associated reminders. You can request deletion of all tasks or tasks from specific date ranges.
+                    All tasks, their steps, and associated reminders. You can request deletion of all tasks or tasks from specific date ranges.
                   </p>
                 </div>
 
