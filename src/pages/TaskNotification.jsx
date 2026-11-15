@@ -211,6 +211,17 @@ export default function TaskNotification() {
     setProcessingAction('complete');
     setSaveError(null);
 
+    // A repeating task's next copy needs two lookups before it can be made (is
+    // one already there? whose phone is it for?). They start NOW, while Done is
+    // saving, so that the copy is the very next request out once it has saved
+    // (prepareNextCopy in taskRecurrence has the why: Nov 14 2026, Anna, on the
+    // second "repeating task has no next copy" alert: "Why does this keep
+    // happening"). Nothing is made here; if Done doesn't save, nothing is.
+    const repeats = !!task.recurrence_pattern && task.recurrence_pattern !== 'none';
+    const recurrence = repeats ? import('../components/utils/taskRecurrence') : null;
+    if (recurrence) recurrence.catch(() => {});
+    const prepared = recurrence ? recurrence.then((m) => m.prepareNextCopy(task)).catch(() => null) : null;
+
     try {
       const now = new Date();
       await withRetries(() => base44.entities.Task.update(task.id, {
@@ -246,10 +257,18 @@ export default function TaskNotification() {
       // only ever meets the app through its alarm there is no next open to
       // catch it (Nov 6 2026: an 8 AM daily medication checked off from its
       // alarm at 8:08 got no copy for the next day, and nothing else makes it).
-      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+      if (repeats) {
         try {
-          const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
-          await withRetries(() => createNextRecurrence(task));
+          const { createNextRecurrence } = await recurrence.catch(() => import('../components/utils/taskRecurrence'));
+          // The lookups made ahead are used for the first try only: a second
+          // try looks again, so a copy that did land (its answer lost on the
+          // way back) is found instead of made twice.
+          let ahead = prepared;
+          await withRetries(() => {
+            const opts = ahead ? { prepared: ahead } : {};
+            ahead = null;
+            return createNextRecurrence(task, opts);
+          });
           window.dispatchEvent(new CustomEvent('tasks-changed'));
         } catch (e) {
           console.error('Failed to create next recurrence:', e);
