@@ -2335,7 +2335,7 @@ Return JSON:
                       )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
+                  <PopoverContent noClose className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
                     theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'
                   }`}>
                     <div className="space-y-3">
@@ -2360,7 +2360,7 @@ Return JSON:
                           onChange={(e) => { setReminderTime(e.target.value); reminderTimeRef.current = e.target.value; dueDirty.current = true; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-gray-500 mt-1 min-h-[2rem]">
                           {reminderTime
                             ? (currentType === 'repeat' && !(task.reminder_interval && task.reminder_interval !== 'once')
                               ? 'One reminder at that time, each time it repeats.'
@@ -2369,10 +2369,24 @@ Return JSON:
                         </p>
                       </div>
                       <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
+                      {/* The way out, always in the same spot. "Clear the time"
+                           was the only button in this box, and it only showed up
+                           once a time was in it, right where a way out would be
+                           (Anna, Nov 14 2026: "Lots of pop ups dont go away on
+                           their own and have no way to exit"; earlier that day a
+                           2:00 PM she set on a daily task was cleared 40 minutes
+                           later, the same result as that button). It sits under
+                           Done now, smaller, and Done never moves. */}
+                      <PopoverClose asChild>
+                        <button type="button" className="block w-full rounded-md bg-purple-600 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-purple-700">
+                          Done
+                        </button>
+                      </PopoverClose>
                       {reminderTime && (
                         <button
+                          type="button"
                           onClick={() => { dueDirty.current = false; setReminderTime(''); reminderTimeRef.current = ''; handleUpdateReminderTime('', reminderDate); }}
-                          className="w-full text-center px-3 py-2 text-sm hover:bg-gray-50 rounded text-gray-600 font-medium"
+                          className={`w-full text-center px-3 py-1 text-xs underline ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
                         >
                           {repeatTimeOnly ? 'Clear the time' : 'Clear time — just due that day'}
                         </button>
