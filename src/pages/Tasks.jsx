@@ -385,6 +385,12 @@ export default function Tasks() {
   // harvest, fall and winter, so on those five it fell back to the plain light
   // look: a white card and black text sitting on the wallpaper.
   const isSeasonalTheme = () => isSeasonal(specialMode);
+  // What the Filter button says is on, when anything is (see the button).
+  const filtersOn = [
+    { completed: 'Completed', snoozed: 'Snoozed' }[statusFilter],
+    { urgent: 'Urgent', high: 'High priority', medium: 'Medium priority', low: 'Low priority' }[urgencyFilter],
+    { payment: 'Payments', event: 'Events', birthday: 'Birthdays', task: 'Tasks only' }[typeFilter],
+  ].filter(Boolean);
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full pb-0 ${
@@ -438,71 +444,111 @@ export default function Tasks() {
                   <Plus className="w-5 h-5 mr-2" />
                   Add Task
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleExportPDF}
-                  disabled={isExporting}
-                  className={isSeasonalTheme() ? 'bg-white/80 hover:bg-white border-gray-200' : ''}
-                >
-                  {isExporting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Exporting...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4 mr-2" />
-                      Export PDF
-                    </>
-                  )}
-                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500 flex-shrink-0" />
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-28">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="snoozed">Snoozed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priority</SelectItem>
-              <SelectItem value="urgent">Urgent</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="payment">💳 Payments</SelectItem>
-              <SelectItem value="event">📅 Events</SelectItem>
-              <SelectItem value="birthday">🎂 Birthdays</SelectItem>
-              <SelectItem value="task">📌 Tasks</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <TaskSortDropdown extra={statusFilter === 'completed' ? { [COMPLETED_SORT]: COMPLETED_SORT_LABEL } : null} />
+          {/* One button holds the four choices (which tasks, priority, type,
+              order) and Export PDF. They were four boxes in a row, two rows
+              on a phone, with Export PDF beside Add Task: together they took
+              the top half of a phone screen before the first task (Nov 14
+              2026). A filter that is on is never hidden: the button turns
+              purple and names it ("Completed · High priority"). */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={filtersOn.length ? `Filter and sort. Showing: ${filtersOn.join(', ')}` : 'Filter and sort'}
+                className={`h-9 gap-1.5 max-w-[62vw] ${
+                  filtersOn.length
+                    ? 'border-purple-400 bg-purple-50 text-purple-800 hover:bg-purple-100'
+                    : isSeasonalTheme() ? 'bg-white/80 hover:bg-white border-gray-200' : ''
+                }`}
+              >
+                <Filter className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{filtersOn.length ? filtersOn.join(' · ') : 'Filter & sort'}</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className={`w-72 p-3 space-y-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
+              <div className="space-y-1">
+                <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Show</p>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="snoozed">Snoozed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Priority</p>
+                <Select value={urgencyFilter} onValueChange={setUrgencyFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All priorities</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Type</p>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    <SelectItem value="payment">💳 Payments</SelectItem>
+                    <SelectItem value="event">📅 Events</SelectItem>
+                    <SelectItem value="birthday">🎂 Birthdays</SelectItem>
+                    <SelectItem value="task">📌 Tasks</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Sort</p>
+                <TaskSortDropdown className="!w-full" extra={statusFilter === 'completed' ? { [COMPLETED_SORT]: COMPLETED_SORT_LABEL } : null} />
+              </div>
+              {filtersOn.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter('active'); setUrgencyFilter('all'); setTypeFilter('all'); }}
+                  className={`text-sm font-medium underline ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`}
+                >
+                  Show everything again
+                </button>
+              )}
+              <Button
+                variant="outline"
+                onClick={handleExportPDF}
+                disabled={isExporting}
+                className="w-full"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export PDF
+                  </>
+                )}
+              </Button>
+            </PopoverContent>
+          </Popover>
 
           <WeeklyStar slot={0} />
 
