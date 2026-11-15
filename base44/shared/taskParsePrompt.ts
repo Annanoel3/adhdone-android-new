@@ -311,6 +311,25 @@ end_date — for a stated multi-day range (a trip Dec 3–7, a three-day
   into the early morning (a party from 7 PM to 2 AM) is one night, on the day
   it starts, not a range: end_date stays null.
 
+end_time — the clock time it ENDS ("HH:MM", 24-hour), only when the person
+  gave one: a range ("from 2 to 5", "6-8pm", "9 until noon", "between 1 and
+  3") or how long it runs ("at 3 for two hours" is "17:00", "a 45 minute
+  massage at 10" is "10:45"). Null when they said nothing about when it ends:
+  never guess one here. It needs a target_time the person gave. A deadline
+  ("by 5") is not an end, and a range of DAYS is end_date, not this. An end
+  after midnight ("7 PM to 2 AM") is still just its clock time ("02:00").
+
+usual_minutes — only for an EVENT that has a target_time and no end_time:
+  your best estimate, in whole minutes, of how long this kind of event
+  usually keeps someone there, from its start until they walk out. A dental
+  cleaning or a doctor visit is about 60, a haircut about 45, dinner out
+  about 90, a movie about 150, a concert or a ball game about 180, a wedding
+  about 300, a work shift about 480. Judge by what the event actually is,
+  never by one word in it. Null for anything that is not a timed event, when
+  end_time is filled in, and when you really can't tell. The person never
+  sees this number: it only helps the app judge where they will be when
+  their next thing starts.
+
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
   day_only_task is true, so the task actually shows a date in the app.
@@ -503,6 +522,8 @@ Return JSON with exactly these keys:
   "target_date": "YYYY-MM-DD" | null,
   "target_time": "HH:MM" | null,
   "time_stated": boolean,
+  "end_time": "HH:MM" | null,
+  "usual_minutes": integer | null,
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
