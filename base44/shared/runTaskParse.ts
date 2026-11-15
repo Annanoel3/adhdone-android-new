@@ -61,6 +61,11 @@ const TASK_PARSE_SCHEMA = {
     // time made up with no instructions would show on the card.
     end_time: { type: ["string", "null"], description: "HH:MM (24-hour) the event ENDS, only when the person's own words say when it ends or how long it runs. Null otherwise: never guess one." },
     usual_minutes: { type: ["integer", "null"], description: "For a timed event with no stated end: your estimate, in minutes, of how long this kind of event usually keeps someone there. Null for anything else." },
+    // A task that IS sending someone a text, and who it's to (Anna, Nov 15
+    // 2026: "If someone makes a task to text someone..."). Described here too,
+    // for a page still holding the older prompt right after a publish.
+    texts_someone: { type: "boolean", description: "True only when the thing to do is sending a text or a message to a person or a group. False for a call, an email, anything that could be said another way, and everything else." },
+    text_person: { type: ["string", "null"], description: "Who that text is to, in the person's own words. Null when texts_someone is false or no one is named." },
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
@@ -95,7 +100,7 @@ const TASK_PARSE_SCHEMA = {
   },
   required: [
     "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
-    "target_date", "target_time", "time_stated", "end_time", "usual_minutes", "end_date", "due_date",
+    "target_date", "target_time", "time_stated", "end_time", "usual_minutes", "texts_someone", "text_person", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "reminder_wish",
@@ -262,6 +267,11 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   const usual = Math.round(Number(parsed?.usual_minutes));
   parsed.usual_minutes = parsed?.classification === 'event' && !!parsed?.target_time && !parsed.end_time
     && Number.isFinite(usual) && usual >= 5 && usual <= 720 ? usual : null;
+  // A text to send: only on a plain to-do (never an event, a bill or a
+  // birthday, which has its own text), and the name kept short.
+  parsed.texts_someone = parsed?.texts_someone === true && (!parsed?.classification || parsed.classification === 'task');
+  const textTo = String(parsed?.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  parsed.text_person = parsed.texts_someone && textTo ? textTo : null;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'every_other_day', 'weekly', 'every_other_week', 'monthly', 'yearly'];
