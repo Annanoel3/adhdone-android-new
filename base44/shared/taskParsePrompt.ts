@@ -337,11 +337,11 @@ texts_someone — true only when the thing to do IS sending a text or a message
   the address", "send Sam a text when I land"). The app then gives them a
   spot to type that text ahead of time. False for a call, an email, a letter
   or a post; for something that could just as well be said in person or any
-  other way ("tell Dad", "let Sam know", "reply to Holly"); and for a task
+  other way ("tell Alex", "let Sam know", "reply to Dana"); and for a task
   that only mentions a text ("read Sam's text", "get the textbook"). Judge by
   what they mean, never by one word.
 
-text_person — who that text is to, in their own words ("Mom", "Chris", "the
+text_person — who that text is to, in their own words ("Mom", "Priya", "the
   group chat"). Null when texts_someone is false or they named no one.
 
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
