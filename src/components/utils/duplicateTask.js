@@ -26,6 +26,9 @@ const KEEP = [
   'recurrence_days', 'recurrence_nth_weekday', 'reminder_wish', 'alert_style', 'quiet_hours_exempt',
   'pictures', 'prep_questions', 'typical_minutes',
   'task_family', 'original_input',
+  // What the event is: how long it usually runs (shared/leaveOrigin.ts only,
+  // never shown) and whether it means going somewhere (the address line).
+  'event_guess_minutes', 'goes_somewhere',
 ];
 
 export async function duplicateTask(task) {
