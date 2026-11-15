@@ -250,6 +250,14 @@ export function planNextCopy(task: any, owner: any, email: string, nowMs: number
       text_phone: task.text_phone || null,
       text_offer_dismissed: task.text_offer_dismissed === true,
     } : {}),
+    // A repeating phone call keeps who it's to and their number, and whether
+    // the row's line was hidden.
+    ...(task.calls_someone === true ? {
+      calls_someone: true,
+      call_person: task.call_person || null,
+      call_phone: task.call_phone || null,
+      call_offer_dismissed: task.call_offer_dismissed === true,
+    } : {}),
     day_only_task: dayOnly,
     deadline_style: task.deadline_style || null,
     alert_style: task.alert_style || null,
