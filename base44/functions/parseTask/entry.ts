@@ -1,3 +1,4 @@
+// Nov 15 2026 (bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser reads an event's END when the person gave one ("from 2 to 5", "at 3 for two hours": end_time) and, for a timed event with none, estimates how long that kind of event usually runs (usual_minutes; never shown, read only by shared/leaveOrigin.ts). Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours". The admin check of several inputs takes { only: [field names] } to answer with just those fields; self-test cases added.
 // Re-saved Nov 14 2026 (afternoon; once more after shared/nthWeekday.ts gained the same-day-each-month math, unused here) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and nthWeekday.ts are picked up: "the second Tuesday of every month" is read as a monthly repeat on that weekday (Task.recurrence_nth_weekday, "2TU") and its first day is counted in code, not by the model (Anna: "we need a way to allow users to make recurring for second tuesday of every month, third thursday, first monday, first sunday etc").
 // Re-saved Nov 14 2026 so the bundled shared/taskParsePrompt.ts and runTaskParse.ts are picked up: the parser no longer invents a "next step" for a chore (Anna: "Remove it").
 // Nov 12 2026: { renamed: { from, to } } reads a task's new name after a rename. A short look on gpt-6-astra says whether the new name adds a day, a time or a repeat the old one didn't have; only then is the new name parsed, as of now, by the same parser as a new task. Nothing is saved here (the app applies it: renameReread.js). Admin check of several at once: { renameTry: [{ from, to }] }.
@@ -148,7 +149,15 @@ Deno.serve(async (req) => {
       const results = await Promise.all(body.texts.slice(0, 30).map(async (t: any) => {
         const text = String(t || "");
         try {
-          return { text, ...(await runTaskParse(base44, text, tz, aboutMe)) };
+          const parsed: any = await runTaskParse(base44, text, tz, aboutMe);
+          // { only: ["end_time", "usual_minutes"] }: just those fields, so a
+          // batch fits on one screen.
+          if (Array.isArray(body.only) && body.only.length) {
+            const out: Record<string, any> = { text };
+            for (const k of body.only.slice(0, 12)) out[String(k)] = parsed?.[String(k)] ?? null;
+            return out;
+          }
+          return { text, ...parsed };
         } catch (e) {
           return { text, error: String(e?.message || e) };
         }
@@ -298,6 +307,16 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Telehealth visit with the doctor Tuesday 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: false } },
   { text: "Physical therapy session Wednesday 9am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: true } },
   { text: "Dinner at the new Thai place Friday 7pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: true } },
+  // How long an event runs (Anna, Nov 14 2026: "Wish we could tell which
+  // events lasted an hour vs which ones last like 5 hours"). An end they gave
+  // is read (end_time) and never made up; with none, a timed event gets an
+  // estimate of its usual length (usual_minutes: never shown, read only by
+  // shared/leaveOrigin.ts); a to-do gets neither.
+  { text: "Baby shower Saturday from 2 to 5pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { classification: "event", target_time: "14:00", end_time: "17:00", usual_minutes: null } },
+  { text: "Massage Thursday at 3 for an hour and a half", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { target_time: "15:00", end_time: "16:30" } },
+  { text: "Dentist appointment Friday at 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: (v: any) => Number.isInteger(v) && v >= 30 && v <= 120 } },
+  { text: "Jess and Mark's wedding Saturday at 3pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: (v: any) => Number.isInteger(v) && v >= 180 } },
+  { text: "Submit the report by Friday 5pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { end_time: null, usual_minutes: null } },
 ];
 
 async function runParserSelfTest(base44: any) {
