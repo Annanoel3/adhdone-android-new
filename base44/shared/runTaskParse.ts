@@ -66,6 +66,11 @@ const TASK_PARSE_SCHEMA = {
     // for a page still holding the older prompt right after a publish.
     texts_someone: { type: "boolean", description: "True only when the thing to do is sending a text or a message to a person or a group. False for a call, an email, anything that could be said another way, and everything else." },
     text_person: { type: ["string", "null"], description: "Who that text is to, in the person's own words. Null when texts_someone is false or no one is named." },
+    // A task that IS making a phone call, and who it's to (Anna, Nov 15 2026,
+    // on the same picker with a Call button: "And do calls?"). Described here
+    // too, for a page still holding the older prompt right after a publish.
+    calls_someone: { type: "boolean", description: "True only when the thing to do is making a phone call to a person or a place. False for a text, an email, a video meeting, a scheduled call they join (an event), anything that could be done another way, and everything else." },
+    call_person: { type: ["string", "null"], description: "Who that call is to, in the person's own words. Null when calls_someone is false or no one is named." },
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
@@ -100,7 +105,7 @@ const TASK_PARSE_SCHEMA = {
   },
   required: [
     "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
-    "target_date", "target_time", "time_stated", "end_time", "usual_minutes", "texts_someone", "text_person", "end_date", "due_date",
+    "target_date", "target_time", "time_stated", "end_time", "usual_minutes", "texts_someone", "text_person", "calls_someone", "call_person", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "reminder_wish",
@@ -272,6 +277,12 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   parsed.texts_someone = parsed?.texts_someone === true && (!parsed?.classification || parsed.classification === 'task');
   const textTo = String(parsed?.text_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
   parsed.text_person = parsed.texts_someone && textTo ? textTo : null;
+  // A phone call to make: the same rule (a plain to-do only). Never both on
+  // one task: "call or text Dana" keeps the text, whose box already holds
+  // the number.
+  parsed.calls_someone = parsed?.calls_someone === true && !parsed.texts_someone && (!parsed?.classification || parsed.classification === 'task');
+  const callTo = String(parsed?.call_person || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  parsed.call_person = parsed.calls_someone && callTo ? callTo : null;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'every_other_day', 'weekly', 'every_other_week', 'monthly', 'yearly'];
