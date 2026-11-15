@@ -1166,7 +1166,7 @@ export default function TaskCard({
                     {chipIcon}{chipText}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                <PopoverContent noClose className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-3">
                     <div>
                       <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{chipDateLabel}</label>
@@ -1695,7 +1695,7 @@ export default function TaskCard({
                       })()}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                  <PopoverContent noClose className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-4 p-2">
                       <div>
                         <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Date:' : 'Due Date:'}</label>
