@@ -891,7 +891,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             :root {
               --primary: 142 76% 45%;
               --primary-foreground: 0 0% 100%;
-              --secondary: 240 4% 22%;
+              --secondary: 240 4% 12%;
               --secondary-foreground: 0 0% 98%;
               --accent: 240 4% 20%;
               --accent-foreground: 0 0% 98%;
