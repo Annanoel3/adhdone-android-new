@@ -285,7 +285,7 @@
         "type": "object",
         "additionalProperties": true
       },
-      "description": "Smart Reminders' own record of tasks it weighed and chose NOT to nudge, with its reason: {at, task_id, title, why}. Written on every look, kept for three days (60 at most), never sent to the user. For reviewing its judgment: why didn't it remind me about X?"
+      "description": "Smart Reminders' own record of tasks it weighed and chose NOT to nudge, with its reason: {at, task_id, title, why}. Written on every look, kept for three days, never sent to the user. For reviewing its judgment: why didn't it remind me about X? From Nov 16 2026 (PLANNER V2 in cronSmartTaskNudge): one row per task per day (150 at most), the newest answer, with back_at (when it said it would come back to the task) or not_today: true, and n (how many looks held the task back that day). The planner is shown these at its next look."
     },
     "app_platform": {
       "type": "string",
