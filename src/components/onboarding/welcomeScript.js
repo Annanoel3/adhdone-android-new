@@ -1,9 +1,16 @@
 import { phoneOs } from '@/lib/phonePlatform';
 
-// The first-run conversation, as data. Each beat is one line the app types; a
-// beat with `input` waits for the user before moving on; a beat with `skip`
-// is left out when it returns true. Keeping the script separate from the flow
-// component means the copy can be reworded without touching logic.
+// The first-run questions, as data. Each beat is one line; a beat with `input`
+// waits for the user before moving on; a beat with `skip` is left out when it
+// returns true. Keeping the script separate from the flow component means the
+// copy can be reworded without touching logic.
+//
+// HOW IT SHOWS (since Nov 15 2026, WelcomeChat.jsx): as cards, not a typed-out
+// chat. A beat with `input` (or `final`) is one card: the sentence that asks
+// is the bold question, anything before it in the same line sits above in
+// small type and anything after it below (cardParts). A beat with no `input`
+// has no card of its own: its line is small print at the top of the next
+// card. So when wording a line, put the question in its own sentence.
 //
 // Voice: the first line is the ONE place the builder introduces herself — after
 // that it's the app talking to the user, so everything below stays in the app's

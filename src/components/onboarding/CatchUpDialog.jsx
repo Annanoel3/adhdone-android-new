@@ -194,7 +194,11 @@ export default function CatchUpDialog({ user }) {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border">
+      <DialogContent
+        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border rounded-2xl"
+        // Same as the welcome: no keyboard until they tap the box.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="pt-2">
           <WelcomeChat onDone={handleClose} script={script} initialName={knownName} />
         </div>

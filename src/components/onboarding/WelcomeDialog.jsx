@@ -9,8 +9,11 @@ import { resumeScript } from './welcomeScript';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 import { aiConsentPending, AI_CONSENT_EVENT } from './AiConsentDialog';
 
-// The very first thing a new user sees — a short back-and-forth that collects a
-// name, a first task and its time, and asks for notifications. Nothing else in
+// The very first thing a new user sees — a few cards, one question each, that
+// collect a name, a first task and its time, and ask for notifications. (A
+// typed-out chat until Nov 15 2026; Anna: "make it more like brief cards that
+// pop up with simple answers". The component is still called WelcomeChat and
+// the comments below still say "chat": same questions, same answers.) Nothing else in
 // the first-run sequence starts until it's finished. (The about-you question
 // is the second open's, CatchUpDialog; Anna, Nov 4 2026.)
 //
@@ -193,10 +196,14 @@ export default function WelcomeDialog({ user }) {
   return (
     <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleDismiss(); }}>
       <DialogContent
-        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border"
+        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border rounded-2xl"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
+        // Nothing is focused as the first card appears, so the keyboard
+        // doesn't jump up over a card they haven't read yet (WelcomeChat,
+        // typeReady). They tap the box when they're ready.
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="pt-2">
           {mode === 'catchup' ? (
