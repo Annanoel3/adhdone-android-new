@@ -1,3 +1,4 @@
+// Nov 16 2026: each sent reminder's line now says how FAST it was answered, when the answer came while it was still ringing ("they saw it and got out of its alarm with Later about 2 seconds after it went out"; until now only the minute, "..., 9:59 PM"). Anna: "I keep pressing later without even reading the alarm. Pure adhd.", then "smart reminders seeing the amount of time it takes for someone to swipe away is a great idea". On her own account, Nov 13 to 16: 26 alarms answered, 25 with Later and 1 with Home, half of them within about 5 seconds of ringing and 10 within 3. A fact on the line and nothing else: the brief is unchanged (its wording is hers), nothing is removed, no plan is redone. See answeredIn in briefData.
 // Nov 15 2026 (10:30 PM): brief r48, the lists are out (shared/reminderBrief.ts, Anna's doc updated to match). Anna: "The brief shouldnt have to have hour-sense for specific things ... It should be too smart for a dumb list of things with hour-sense", then "Ok do it". The two judgment sections are the job and the judgment only; every list of specific things and hours added since rev 40 is gone, with one general paragraph on timing and one on the end of the day in their place (her own Oct 9 paragraph, "There is no fixed limit on pings", stays word for word). Checked first on owner replays of six real moments with the new replay extras here (candidate, dry, task_overrides: see "Replay extras" in the handler). Two things the planner is SHOWN changed in this file because they were untrue as worded and were making it wrong: a task family's timer minutes no longer read "usually takes them about N min" (it sent laundry at 10:10 PM because "their usual 24-minute laundry task fits"), and the parser's stock phrase for a bare "asap" is no longer shown as their own reminder wish (it sent "Buy body wash now" at 9:09 PM on "Explicit start-now wish").
 // Nov 15 2026 (9:30 PM): brief r46 and r47 (shared/reminderBrief.ts, Anna's doc updated to match). r46: Later is a way out of an alarm, counted the same as Home or Back (Anna: "later should be counted the same as home presses and back presses to get out of an alarm"), so the lines below say "got out of its alarm with Later" / "with Home" in the same words and never "answered". r47: no date never means it doesn't matter (Anna: "things without a date are probably things the user still wants to get done in the near future unless they say otherwise ... weigh PRIORITY, DATE, WHAT THE TASK IS, ALL OF IT"); the planner had passed over her no-date text four runs in a row with "no known deadline". No code changed for r47, only the brief.
 // Nov 15 2026 (night): one Later no longer ends a task's day. Brief r45 (shared/reminderBrief.ts, Anna's doc updated to match): "One Later is a pause, not a no"; when the break ends the task is owed its next mention today. Three facts the planner was missing are now on its lines: how each notification was answered on the phone ("they saw it and tapped Later, 3:29 PM": an answer is proof they saw it, app opened or not), a Later break that has ENDED ("that break ended at 6:29 PM"; the line used to go silent the moment it was over), and each finished task's own set time ("Take heart pill (the one set for 10:00 AM)", so finishing one of three same-named pill tasks doesn't silence the others). Anna, after a Sunday with 2 Smart Reminders by 8 PM against 8 the day before: "Smart reminders is being dumb as fuck. It is not being smart. I never said that ONE later press means forgrt it on a medium task. This counts as it leaving things out and that is a HUGE NO". Nothing is removed: this only brings mentions back. Also: tasks that share a name are said to be separate tasks, each with its own time (the planner had been reading her 3 PM pill as a copy of the 10 AM one), and alerts to the owner about the app (kind owner_*) are no longer counted in a person's day of reminders.
@@ -2672,19 +2673,40 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     });
 
     const seenAfter = (at: number) => Number.isFinite(lastSeenMs) && lastSeenMs > at;
+    // How fast an answer came (Anna, Nov 16 2026: "I keep pressing later
+    // without even reading the alarm", and "smart reminders seeing the amount
+    // of time it takes for someone to swipe away is a great idea"). Said only
+    // when the answer came while THAT reminder was still up: an alarm rings
+    // for 60 seconds (AlarmService RING_MS), so anything later is the answer
+    // to a snooze ringing again, or to a push that reached the phone late,
+    // and then only the clock time is given, as before. "After it went out",
+    // not "after it rang": the phone reports when the button was pressed, not
+    // when the ring began. Checked against alarms that rang out untouched on
+    // Anna's phone: reported 60.1 to 60.4 seconds after the send time, so the
+    // two are well under a second apart when a push arrives on time; a slow
+    // delivery can only make an answer look slower than it was, never faster.
+    // "About": the phone's clock and the server's are not the same clock.
+    const answeredIn = (sentAt: number, answeredAt: number) => {
+      const gap = answeredAt - sentAt;
+      if (!(gap > -3000 && gap <= 60 * 1000)) return '';
+      const secs = Math.max(1, Math.round(gap / 1000));
+      return `about ${secs} second${secs === 1 ? '' : 's'} after it went out`;
+    };
     const pushLines = dayPushes.slice(0, 40).map((p) => {
       if (p.at > nowMs) return `- ${clock(p.at)} ${p.title} — booked, not sent yet`;
       // What they did with it on the phone comes first: an answer means they
       // saw it, whether or not the app was opened afterwards.
       const a = p.answer;
+      const fast = a ? answeredIn(p.at, a.at) : '';
+      const when = !a ? '' : fast ? ` ${fast}` : `, ${clock(a.at)}`;
       const did = !a ? ''
         // Later is said the same way as Home and Back (Anna, Nov 15 2026:
         // "later should be counted the same as home presses and back presses
         // to get out of an alarm"): a way out of the alarm, not a decision.
-        : a.choice === 'later' ? `they saw it and got out of its alarm with Later, ${clock(a.at)}`
-        : a.choice === 'snooze' ? `they saw it and snoozed it, ${clock(a.at)}`
-        : a.choice === 'dismiss' ? `they saw it and stopped its alarm, ${clock(a.at)}`
-        : a.choice === 'closed' ? `they saw it and got out of its alarm with ${a.how === 'back' ? 'Back' : 'Home'}, ${clock(a.at)}`
+        : a.choice === 'later' ? `they saw it and got out of its alarm with Later${when}`
+        : a.choice === 'snooze' ? `they saw it and snoozed it${when}`
+        : a.choice === 'dismiss' ? `they saw it and stopped its alarm${when}`
+        : a.choice === 'closed' ? `they saw it and got out of its alarm with ${a.how === 'back' ? 'Back' : 'Home'}${when}`
         : a.choice === 'ignored' ? 'its alarm rang out with no answer'
         : '';
       return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
