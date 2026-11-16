@@ -1026,7 +1026,7 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
         <button type="button" onClick={() => mock('On a real alarm that marks the task done.')} className={`mt-6 w-full h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Done ✓</button>
         <div className="mt-3 flex w-full gap-3">
           <button type="button" onClick={() => mock('On a real alarm that opens the task in the app.')} className={`flex-1 h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Open task</button>
-          <button type="button" onClick={() => mock('On a real alarm that stops the ring and leaves the task for later.')} className={`flex-1 h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Later</button>
+          <button type="button" onClick={() => mock('Later means "I know, just not right now." Smart Reminders brings it back up later.')} className={`flex-1 h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Later</button>
         </div>
         <p className="mt-4 min-h-[1.25rem] text-center text-sm" style={{ color: '#C9C3DC' }}>
           {note || (ringing ? 'Ringing…' : '')}
@@ -1035,6 +1035,12 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
       </div>
 
       <div className="px-4 pb-4 space-y-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        {/* What Later means, said where people first choose alarms (Anna, Nov 16
+            2026: "Later just means, I acknowledge this needs to happen, but I'll
+            do it later. So, the smart reminders will bring it back up later."). */}
+        <p className="text-center text-xs" style={{ color: '#C9C3DC' }}>
+          Later means &ldquo;I know, just not right now.&rdquo; Smart Reminders brings it back up later.
+        </p>
         <p className="text-center text-sm" style={{ color: '#C9C3DC' }}>
           {trial ? 'Try it this way?' : 'Want your reminders this way?'}
         </p>
