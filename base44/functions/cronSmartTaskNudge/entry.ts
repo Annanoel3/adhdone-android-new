@@ -2578,7 +2578,13 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (t.task_family) {
         const hb = (ctx.habits || {})[t.task_family] || {};
         const mins = Number(t.typical_minutes || hb.minutes);
-        if (mins > 0) parts.push(`usually takes them about ${Math.round(mins)} min`);
+        // Said as what it is: the minutes on their own timer for this kind of
+        // task (logTaskCompletion), which is hands-on time. It used to read
+        // "usually takes them about 24 min", and on a replay of 10:10 PM with
+        // 50 minutes to bedtime the planner sent two loads of laundry because
+        // "their usual 24-minute laundry task fits" (Nov 15 2026). A fact the
+        // planner is handed has to be true as worded.
+        if (mins > 0) parts.push(`their own timer on this kind of task usually runs about ${Math.round(mins)} min (the minutes they spent on it, not how long the whole thing takes from start to finish)`);
         const pref = famYes[t.task_family] || (/^\d{2}:\d{2}$/.test(hb.preferred_time || '') ? hb.preferred_time : null);
         if (pref && !(t.anchor_time && !t.day_only_task)) parts.push(`they asked to be reminded about this around ${hhmmLabel(pref)}, when they usually do it`);
       }
