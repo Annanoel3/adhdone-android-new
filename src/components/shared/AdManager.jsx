@@ -27,9 +27,8 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 //     and they've had 4 seconds for Undo (Anna, Oct 8 2026: "four seconds is
 //     a long time to press undo"; the toast's last second sits under the ad),
 //     and only if they haven't tapped anything since;
-//   - they added a task — the moment the capture is finished (every part
-//     sorted, parsed and saved), with only half a second for the new task to
-//     land on the list first.
+//   - they added a task — right then, while the task is set up underneath
+//     (see AFTER_TASK_ADDED_MS for why it no longer waits for the save).
 // If neither happens, the owed ad falls back to the next page switch, but
 // only once they've been in the app a while (so the task pauses get their
 // chance first), and only onto a page where an ad makes sense. An open that
@@ -37,15 +36,22 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 // Nothing here waits on a timer and retries: a pause that isn't quiet when
 // it comes is simply let go, and the next one is waited for.
 const AFTER_TASK_DONE_MS = 4000;
-// Added a task: no clock after it (Anna, Oct 24 2026: "Seems like theres an
-// intentional pause between adding a task and an ad. It should be way more
-// immediate."). It used to wait a flat 3 seconds after the task was made and
-// only then start loading the ad. Now the ad is loaded ahead (admob.js
-// preloadInterstitialAd) and shows as soon as the capture is done.
+// Added a task: the pause is the Add itself (Anna, Nov 16 2026: "The ad
+// should pop up when the task starts saving, not when it finishes. Because
+// sometimes, it takes a while for a task to finish saving and so it kind of
+// seems like that pops out of nowhere at bad timing."). Until then it waited
+// for the capture to be finished, 10 to 20 seconds after the Add, by which
+// time they were on to something else. Half a second, so the page the Add
+// takes them to is drawn first (the task's card, still setting up) and that
+// is what they come back to. The ad is loaded ahead (admob.js
+// preloadInterstitialAd; Anna, Oct 24 2026: "It should be way more
+// immediate"). The task goes on being made under the ad: on Android the ad
+// covers the app the way leaving does, and TaskCaptureProcessor keeps the
+// task with the app for that one moment (src/lib/adCover.js).
 const AFTER_TASK_ADDED_MS = 500;
-// A task-created whose capture still isn't finished after this long stops
-// waiting (a capture stuck retrying never gets an ad on top of it).
-const TASK_ADDED_WAIT_MS = 2 * 60 * 1000;
+// Only a capture this new is "just added": one picked up from an earlier
+// open, or simply still on the list when this component remounts, is not.
+const JUST_ADDED_MS = 3000;
 // Past the tap that switched the page, so it doesn't read as mid-something.
 const AFTER_PAGE_SWITCH_MS = 2500;
 // No ad inside the first moments of an open, whatever happened.
@@ -66,7 +72,9 @@ let owedThisOpen = false;
 let lastTapAt = 0;
 let lastPathname = null;
 let pendingTimer = null;
-let taskAddedAt = 0; // a task was made and its ad waits for the capture to finish
+let pendingSource = null; // which pause the timer above is for
+let addedAt = 0; // when the task whose ad is waiting (or last showed) was added
+const seenCaptures = new Set(); // captures already looked at, by id
 
 function isCapacitor() {
   return window.Capacitor?.isNativePlatform?.() ?? false;
@@ -88,7 +96,9 @@ export function getAdManagerNotes() {
   try { return JSON.parse(localStorage.getItem(NOTE_KEY) || '[]'); } catch (e) { return []; }
 }
 
-function isUserBusy() {
+// ignoreTapsThrough: the tap that added a task is the pause itself, so for
+// that ad only a tap AFTER it means they've moved on to something.
+function isUserBusy(ignoreTapsThrough = 0) {
   const el = document.activeElement;
   if (el) {
     const tag = el.tagName.toLowerCase();
@@ -100,6 +110,7 @@ function isUserBusy() {
   // end up in the recording.
   if (window.__notesRecording) return true;
   if (document.querySelector('[data-mic-active="true"]')) return true;
+  if (lastTapAt <= ignoreTapsThrough) return false;
   return Date.now() - lastTapAt < RECENT_TAP_MS;
 }
 
@@ -148,7 +159,9 @@ function inGrace(count) {
 // An ad on top of it puts the app behind the ad half-way through (Oct 13 2026:
 // "call propane ... today" had just been sorted when a page-switch ad showed
 // 70 ms later; the task was never made, and that person never opened the app
-// again). Anna's rule: an ad never interrupts someone mid-task.
+// again). Anna's rule: an ad never interrupts someone mid-task. The one ad
+// that does show over a task being set up is that task's own, right after
+// the Add (task_added, Nov 16 2026).
 function taskBeingSetUp() {
   try {
     const now = Date.now();
@@ -162,6 +175,7 @@ function taskBeingSetUp() {
 function cancelPending() {
   if (pendingTimer) clearTimeout(pendingTimer);
   pendingTimer = null;
+  pendingSource = null;
 }
 
 // Load the owed ad now, so it can show the instant a pause comes.
@@ -169,28 +183,29 @@ function warmAd() {
   if (owedThisOpen && inFirstDays() !== true) preloadInterstitialAd().catch(() => {});
 }
 
-// A task was made: the pause is the moment its capture is finished. Run on
-// task-created and again on every change to the capture list, so a capture
-// that splits into several tasks gets one ad, after its last one.
-function checkTaskAdded() {
-  if (!taskAddedAt) return;
-  if (!owedThisOpen || Date.now() - taskAddedAt > TASK_ADDED_WAIT_MS) {
-    taskAddedAt = 0;
-    return;
-  }
-  if (taskBeingSetUp()) return;
-  taskAddedAt = 0;
-  // A tap a moment ago would get this pause let go as "just tapped", so it
-  // waits just until the screen has been quiet for RECENT_TAP_MS instead.
-  // Tapping on past that still lets it go (they're doing something).
-  // Same for a task finished inside the open's first moments: it waits for
-  // MIN_OPEN_AGE_MS rather than losing the pause as "too soon".
+// A task was just added (typed, spoken or shared in): that is the pause. Run
+// on every change to the capture list; each capture is looked at once, so
+// one that splits into several tasks, or is still there when this component
+// remounts on the next page, never asks twice.
+function noticeNewCaptures(list) {
   const now = Date.now();
-  atPause('task_added', Math.max(
-    AFTER_TASK_ADDED_MS,
-    lastTapAt + RECENT_TAP_MS - now + 50,
-    openStartedAt + MIN_OPEN_AGE_MS - now + 50,
-  ));
+  const here = new Set();
+  let newest = 0;
+  for (const c of list || []) {
+    here.add(c.id);
+    if (seenCaptures.has(c.id)) continue;
+    seenCaptures.add(c.id);
+    if (c.resumed || c.held) continue; // left over from an earlier open
+    const at = c.createdAt || 0;
+    if (now - at <= JUST_ADDED_MS) newest = Math.max(newest, at);
+  }
+  for (const id of [...seenCaptures]) if (!here.has(id)) seenCaptures.delete(id);
+  if (!newest || !owedThisOpen) return;
+  addedAt = newest;
+  // A task added inside the open's first moments waits for MIN_OPEN_AGE_MS
+  // rather than losing the pause as "too soon". A tap after the Add still
+  // lets it go (they're doing something).
+  atPause('task_added', Math.max(AFTER_TASK_ADDED_MS, openStartedAt + MIN_OPEN_AGE_MS - now + 50));
 }
 
 // Counts a launch at most once per gap window, so route changes (which
@@ -213,7 +228,7 @@ function registerLaunch() {
   lastPathname = window.location.pathname;
   resetAdLaunchState();
   cancelPending();
-  taskAddedAt = 0;
+  addedAt = 0;
   note(`open #${count}: ${owedThisOpen ? (carried && !shouldShowAd(count) ? 'an ad carried over from an earlier open, waiting for a pause' : 'an ad is due this open, waiting for a pause') : 'no ad due this open'}`);
   return true;
 }
@@ -222,10 +237,12 @@ function registerLaunch() {
 // otherwise let this pause go and wait for the next one.
 async function attempt(source) {
   pendingTimer = null;
+  pendingSource = null;
   if (!owedThisOpen) return;
   if (document.visibilityState === 'hidden') { note(`${source}: app not on screen`); return; }
-  // Waits for the pause after the task is made (task_added) instead.
-  if (taskBeingSetUp()) { note(`${source}: a task is still being set up`); return; }
+  // Only the ad for the Add itself shows over a task being set up.
+  const afterAdd = source === 'task_added';
+  if (!afterAdd && taskBeingSetUp()) { note(`${source}: a task is still being set up`); return; }
   if (inGrace(launchCount)) {
     owedThisOpen = false;
     writeOwed(false);
@@ -238,7 +255,7 @@ async function attempt(source) {
   if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) { note(`${source}: too soon after opening`); return; }
   if (NO_AD_PAGE.test(window.location.pathname)) { note(`${source}: no ads on ${window.location.pathname}`); return; }
   if (anyPopupOpen()) { note(`${source}: a popup is open`); return; }
-  if (isUserBusy()) { note(`${source}: typing, recording or just tapped`); return; }
+  if (isUserBusy(afterAdd ? addedAt : 0)) { note(`${source}: typing, recording or just tapped`); return; }
   try {
     const shown = await showInterstitialAd(source);
     note(`${source}: ${shown ? 'ad shown' : 'no ad (see last attempt above)'}`);
@@ -254,6 +271,7 @@ async function attempt(source) {
 function atPause(source, delayMs) {
   if (!owedThisOpen) return;
   cancelPending();
+  pendingSource = source;
   pendingTimer = setTimeout(() => attempt(source), delayMs);
 }
 
@@ -274,15 +292,9 @@ export default function AdManager({ user }) {
     warmAd();
 
     const onTaskDone = () => atPause('task_done', AFTER_TASK_DONE_MS);
-    const onTaskAdded = () => {
-      if (!owedThisOpen) return;
-      taskAddedAt = Date.now();
-      checkTaskAdded();
-    };
-    const stopWatchingCaptures = subscribeCaptures(() => checkTaskAdded());
+    const stopWatchingCaptures = subscribeCaptures(noticeNewCaptures);
     const onTap = () => { lastTapAt = Date.now(); };
     window.addEventListener('task-done', onTaskDone);
-    window.addEventListener('task-created', onTaskAdded);
     window.addEventListener('pointerdown', onTap, true);
     window.addEventListener('keydown', onTap, true);
 
@@ -304,7 +316,6 @@ export default function AdManager({ user }) {
 
     return () => {
       window.removeEventListener('task-done', onTaskDone);
-      window.removeEventListener('task-created', onTaskAdded);
       window.removeEventListener('pointerdown', onTap, true);
       window.removeEventListener('keydown', onTap, true);
       stopWatchingCaptures();
@@ -322,6 +333,8 @@ export default function AdManager({ user }) {
     if (!switched || !owedThisOpen) return;
     if (Date.now() - openStartedAt < PAGE_SWITCH_AFTER_MS) return;
     if (NO_AD_PAGE.test(path)) return;
+    // The Add itself took them to this page, and its ad is already on its way.
+    if (pendingSource === 'task_added') return;
     atPause('page_switch', AFTER_PAGE_SWITCH_MS);
   }, [location.pathname]);
 
