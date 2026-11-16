@@ -25,6 +25,16 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
     r => !removedIds.includes(r.notification_id)
   );
 
+  // What an empty list means for an event, said truthfully (Anna, Nov 16 2026,
+  // on a new event six weeks out whose card read "No reminders yet. Set the
+  // date and time below and the heads-ups get booked." with the date and time
+  // already set). Pushes can't be booked more than about 30 days ahead, so a
+  // far-off event's reminders are written by the hourly refill job (the plan
+  // shows here once it has run, and each one is booked when it comes in reach).
+  const whenMs = Date.parse(task.event_time || task.due_date || '');
+  const hasWhen = Number.isFinite(whenMs);
+  const farOff = hasWhen && whenMs - Date.now() > 30 * 24 * 60 * 60 * 1000;
+
   const formatDateTime = (iso) => {
     const d = new Date(iso);
     const now = new Date();
@@ -164,7 +174,11 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
 
       {schedule.length === 0 && !task.reminder_schedule_summary && (
         <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-          {isEvent
+          {isEvent && farOff
+            ? 'This is more than a month away. Its reminders get set up within the hour.'
+            : isEvent && hasWhen
+            ? 'No reminders on this. Add one below.'
+            : isEvent
             ? 'No reminders yet. Set the date and time below and the heads-ups get booked.'
             : 'No reminders yet. Add one below, or save a date and time above and the app books them.'}
         </p>
@@ -266,9 +280,14 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
         </Button>
       )}
 
+      {/* Only when there is something to tap: under an empty list it was one
+          more line to read about nothing (Anna, Nov 16 2026: "super messy and
+          overwhelming"). */}
+      {schedule.length > 0 && (
       <p className={`text-xs italic ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
         Tap × to turn one off. A new date and time rebuilds them all.
       </p>
+      )}
     </div>
   );
 }
