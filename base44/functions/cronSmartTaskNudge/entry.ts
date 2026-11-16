@@ -924,6 +924,12 @@ Deno.serve(async (req) => {
           for (const r of rows) {
             const at = utcMs(r.send_at);
             if (!Number.isFinite(at)) continue;
+            // Alerts to the owner about the app itself (cronRefillReminders,
+            // kind owner_*) are not reminders: on Anna's own phone account they
+            // were being counted in her day ("five notifications have gone
+            // out since the last app opening", two of them owner alerts) and
+            // helped talk the planner into stopping for the day (Nov 15 2026).
+            if (String(r.kind || '').startsWith('owner_')) continue;
             // REPLAY: a Smart Reminder after that moment hadn't been picked yet.
             if (replay && at > nowMs && r.kind === 'smart_nudge') continue;
             if (at <= nowMs && Number.isFinite(seenMs) && at > seenMs) sentSinceSeen++;
@@ -2441,10 +2447,25 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const s = x?.habit_suggestion;
       if (x?.task_family && s?.answer === 'yes' && /^\d{2}:\d{2}$/.test(s.time || '')) famYes[x.task_family] = s.time;
     }
+    // Tasks that share a name (three "Take heart pill" tasks, set for 10 AM,
+    // 3 PM and 8 PM, the 3 PM one made with Duplicate so it still carries the
+    // words "every day at 10 a.m."). Each is its own task. The planner read
+    // them as copies of one dose: "this may be a duplicate, so do not prompt
+    // an additional dose", and the 3 PM one was never brought back after its
+    // Later (Anna, Nov 15 2026: "leaving things out ... is a HUGE NO").
+    const sameName = (v: any) => String(v || '').replace(/\s*\(the one set for [^)]*\)\s*$/, '').trim().toLowerCase();
+    const nameCount: Record<string, number> = {};
+    for (const x of [...tasks, ...(ctx.fixed || [])]) { const k = sameName(x?.title); if (k) nameCount[k] = (nameCount[k] || 0) + 1; }
+    for (const d of doneToday) { const k = sameName(d); if (k) nameCount[k] = (nameCount[k] || 0) + 1; }
     const line = (t: any, i: number) => {
       const parts: string[] = [];
       const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
       if (said && said.toLowerCase() !== String(t.title || '').trim().toLowerCase()) parts.push(`their words when they added it: "${said.slice(0, 400)}"`);
+      const twins = nameCount[sameName(t.title)] || 0;
+      if (twins > 1) {
+        const own = hhmmLabel(t.anchor_time);
+        parts.push(`one of ${twins} separate tasks of theirs with this name today, each its own task with its own time${own ? `; this is the ${own} one` : ''}. Finishing another of them does not finish this one, and if the words above name a different time, they changed this one's time since: the time on the task is the one that counts`);
+      }
       const notesText = [t.description, t.notes].map((x) => String(x || '').trim()).filter(Boolean).join(' / ').replace(/\s+/g, ' ');
       if (notesText) parts.push(`notes: ${notesText.slice(0, 400)}`);
       if (t.goal_context) parts.push(`this is ${String(t.goal_context).slice(0, 200)}`);
