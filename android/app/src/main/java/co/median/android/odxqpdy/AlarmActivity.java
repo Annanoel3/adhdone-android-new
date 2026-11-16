@@ -67,6 +67,9 @@ public class AlarmActivity extends Activity {
     private MediaPlayer ownPlayer;
     private LoudnessEnhancer ownBoost;
     private AlarmSpeech ownSpeech;
+    // Whether the theme writes the Later button in capitals (read once, before
+    // nameLater takes the capitals off so the task's name keeps its own case).
+    private Boolean laterInCaps;
     private Vibrator ownVibrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
     // Rang out on this screen with no choice: stop, count it as ignored (the
@@ -117,6 +120,7 @@ public class AlarmActivity extends Activity {
         if (!body.isEmpty()) {
             titleView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 22);
         }
+        nameLater(e);
         // Ringing together with another task: the Done spot splits in two, one
         // half per task, in the same space one Done takes. One tap finishes that
         // task only; being reminded together doesn't mean finishing together
@@ -174,6 +178,136 @@ public class AlarmActivity extends Activity {
         row.addView(done);
         row.addView(b);
         parent.addView(row, at);
+    }
+
+    /**
+     * The task's name on the Later button itself (Anna, Nov 16 2026: "I keep
+     * pressing later without even reading the alarm. Pure adhd."): the thing the
+     * thumb goes for is the thing to read. One line under the word, cut with an
+     * ellipsis when it is long. The button stays where it was and as big as it
+     * was; with other tasks ringing together it says how many it puts off,
+     * since Later gives all of them the same break.
+     */
+    private void nameLater(AlarmStore.Entry e) {
+        try {
+            Button later = findViewById(R.id.alarm_later);
+            if (later == null || e == null) {
+                return;
+            }
+            String name = e.title == null ? "" : e.title.trim();
+            int others = e.companionTaskIds().size();
+            if (others == 1) {
+                name = "both tasks";
+            } else if (others > 1) {
+                name = "all " + (others + 1) + " tasks";
+            }
+            if (name.isEmpty()) {
+                return;
+            }
+            if (laterInCaps == null) {
+                laterInCaps = later.getTransformationMethod() != null;
+            }
+            String word = getString(R.string.alarm_action_later);
+            if (laterInCaps) {
+                word = word.toUpperCase(java.util.Locale.getDefault());
+            }
+            later.setAllCaps(false);
+            android.text.SpannableString label = new android.text.SpannableString(word + "\n" + name);
+            label.setSpan(new android.text.style.RelativeSizeSpan(0.72f), word.length() + 1, label.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            later.setText(label);
+            later.setMaxLines(2);
+            later.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            // Two lines in the height one line had: no padding above and below,
+            // and a very large system font is held back so the name isn't cut off.
+            later.setIncludeFontPadding(false);
+            later.setPadding(later.getPaddingLeft(), 0, later.getPaddingRight(), 0);
+            float fontScale = getResources().getConfiguration().fontScale;
+            if (fontScale > 1.3f) {
+                later.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f * 1.3f / fontScale);
+            }
+        } catch (Exception ex) {
+            Log.w(TAG, "AlarmActivity: Later not named", ex);
+        }
+    }
+
+    /**
+     * The words look a little different from one alarm to the next (Anna's yes,
+     * Nov 16 2026). A screen that looks the same every time stops being read:
+     * in a BYU study on Android phones (MIS Quarterly, 2018) people still heeded
+     * warnings that changed their look 76% of the time after 15 days, against
+     * 55% for ones that always looked the same. Four looks, taken in turn so no
+     * two alarms in a row match: where the heading and the words sit, their
+     * typeface, and how they come in. ONLY the heading and the words change;
+     * the buttons never move, and the colours stay the theme's. If anything
+     * here fails the words are simply shown as they always were.
+     */
+    private void varyLook() {
+        final TextView heading = findViewById(R.id.alarm_heading);
+        final TextView words = findViewById(R.id.alarm_task_title);
+        if (heading == null || words == null) {
+            return;
+        }
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("adhdone_alarm_look", MODE_PRIVATE);
+            int look = Math.abs(p.getInt("next", 0)) % 4;
+            p.edit().putInt("next", (look + 1) % 4).apply();
+            float from = 28f * getResources().getDisplayMetrics().density;
+            if (look == 1) {
+                // From the left edge instead of centred.
+                words.setGravity(android.view.Gravity.START);
+                heading.setGravity(android.view.Gravity.START);
+                android.view.ViewGroup.LayoutParams lp = heading.getLayoutParams();
+                lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                heading.setLayoutParams(lp);
+                words.setTranslationX(-from);
+            } else if (look == 2) {
+                words.setTypeface(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD);
+                words.setScaleX(0.92f);
+                words.setScaleY(0.92f);
+            } else if (look == 3) {
+                // The heading under the words instead of over them.
+                android.view.ViewGroup box = (android.view.ViewGroup) heading.getParent();
+                if (box != null && box == words.getParent()
+                        && heading.getLayoutParams() instanceof LinearLayout.LayoutParams
+                        && words.getLayoutParams() instanceof LinearLayout.LayoutParams) {
+                    LinearLayout.LayoutParams wordsAt = (LinearLayout.LayoutParams) words.getLayoutParams();
+                    LinearLayout.LayoutParams headingAt = (LinearLayout.LayoutParams) heading.getLayoutParams();
+                    int gap = wordsAt.topMargin;
+                    box.removeView(heading);
+                    wordsAt.topMargin = 0;
+                    words.setLayoutParams(wordsAt);
+                    headingAt.topMargin = gap;
+                    box.addView(heading, box.indexOfChild(words) + 1, headingAt);
+                }
+                words.setTranslationY(-from);
+            } else {
+                words.setTranslationY(from);
+            }
+            words.setAlpha(0f);
+            heading.setAlpha(0f);
+            words.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(320L).start();
+            heading.animate().alpha(1f).setDuration(320L).start();
+        } catch (Exception ex) {
+            Log.w(TAG, "AlarmActivity: look not varied", ex);
+        }
+        // Whatever happened above, the words are fully on screen within a second.
+        words.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    words.animate().cancel();
+                    heading.animate().cancel();
+                    words.setAlpha(1f);
+                    heading.setAlpha(1f);
+                    words.setTranslationX(0f);
+                    words.setTranslationY(0f);
+                    words.setScaleX(1f);
+                    words.setScaleY(1f);
+                } catch (Exception ignored) {
+                }
+            }
+        }, 900L);
     }
 
     private static String shortTitle(String t) {
@@ -296,6 +430,7 @@ public class AlarmActivity extends Activity {
         }
         showing = new WeakReference<>(this);
         showWords(e);
+        varyLook();
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::backStopsRing);
@@ -346,6 +481,8 @@ public class AlarmActivity extends Activity {
         if (ownPlayer != null || ownSpeech != null || ownVibrator != null) {
             return;
         }
+        // A voice still finishing the last alarm's sentence stops for this one.
+        AlarmSpeech.silenceLingering();
         final AlarmStore.Entry e = alarmId != null ? AlarmStore.get(this, alarmId) : null;
         boolean ownPick = e != null && e.soundUrl != null && !e.soundUrl.trim().isEmpty();
         if (AlarmQuiet.vibrateOnly(this)) {
@@ -496,6 +633,11 @@ public class AlarmActivity extends Activity {
 
     /** Later: the ring stops and nothing is booked here; the app stays closed. */
     private void later() {
+        // Ringing on this screen with the spoken alarm: the voice gets to the end
+        // of the reminder once (AlarmSpeech.finishOnce), everything else stops.
+        if (ownSpeech != null && ownSpeech.finishOnce()) {
+            ownSpeech = null;
+        }
         stopOwnRinging();
         sendToService(AlarmService.ACTION_LATER, 0);
         finish();
