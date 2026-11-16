@@ -27,23 +27,26 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 // linked for pushes (then it books straight away).
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 
-// Skip on "what's one thing…": instead of an empty list, three tap-to-pick
-// things most people need anyway (Anna, Nov 4 2026: "use the lazy path as an
-// opportunity to show personality and relatability"). Each is a real, small
-// task for today, so a pick gets the same "when?" and the same first reminder
-// as a typed one. Exactly these three, always (Anna: "pick the top 3 most
-// likely to be chosen and use only those"); "Really, nothing today" skips for
-// real. Written here, not taken from anyone's tasks.
-const TASK_OFFER_LINE = "No pressure — brains don't take requests. These count too. Tap one and it's on your list:";
+// THE PICKS, ON THE TASK CARD FROM THE START (Anna, Nov 15 2026: "show the
+// picks can be visible. Just do a text box and show the picks below"). Three
+// tap-to-pick things most people need anyway sit under the box, so the one
+// question that asks for a thought to be typed can also be answered with a
+// tap: of the six accounts that joined Nov 13 to 15, the two that stopped
+// partway both stopped on this question. Each is a real, small task for today,
+// so a pick gets the same "when?" and the same first reminder as a typed one.
+// Exactly these three, always (Anna, Nov 4 2026: "pick the top 3 most likely
+// to be chosen and use only those"). Written here, not taken from anyone's
+// tasks. Skip under them skips for real.
+// (Nov 4 to Nov 15 2026 they only came up after Skip, under the line "No
+// pressure — brains don't take requests. These count too. Tap one and it's on
+// your list:", with "Really, nothing today" as the real skip. With nothing to
+// skip first, that line has nothing to answer to; a short label stands there.)
+const TASK_OFFER_LABEL = 'Or tap one:';
 const TASK_OFFERS = [
   "Drink a glass of water (it's been judging me)",
   "Answer the text I've opened four times",
   'Find my keys before I need them',
 ];
-const TASK_OFFER_DECLINE = 'Really, nothing today';
-function pickTaskOffers() {
-  return TASK_OFFERS;
-}
 
 // "When should it remind you?" — three taps, nothing else (A task that
 // already names its time skips the question entirely; see saysWhen in
@@ -349,27 +352,23 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer();
   };
 
-  // Skip on the task: the card turns into the offers, under their own line
-  // (see TASK_OFFERS). The beat stays the task beat; only the card changes.
-  const [taskOffers, setTaskOffers] = useState(null);
-  const skipTask = () => {
-    const offers = pickTaskOffers();
-    setTaskOffers(offers);
-    setDraft('');
-    trackFire('welcome_task_offer', { props: { action: 'shown' } });
-  };
+  // The picks under the box (see TASK_OFFERS), and the real skip under them.
+  // The events keep their names from when the picks came up after Skip:
+  // shown (now: the task card is on screen), picked, declined (now: Skip).
   const pickTaskOffer = (text) => {
     trackFire('welcome_task_offer', { props: { action: 'picked', pick: TASK_OFFERS.indexOf(text) } });
     setTask(text);
     if (!hasWhenBeat) captureTask(text, '');
-    setTaskOffers(null);
     advance();
   };
   const declineTaskOffers = () => {
     trackFire('welcome_task_offer', { props: { action: 'declined' } });
-    setTaskOffers(null);
     advance();
   };
+  const taskCardUp = beat?.input === 'task' && !skippedNow;
+  useEffect(() => {
+    if (taskCardUp) trackFire('welcome_task_offer', { props: { action: 'shown' } });
+  }, [taskCardUp, idx]);
 
   // The time they tapped is kept until the notifications question is answered;
   // the task goes in right after that (see submitNotify).
@@ -414,9 +413,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer();
   };
 
-  // What the card says. While the task offers are up, their own line is the card.
-  const parts = cardParts(taskOffers ? TASK_OFFER_LINE : line);
-  const smallPrint = taskOffers ? [] : [...saidOnTheWay, parts.lead].filter(Boolean);
+  // What the card says.
+  const parts = cardParts(line);
+  const smallPrint = [...saidOnTheWay, parts.lead].filter(Boolean);
   // Dots: one per card this script can show, the one on screen wide.
   const stops = script.map((b, i) => (isStop(b) ? i : -1)).filter((i) => i >= 0);
   const stepNumber = stops.indexOf(idx) + 1;
@@ -431,7 +430,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
       {beat && !skippedNow && (
         <div
-          key={`${idx}${taskOffers ? '-offers' : ''}`}
+          key={idx}
           className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
         >
           <div className="space-y-2">
@@ -491,31 +490,30 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             </div>
           )}
 
-          {beat.input === 'task' && !taskOffers && (
-            <div className="space-y-2">
-              <Input
-                autoFocus={typeReady}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && submitTask()}
-                placeholder="Like: call the pharmacy"
-                className="h-11"
-              />
+          {/* The box, then the picks: type one or tap one. The box doesn't
+              put the keyboard up by itself here, whatever card came before:
+              the keyboard would cover the picks. */}
+          {beat.input === 'task' && (
+            <div className="space-y-3">
               <div className="flex gap-2">
-                <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1 h-11 text-base">Add it</Button>
-                <Button variant="ghost" onClick={skipTask} className="h-11">Skip</Button>
+                <Input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && submitTask()}
+                  placeholder="Like: call the pharmacy"
+                  className="h-11 flex-1 min-w-0"
+                />
+                <Button onClick={submitTask} disabled={!draft.trim()} className="h-11 text-base shrink-0">Add it</Button>
               </div>
-            </div>
-          )}
-
-          {beat.input === 'task' && taskOffers && (
-            <div className="space-y-2">
-              {taskOffers.map((text) => (
-                <Button key={text} variant="outline" onClick={() => pickTaskOffer(text)} className="w-full h-auto min-h-11 py-2.5 text-sm leading-tight whitespace-normal">
-                  {text}
-                </Button>
-              ))}
-              <Button variant="ghost" onClick={declineTaskOffers} className="w-full text-xs">{TASK_OFFER_DECLINE}</Button>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">{TASK_OFFER_LABEL}</p>
+                {TASK_OFFERS.map((text) => (
+                  <Button key={text} variant="outline" onClick={() => pickTaskOffer(text)} className="w-full h-auto min-h-11 py-2.5 text-sm leading-tight whitespace-normal">
+                    {text}
+                  </Button>
+                ))}
+              </div>
+              <Button variant="ghost" onClick={declineTaskOffers} className="w-full">Skip</Button>
             </div>
           )}
 
