@@ -110,7 +110,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // older one (RULES.md, "An older copy of the planner must not answer"): what
 // it writes to smart_nudge_passed is in the old shape (no back_at) and is
 // folded in at the next scheduled look.
-const PLANNER_V2_LIVE = false;
+const PLANNER_V2_LIVE = true;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
