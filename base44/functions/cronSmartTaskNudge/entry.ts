@@ -80,6 +80,32 @@ import { countUsage } from '../../shared/aiCost.ts';
 const openai = countUsage(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronSmartTaskNudge' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// PLANNER V2 (Anna, Nov 16 2026: "Our goal is for it to not leave things out
+// that should have happened, not to overload with notifications, and to
+// actually do what we say it does"). On her own day the planner passed two
+// tasks at five looks in a row with "already raised this morning", sat on a
+// chore for "its one daily mention", and counted the reminders she set
+// herself as its own flood. What changes when this is on:
+//  1. ANSWERS: every answer the phone reported today is on that reminder's
+//     line with how many seconds it took, not only each task's newest
+//     (AppEvent 'alarm_choice', the same rows ARE THEY HELPING? reads).
+//  2. WHOSE REMINDER: what Smart Reminders sent is listed apart from the
+//     reminders they set themselves and from the app's other messages.
+//  3. COMING BACK: every numbered task it doesn't pick goes in "passed" with
+//     back_in_minutes (or null = not today, and why). Kept on the person
+//     (smart_nudge_passed, one row per task per day with a count), shown back
+//     on the task's line at the next look, and the next look comes at the
+//     earliest of those times.
+//  4. PUT OFF ON 3 DAYS: the one-mention-a-day cap is gone (the line says the
+//     fact, and how its reminders are delivered now); the every-other-day
+//     plan for a low-stakes repeating task (Anna, Nov 11 2026) stays a cap.
+//  5. "they saw it" is gone from Later, Home and Back (Anna: "A home or back
+//     press means they probably didn't read it").
+// Off: nothing the planner is shown or asked changes by a single character.
+// An owner replay with candidate: true runs V2 with the candidate brief.
+const PLANNER_V2_LIVE = false;
+// "passed" rows kept under V2: one per task per day.
+const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
 // long past its send time is dropped and planned again, not sent stale.
 const HELD_STALE_MS = 30 * 60 * 1000;
@@ -212,6 +238,8 @@ Deno.serve(async (req) => {
     // (a Later pressed since, an alarm answered since) back to what they were.
     const useCandidate = replay && body?.candidate === true;
     const dryRun = replay && body?.dry === true;
+    // PLANNER V2 (top of file): live for everyone, or on for this replay.
+    const plannerV2 = PLANNER_V2_LIVE || useCandidate;
     const taskOverrides: Record<string, any> | null = replay && body?.task_overrides && typeof body.task_overrides === 'object' ? body.task_overrides : null;
     if (replay) {
       const me = await base44.auth.me().catch(() => null);
@@ -959,7 +987,7 @@ Deno.serve(async (req) => {
         // day, not just its own nudges.
         const localMin = localMinutesOfDay(now, timeZone);
         const dayStartMs = nowMs - localMin * 60 * 1000;
-        const dayPushes: { at: number; title: string; mine: boolean; taskId?: string; answer?: { choice: string; at: number; how?: string } }[] = [];
+        const dayPushes: { at: number; title: string; mine: boolean; taskId?: string; kind?: string; answer?: { choice: string; at: number; how?: string }; answers?: { choice: string; at: number; how?: string; minutes?: number }[] }[] = [];
         let sentSinceSeen = 0;
         try {
           const ledgerFrom = Math.min(dayStartMs, Number.isFinite(seenMs) ? Math.max(seenMs, nowMs - 3 * DAY_MS) : dayStartMs);
@@ -980,7 +1008,7 @@ Deno.serve(async (req) => {
             if (replay && at > nowMs && r.kind === 'smart_nudge') continue;
             if (at <= nowMs && Number.isFinite(seenMs) && at > seenMs) sentSinceSeen++;
             if (at >= dayStartMs && at < dayStartMs + DAY_MS) {
-              dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge', taskId: r.task_id ? String(r.task_id) : '' });
+              dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge', taskId: r.task_id ? String(r.task_id) : '', kind: String(r.kind || '') });
             }
           }
           dayPushes.sort((a, b) => a.at - b.at);
@@ -1003,6 +1031,32 @@ Deno.serve(async (req) => {
                 if (p.taskId === String(t.id) && p.at <= nowMs && p.at <= cAt + 60 * 1000 && cAt - p.at < 6 * 60 * 60 * 1000) hit = p;
               }
               if (hit) hit.answer = { choice: String(c.choice), at: cAt, how: c.how ? String(c.how) : '' };
+            }
+          }
+          // PLANNER V2, 1: every answer of the day, each on the reminder it
+          // answered (the newest one about that task at or before it), in the
+          // order they came. A replay only sees answers made by its moment.
+          if (plannerV2) {
+            const seenKeys = new Set<string>();
+            const answers: { taskId: string; choice: string; at: number; how: string; minutes: number }[] = [];
+            for (const r of await choicesFor(email)) {
+              const pr = r?.props || {};
+              const cAt = utcMs(pr.at || r?.created_date);
+              const taskId = String(pr.task_id || '');
+              const choice = String(pr.choice || '');
+              if (!taskId || !choice || !Number.isFinite(cAt) || cAt < dayStartMs - 60 * 1000 || cAt > nowMs + 60 * 1000) continue;
+              const key = pr.report_id ? `r:${pr.report_id}` : `${taskId}|${choice}|${cAt}`;
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              answers.push({ taskId, choice, at: cAt, how: pr.how ? String(pr.how) : '', minutes: Number(pr.minutes) || 0 });
+            }
+            answers.sort((a, b) => a.at - b.at);
+            for (const c of answers) {
+              let hit: any = null;
+              for (const p of dayPushes) {
+                if (p.taskId === c.taskId && p.at <= nowMs && p.at <= c.at + 60 * 1000 && c.at - p.at < 6 * 60 * 60 * 1000) hit = p;
+              }
+              if (hit) (hit.answers = hit.answers || []).push({ choice: c.choice, at: c.at, how: c.how, minutes: c.minutes });
             }
           }
         } catch (e) {
@@ -1215,6 +1269,9 @@ Deno.serve(async (req) => {
           // When the parked-list roundup last went out (the sent log keeps a week).
           useBrief,
           briefText: useCandidate ? REMINDER_BRIEF_CANDIDATE : null,
+          v2: plannerV2 && useBrief,
+          // What it held back at its earlier looks (PLANNER V2, 3).
+          passedBefore: plannerV2 && Array.isArray(user.smart_nudge_passed) ? user.smart_nudge_passed : [],
           dryRun,
           fixed: fixedByUser[email] || [],
           habits: user.task_habits || {},
@@ -1289,7 +1346,9 @@ Deno.serve(async (req) => {
                     ? new Date(planOut.holdEndsMs + 60 * 1000).toISOString() : iso;
                 })() : null,
                 smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
-                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, planOut.passed, nowMs),
+                smart_nudge_passed: plannerV2 && useBrief
+                  ? mergePassedV2(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, planOut.passed, nowMs, dayOf)
+                  : mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, planOut.passed, nowMs),
               });
               schedulesGenerated++;
               console.log(`[SMART NUDGE] ${onlyEmail ? 'Re-planned' : 'Generated schedule'} for ${email}: ${newEntries.length} new nudge(s), ${stillQueued.length} kept`);
@@ -1495,7 +1554,7 @@ Deno.serve(async (req) => {
           const mentionDays = [...sentLog, ...newLog]
             .filter((l: any) => l?.task_id === entry.task_id && !l?.skip)
             .map((l: any) => dayOf(utcMs(l.at)));
-          if (easeTooSoon(easedNow, mentionDays, todayStr)) {
+          if (easeTooSoon(easedNow, mentionDays, todayStr) && !(PLANNER_V2_LIVE && useBrief && easedNow.gapDays === 1)) {
             entry.sent = true;
             entry.sent_at = now.toISOString();
             entry.skipped_reason = 'eased';
@@ -2020,7 +2079,7 @@ interface PlanContext {
   showReactions: boolean;
   // Every notification the app sends them today (all senders), and whether
   // they're looking at the app at all.
-  dayPushes: { at: number; title: string; mine: boolean; taskId?: string; answer?: { choice: string; at: number; how?: string } }[];
+  dayPushes: { at: number; title: string; mine: boolean; taskId?: string; kind?: string; answer?: { choice: string; at: number; how?: string }; answers?: { choice: string; at: number; how?: string; minutes?: number }[] }[];
   // How their day has started (dayStartLine).
   dayStart?: string;
   // Joined in the last day, nothing from Smart Reminders yet.
@@ -2043,6 +2102,9 @@ interface PlanContext {
   // stops before the model is asked.
   briefText?: string | null;
   dryRun?: boolean;
+  // PLANNER V2 (top of file), and what it held back at its earlier looks.
+  v2?: boolean;
+  passedBefore?: any[];
   fixed: any[];
   habits?: Record<string, any>;
   // Filled in by generateDailySchedule for THIS call (see PlanOut).
@@ -2131,6 +2193,29 @@ function mergePassed(prev: any, add: any[], nowMs: number): any[] {
   return [...kept, ...add].slice(-PASSED_MAX);
 }
 
+// PLANNER V2, 3: one row per task per day, the newest answer with how many
+// looks held the task back that day (n). Rows from before V2 (one per look)
+// are folded in the same way the first time a task is passed again.
+function mergePassedV2(prev: any, add: any[], nowMs: number, dayOf: (ms: number) => string): any[] {
+  let kept = (Array.isArray(prev) ? prev : []).filter((p: any) => {
+    const at = utcMs(p?.at);
+    return Number.isFinite(at) && nowMs - at < PASSED_KEEP_MS;
+  });
+  for (const a of add || []) {
+    const aAt = utcMs(a?.at);
+    if (!a?.task_id || !Number.isFinite(aAt)) continue;
+    const day = dayOf(aAt);
+    let n = 1;
+    kept = kept.filter((p: any) => {
+      if (p?.task_id !== a.task_id || dayOf(utcMs(p.at)) !== day) return true;
+      n += Math.max(1, Math.floor(Number(p?.n) || 1));
+      return false;
+    });
+    kept.push({ ...a, n });
+  }
+  return kept.slice(-PASSED_MAX_V2);
+}
+
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
   lastPassed = [];
   lastPrompt = '';
@@ -2142,6 +2227,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
     dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook, lastRoundupMs,
   } = ctx;
+  const v2 = ctx.v2 === true && ctx.useBrief;
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const timeStr = formatTime(localMin);
@@ -2211,6 +2297,21 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     }
     return end > nowMs ? end : NaN;
   };
+  // PLANNER V2, 3: what it said about each task at its earlier looks: how
+  // many looks held it back today, and the newest answer (its reason and when
+  // it said it would come back). A row from an earlier day is shown as that.
+  const passedByTask = new Map<string, { nToday: number; at: number; why: string; backAt: number; notToday: boolean; today: boolean }>();
+  if (v2) {
+    const rows = (Array.isArray(ctx.passedBefore) ? ctx.passedBefore : [])
+      .map((p: any) => ({ id: String(p?.task_id || ''), at: utcMs(p?.at), why: String(p?.why || '').replace(/\s+/g, ' ').trim().slice(0, 160), backAt: utcMs(p?.back_at), notToday: p?.not_today === true, n: Math.max(1, Math.floor(Number(p?.n) || 1)) }))
+      .filter((p: any) => p.id && Number.isFinite(p.at) && p.at <= nowMs)
+      .sort((a: any, b: any) => a.at - b.at);
+    for (const r of rows) {
+      const today = dayOf(r.at) === todayStr;
+      const cur = passedByTask.get(r.id);
+      passedByTask.set(r.id, { nToday: (cur?.nToday || 0) + (today ? r.n : 0), at: r.at, why: r.why, backAt: r.backAt, notToday: r.notToday, today });
+    }
+  }
   const holdEnds = new Map<string, number>();
   for (const t of tasks) {
     const end = holdEndOf(t);
@@ -2235,8 +2336,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // Oct 22 2026). ONE mention a day, so once it went out today, nothing
     // more; on the lowest plan, one every other day, so nothing while one
     // went out today or yesterday (Anna, Nov 11 2026).
+    // PLANNER V2, 4: the one-a-day plans are no longer a cap (the line says
+    // what happened and the planner judges); every other day still is.
     const ease = easeNow(t);
-    if (ease && easeTooSoon(ease, (ctx.pastNudges?.get(t.id) || []).map((p) => dayOf(p.at)), todayStr)) return false;
+    if (ease && !(v2 && ease.gapDays === 1) && easeTooSoon(ease, (ctx.pastNudges?.get(t.id) || []).map((p) => dayOf(p.at)), todayStr)) return false;
     if (!t.due_date || !t.day_only_task) return true;
     if (t.deadline_style === 'by') return true; // deadlines get runway
     const days = daysTo(t.due_date);
@@ -2616,6 +2719,16 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       // The words and times of what already went out about it (pastNudgesFor).
       const past = (ctx.pastNudges?.get(t.id) || []).slice(0, 10);
       if (past.length) parts.push(`what you sent about it this past week, newest first: ${past.map((p) => `${whenLabel(p.at)}: "${p.body.slice(0, 200)}"`).join(' | ')}`);
+      // PLANNER V2, 3: its own earlier answer about this task.
+      const held = v2 ? passedByTask.get(String(t.id)) : null;
+      if (held && held.why) {
+        const back = Number.isFinite(held.backAt)
+          ? `, and you said you would come back to it at ${whenLabel(held.backAt)}${held.backAt <= nowMs ? ' (that time has come)' : ''}`
+          : held.notToday ? ', and you said it was not for that day' : '';
+        parts.push(held.today
+          ? `you held it back at ${held.nToday} look${held.nToday === 1 ? '' : 's'} today; at the last one, ${clock(held.at)}, your reason was "${held.why}"${back}`
+          : `at your last look at it, ${whenLabel(held.at)}, you held it back: "${held.why}"${back}`);
+      }
       const react: string[] = [];
       if ((t.snooze_count || 0) > 0) react.push(`snoozed ${t.snooze_count}x`);
       if ((t.dismissed_count || 0) > 0) react.push(`swiped away or closed ${t.dismissed_count}x`);
@@ -2627,7 +2740,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const eased = easeNow(t);
       if (eased) {
         const days = Array.isArray(t.put_off_days) ? t.put_off_days.length : 0;
-        parts.push(eased.gapDays > 1
+        if (v2 && eased.gapDays === 1) parts.push(`put off on ${days} different days without getting done. Because of that, the app delivers anything you send about it as ${eased.nudge === 'notice' ? 'a regular notification, not an alarm' : 'an alarm with only Done and Later'}`);
+        else parts.push(eased.gapDays > 1
           ? `put off on ${days} different days and low stakes, so it's on the lightest plan now: at most ONE mention from you every other day, as a regular notification, never an alarm. Nothing went out about it today or yesterday, so today is its day. Pick the one moment it's most likely to get done; don't pile on`
           : `put off on ${days} different days, so it's on a lighter plan now: it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
       }
@@ -2712,6 +2826,35 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
     });
 
+    // PLANNER V2, 1, 2 and 5: every answer on the reminder it answered, in
+    // order, the first with its seconds; nothing says "they saw it"; and the
+    // reminders are sorted by whose they are.
+    const didV2 = (a: { choice: string; at: number; how?: string; minutes?: number }, when: string) => {
+      const key = a.how === 'home' ? 'Home' : a.how === 'back' ? 'Back' : '';
+      return a.choice === 'later' ? `got out of its alarm with Later${when}`
+        : a.choice === 'snooze' && key ? `pressed ${key} on its alarm${when}, which set it to ring again ${a.minutes || 10} min later`
+        : a.choice === 'snooze' ? `snoozed it${a.minutes ? ` ${a.minutes} min` : ''}${when}`
+        : a.choice === 'dismiss' ? `stopped its alarm${when}`
+        : a.choice === 'closed' ? (key ? `got out of its alarm with ${key}${when}` : `its alarm screen closed${when}`)
+        : a.choice === 'ignored' ? 'its alarm rang out with no answer'
+        : '';
+    };
+    const pushLineV2 = (p: PlanContext['dayPushes'][number]) => {
+      if (p.at > nowMs) return `- ${clock(p.at)} ${p.title} — booked, not sent yet`;
+      const list = (p.answers && p.answers.length ? p.answers : p.answer ? [p.answer] : []).slice(0, 4);
+      const did = list.map((a, i) => {
+        const fast = i === 0 ? answeredIn(p.at, a.at) : '';
+        return didV2(a, fast ? ` ${fast}` : `, ${clock(a.at)}`);
+      }).filter(Boolean).join('; then ');
+      return `- ${clock(p.at)} ${p.title} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
+    };
+    // Not theirs and not Smart Reminders': the app's own messages.
+    const OTHER_KINDS = new Set(['', 'general', 'motivation', 'daily_digest', 'overlap', 'duplicate', 'chat']);
+    const pushesV2 = dayPushes.slice(0, 60);
+    const mineV2 = pushesV2.filter((p) => p.mine).map(pushLineV2);
+    const theirsV2 = pushesV2.filter((p) => !p.mine && !OTHER_KINDS.has(String(p.kind || ''))).map(pushLineV2);
+    const otherV2 = pushesV2.filter((p) => !p.mine && OTHER_KINDS.has(String(p.kind || ''))).map(pushLineV2);
+
     const out: string[] = [];
     out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
@@ -2728,19 +2871,52 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
     const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
     const justAdded = notYet.filter((t: any) => holdEnds.has(t.id));
-    if (laterDay.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${laterDay.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
+    if (laterDay.length && v2) out.push(`OPEN TASKS NOT YOURS TODAY:\n${laterDay.map((t: any) => {
+      const brk = utcMs(t.later_until);
+      const why = Number.isFinite(brk) && brk > nowMs && dayOf(brk) !== todayStr ? `they tapped Later on it; that break runs until ${whenLabel(brk)}`
+        : easeNow(t)?.gapDays === 2 ? 'low stakes and put off on several days, so it gets one mention every other day, and one went out today or yesterday'
+        : t.due_date ? `tied to ${formatDateShort(t.due_date, timeZone)}` : 'tied to a later day';
+      return `- "${t.title}" — ${why}`;
+    }).join('\n')}`);
+    else if (laterDay.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${laterDay.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
     if (justAdded.length) out.push(`JUST ADDED, NOT YOURS YET (they wrote these down within the last hour or two, so they already know about them; nothing from you about them before the time shown, and you'll get to look again then):\n${justAdded.map((t: any) => `- "${t.title}" — yours from ${clock(holdEnds.get(t.id) as number)}`).join('\n')}`);
     if (fixedLines.length) out.push(`OPEN TASKS THAT ALREADY HAVE THEIR OWN REMINDERS (the app sends those; never yours to nudge, plan around them):\n${fixedLines.join('\n')}`);
     if (eventList) out.push(`TODAY'S APPOINTMENTS (they have their own reminders):\n${eventList}`);
     if (upcomingList) out.push(`THE WEEK AHEAD:\n${upcomingList}`);
     if (proximityNotes) out.push(proximityNotes);
-    out.push(`EVERYTHING THE APP HAS SENT OR BOOKED FOR THEM TODAY (every part of the app):\n${pushLines.length ? pushLines.join('\n') : '- nothing yet'}`);
+    if (v2) {
+      out.push(`WHAT YOU HAVE SENT OR BOOKED TODAY (Smart Reminders' own mentions, and what came back from each):\n${mineV2.length ? mineV2.join('\n') : '- nothing yet'}`);
+      out.push(`REMINDERS THEY SET THEMSELVES, TODAY (at a time or on a rhythm they chose, or for an appointment or a date of theirs; the app sends these on its own):\n${theirsV2.length ? theirsV2.join('\n') : '- none today'}`);
+      if (otherV2.length) out.push(`OTHER MESSAGES FROM THE APP TODAY:\n${otherV2.join('\n')}`);
+    } else {
+      out.push(`EVERYTHING THE APP HAS SENT OR BOOKED FOR THEM TODAY (every part of the app):\n${pushLines.length ? pushLines.join('\n') : '- nothing yet'}`);
+    }
     out.push(`FINISHED TODAY:\n${doneToday.length ? doneToday.slice(0, 20).map((d) => `- "${d}"`).join('\n') : '- nothing yet'}`);
     if (queued.length) out.push(`ALREADY GOING OUT IN THE NEXT FEW MINUTES (you picked it at an earlier look; it stays — don't repeat it, and anything you pick now comes after it):\n${queued.map((e) => `- "${e.title}": ${e.body} (${clock(utcMs(e.send_at))})`).join('\n')}`);
     if (laterLook) out.push('Some of what you picked today has already gone out (see above). You are looking at the same day again.');
     out.push(`Last time the parked-tasks roundup went out: ${Number.isFinite(lastRoundupMs) ? daysAgoLabel(lastRoundupMs) : 'never'}.`);
     out.push(`YOU ONLY PICK THE NEXT ONE. Decide the single next thing that should reach them, and when: right now, or a later minute today. Don't book anything after it. Once it goes out, or the moment anything changes (a task added, finished or edited, a snooze, a Later), you look again with whatever has happened by then and pick the next one. If nothing should go out yet, leave "nudges" empty and say when you want to look again.`);
-    out.push(`HOW TO ANSWER — valid JSON only:
+    if (v2) out.push(`HOW TO ANSWER — valid JSON only:
+{
+  "nudges": [
+    {
+      "task_index": <the number of the task, or 0 when it is about several>,
+      "task_indexes": [<the number of EVERY task the message is about>],
+      "delay_minutes": <minutes from now to send it, 0 for right now; nothing lands in quiet hours>,
+      "title": "<2-6 words, may include one emoji that fits what the task literally says>",
+      "body": "<the message itself: one or two complete sentences>",
+      "light": <true only for a rare, gentle mention of a task whose tag asks for that (a tag like "no rush"); otherwise false. For someone with alarms on, everything else rings, a task they keep putting off included>,
+      "roundup": <true only for the once-a-week single notification listing the tasks they parked with a tag like "play it by ear" or "waiting on X", so those aren't forgotten; otherwise false>,
+      "rationale": "<a short phrase: why this, why now>"
+    }
+  ],
+  "passed": [
+    { "task_index": <the number of a task you are not bringing up now>, "why": "<a short phrase>", "back_in_minutes": <minutes from now when you will come back to this task today, or null when it is not for today> }
+  ],
+  "look_again_minutes": <optional: minutes from now to look again if nothing changes first. You are asked again anyway at the earliest "back_in_minutes" above, and once your nudge goes out>
+}
+"nudges" holds one nudge at most. Every numbered task you don't pick goes in "passed", with when you will come back to it: "back_in_minutes" for a time later today, or null when it is not for today, and then "why" says what makes it not for today. You are asked again at the earliest of those times and shown what you said. "passed" is never shown to them. An empty "nudges" list is a complete answer.`);
+    else out.push(`HOW TO ANSWER — valid JSON only:
 {
   "nudges": [
     {
@@ -2891,7 +3067,9 @@ Return ONLY valid JSON:
         ],
       response_format: { type: 'json_object' },
       reasoning_effort: 'medium',
-      max_completion_tokens: 6000,
+      // V2 answers about every task, so its answer is longer (the budget is a
+      // ceiling, not a cost: only what is used is paid for).
+      max_completion_tokens: v2 ? 9000 : 6000,
     });
 
     const parsed = JSON.parse(response.choices[0].message.content);
@@ -2909,11 +3087,28 @@ Return ONLY valid JSON:
           task_id: task.id,
           title: String(task.title || '').slice(0, 80),
           why: String(p?.why || '').replace(/\s+/g, ' ').trim().slice(0, 160),
+          // PLANNER V2, 3: when it said it would come back (a day at most), or
+          // that it is not for today.
+          ...(v2
+            ? (p?.back_in_minutes !== null && p?.back_in_minutes !== undefined && p?.back_in_minutes !== '' && Number.isFinite(Number(p.back_in_minutes)) && Number(p.back_in_minutes) >= 0
+              ? { back_at: new Date(nowMs + Math.min(Number(p.back_in_minutes), 24 * 60) * 60 * 1000).toISOString() }
+              : { not_today: true })
+            : {}),
         };
       })
       .filter(Boolean)
-      .slice(0, 30);
+      .slice(0, v2 ? 80 : 30);
     out.passed = lastPassed;
+    // The next look comes at the earliest time it said it would come back to
+    // something (nextLookIso keeps that between 15 minutes and 3 waking hours).
+    if (v2) {
+      const backs = lastPassed.map((p: any) => (utcMs(p?.back_at) - nowMs) / 60000).filter((m: number) => Number.isFinite(m) && m > 0);
+      if (backs.length) {
+        const first = Math.min(...backs);
+        lastLookAgain = lastLookAgain === null ? first : Math.min(lastLookAgain, first);
+        out.lookAgain = lastLookAgain;
+      }
+    }
 
     const entries = nudges.map((n: any) => {
       const task = n.task_index > 0 ? tasks[n.task_index - 1] : null;
