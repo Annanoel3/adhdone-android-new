@@ -59,6 +59,22 @@ final class AlarmSpeech {
     private boolean repeat;
     private boolean stopped;
     private volatile boolean spokeOnce;
+    // The reminder has been read out once, all the way to its end.
+    private volatile boolean readOnce;
+    // Which stream it speaks on is settled at the start: finishOnce() turns
+    // `repeat` off, and that must not move an alarm's voice over to media.
+    private boolean alarmStream;
+    // A voice left to finish its sentence after Later (finishOnce). The next
+    // thing to ring or speak silences it first (silenceLingering).
+    private static AlarmSpeech lingering;
+    /** A voice left finishing that never reports its end is shut down after this. */
+    private static final long FINISH_TIMEOUT_MS = 25_000L;
+    private final Runnable giveUp = new Runnable() {
+        @Override
+        public void run() {
+            stop();
+        }
+    };
     /** No voice after this long (no voice data, a stuck engine): the tone takes over. */
     private static final long START_TIMEOUT_MS = 5_000L;
     private final Runnable watchdog = new Runnable() {
@@ -139,6 +155,9 @@ final class AlarmSpeech {
         this.listener = listener;
         this.stopped = false;
         this.spokeOnce = false;
+        this.readOnce = false;
+        this.alarmStream = repeat;
+        silenceLingering();
         if (words.isEmpty()) {
             words = "Time for this.";
         }
@@ -240,6 +259,7 @@ final class AlarmSpeech {
     }
 
     private void afterUtterance() {
+        readOnce = true;
         handler.post(new Runnable() {
             @Override
             public void run() {
@@ -352,7 +372,7 @@ final class AlarmSpeech {
             }
             // For engines that ignore audio attributes and only honour a stream.
             params.putInt(TextToSpeech.Engine.KEY_PARAM_STREAM,
-                    repeat ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC);
+                    alarmStream ? AudioManager.STREAM_ALARM : AudioManager.STREAM_MUSIC);
             params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f);
             int r = tts.speak(words, TextToSpeech.QUEUE_FLUSH, params, "adhdone_speech_" + (utterance++));
             if (r != TextToSpeech.SUCCESS) {
@@ -372,8 +392,46 @@ final class AlarmSpeech {
     }
 
     /** Stops speaking and releases the engine. Safe to call more than once. */
+    /**
+     * Later was pressed before the reminder had been read out once (Anna, Nov 16
+     * 2026: "I keep pressing later without even reading the alarm". Her presses
+     * came about 1 to 5 seconds after the alarm went out, and stopping the voice
+     * there meant the reminder was never heard at all). The alarm is over for
+     * everything else, and the break starts as usual; the voice alone goes on to
+     * the end of this reading, once, and stops by itself. Returns false when
+     * there is nothing to finish (it has already been read out in full, or it
+     * was stopped): the caller then stops it as before. If the engine never
+     * starts, the start watchdog ends it and nothing else rings in its place
+     * (there is no listener any more to bring the tone in).
+     */
+    boolean finishOnce() {
+        if (stopped || readOnce || tts == null) {
+            return false;
+        }
+        repeat = false;
+        listener = null;
+        handler.removeCallbacks(again);
+        lingering = this;
+        handler.removeCallbacks(giveUp);
+        handler.postDelayed(giveUp, FINISH_TIMEOUT_MS);
+        return true;
+    }
+
+    /** Stops a voice that was left finishing its sentence, if there is one. */
+    static void silenceLingering() {
+        AlarmSpeech l = lingering;
+        lingering = null;
+        if (l != null) {
+            l.stop();
+        }
+    }
+
     void stop() {
         stopped = true;
+        handler.removeCallbacks(giveUp);
+        if (lingering == this) {
+            lingering = null;
+        }
         listener = null;
         handler.removeCallbacks(again);
         handler.removeCallbacks(watchdog);
