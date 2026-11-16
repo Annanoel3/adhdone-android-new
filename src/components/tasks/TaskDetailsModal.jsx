@@ -163,6 +163,9 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   // v2 card layout only: notes / pictures start folded into "+ Add a …" links.
   const [v2NotesOpen, setV2NotesOpen] = useState(false);
   const [v2PicsOpen, setV2PicsOpen] = useState(false);
+  // An event's prep box is folded to "+ Add prep" until it's asked for or has a
+  // note in it (the card tidy, Nov 16 2026).
+  const [v2PrepOpen, setV2PrepOpen] = useState(false);
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef(''); const dueDirty = useRef(false); const eventDirty = useRef(false); // autosave: popovers save on close
   const isInitializingRef = useRef(false);
@@ -2224,7 +2227,17 @@ Return JSON:
             {/* Reminders group. For everyone but v2 this wrapper is invisible
                 (plain space-y-6), so the layout is unchanged. */}
             <div className={v2 ? v2Group : 'space-y-6'}>
-              {v2 && <div className={v2Label}>Reminders</div>}
+              {/* An event's card, tidied (Anna, Nov 16 2026: "this is super messy and
+                  overwhelming", then "Fix it, just make sure all features are still
+                  available"). It showed the date three times and ran reminders, start
+                  date, place, prep, date, alarm style in that order. Now: When and
+                  where (the date and time once, a start date, the place), then
+                  Reminders (the list, add one, notification or full-screen), then
+                  prep, folded to a link in the last group until it has a note.
+                  Nothing is removed. The pieces keep their place in the code and are
+                  put in order on screen with flex order classes, events only: a
+                  task's card is unchanged. */}
+              {v2 && <div className={v2Label}>{isEvent ? 'When and where' : 'Reminders'}</div>}
             {/* Task Type — the primary control that determines notification behavior.
                 Pulled into its own row above the other pills so it stands out. */}
             <div className="flex items-center gap-2">
@@ -2303,9 +2316,12 @@ Return JSON:
               {/* A repeating task is black and white: it fires on its cadence.
                    No smart/lead-time reminder plan. */}
               {currentType !== 'repeat' && currentType !== 'birthday' && ((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
-                <div className="w-full mt-2">
+                <>
+                {v2 && isEvent && <div className={`w-full order-4 pt-2 ${v2Label}`}>Reminders</div>}
+                <div className={`w-full ${isEvent ? 'order-5' : 'mt-2'}`}>
                   <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} isEvent={isEvent} />
                 </div>
+                </>
               )}
 
               {/* Smart Reminders task — no fixed reminder time, but it can
@@ -2481,7 +2497,7 @@ Return JSON:
                 task.start_date ? (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                      <button className={`order-2 cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
                         theme === 'dark' ? 'bg-emerald-900 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
                       }`}>
                         <CalendarClock className="w-3 h-3" />
@@ -2509,9 +2525,9 @@ Return JSON:
                 ) : (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
+                      <button className={`order-2 cursor-pointer hover:opacity-80 transition-opacity py-1 flex items-center gap-1 ${v2Link}`}>
                         <CalendarClock className="w-3 h-3" />
-                        Add Start Date
+                        Add a start date
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
@@ -2532,20 +2548,19 @@ Return JSON:
               {/* Location — only events happen at a place. Regular tasks and
                    chores don't need one, so it stays off their card. */}
               {isEvent && (
+                <div className="order-3 flex flex-wrap items-center gap-2 max-w-full">
                 <LocationField
                   task={task}
                   theme={theme}
                   onSave={(loc) => handleUpdateField('location', loc)}
                 />
+                </div>
               )}
 
               {/* What to get ready before an appointment (prep_worthy from the
                    parser, or any event with a note already): saving re-words
                    every reminder still ahead, alarms too (base44/shared/prepNote.ts). */}
-              {isEvent && task?.status === 'active' && !task?.birthday_person
-                && (task?.prep_worthy === true || String(task?.prep_note || '').trim()) && (
-                <PrepNoteBox task={task} theme={theme} compact onSaved={(note) => onUpdate && onUpdate({ ...task, prep_note: note })} />
-              )}
+              {/* Shown under the alarm style now, below this row (see v2PrepOpen). */}
 
               {/* Event date & time — editable for event tasks. Setting it
                    regenerates the lead-time reminder schedule automatically. */}
@@ -2558,7 +2573,7 @@ Return JSON:
                   }
                 }}>
                   <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    <button className="order-1 cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" />
                       {(() => {
                         // The event's date may live on next_reminder (that's
@@ -2631,6 +2646,12 @@ Return JSON:
                   {alertStyleControl}
                 </div>
               )}
+              {/* Prep for an appointment: the box when it has a note or was asked
+                  for; otherwise "+ Add prep" in the last group opens it. */}
+              {isEvent && task?.status === 'active' && !task?.birthday_person
+                && (String(task?.prep_note || '').trim() || (task?.prep_worthy === true && v2PrepOpen)) && (
+                <PrepNoteBox task={task} theme={theme} compact onSaved={(note) => onUpdate && onUpdate({ ...task, prep_note: note })} />
+              )}
             </div>
 
             {v2 && (
@@ -2647,6 +2668,10 @@ Return JSON:
                   )}
                   {!(v2PicsOpen || hasPictures) && (
                     <button type="button" className={v2Link} onClick={() => setV2PicsOpen(true)}>＋ Add a picture</button>
+                  )}
+                  {isEvent && task?.status === 'active' && !task?.birthday_person && task?.prep_worthy === true
+                    && !String(task?.prep_note || '').trim() && !v2PrepOpen && (
+                    <button type="button" className={v2Link} onClick={() => setV2PrepOpen(true)}>＋ Add prep</button>
                   )}
                 </div>
                 {(v2NotesOpen || hasNotes) && notesSection}
