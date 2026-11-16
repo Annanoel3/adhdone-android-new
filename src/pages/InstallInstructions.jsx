@@ -75,7 +75,10 @@ function startOf(task) {
 const NOTES_LABELS = ["night before · questions", "at the time · record notes"];
 function isMeeting(task) {
   return (task?.reminder_schedule || []).some((r) => NOTES_LABELS.includes(r?.label))
-    || (task?.prep_questions || []).length > 0;
+    || (task?.prep_questions || []).length > 0
+    // No reminders on it yet (more than about a month out): the judgment made
+    // when it was added (RecordNotesButton.isRecordable; Anna, Nov 16 2026).
+    || (task?.notes_worthy === true && !(task?.reminder_schedule || []).length);
 }
 
 function cleanQuestions(list) {
