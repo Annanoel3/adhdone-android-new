@@ -26,6 +26,7 @@ import {
   keepEarliest,
   trace,
 } from "../utils/taskCreationPipeline";
+import { hiddenByOwnAd } from "@/lib/adCover";
 
 // Base44 timestamps come back without a timezone marker but are UTC. Parsed
 // as-is the browser reads them as local time, hours off.
@@ -531,7 +532,14 @@ export default function TaskCaptureProcessor({ userEmail }) {
     // with the sorter). One already split goes over from the part it is on,
     // each part its own capture — and the question that part may be waiting
     // on is closed, since the server settles it.
-    const handOff = () => {
+    // underOwnAd (Nov 16 2026): the page went hidden because our own ad just
+    // covered it (Android, see src/lib/adCover.js). Nobody left and the app
+    // is still running, so a capture whose safety copy is out stays with the
+    // app, which goes on making it under the ad, steps and questions
+    // included; the copy covers the app being stopped from there. One with no
+    // copy out (an older build, a sign-in the phone doesn't hold yet) goes to
+    // the server as on any leave.
+    const handOff = (underOwnAd = false) => {
       const bridge = window.Capacitor?.Plugins?.ShareBridge;
       const viaPhone = typeof bridge?.handOffCapture === 'function';
       const send = (id, text, createdAt) => {
@@ -544,8 +552,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
         }
       };
       const handed = [];
+      const keptUnderAd = [];
       for (const c of currentCaptures()) {
         if (c.held || c.handedOff || !canHandOff(c) || !c.ownerEmail) continue;
+        if (underOwnAd && c.guardAt) { keptUnderAd.push(c.id); continue; }
         const said = c.createdAt || Date.now();
         if (Array.isArray(c.parts) && c.parts.length) {
           const from = c.doneCount || 0;
@@ -561,6 +571,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
         }
         handed.push(c.id);
       }
+      if (underOwnAd) trace('captureUnderAd', { kept: keptUnderAd, handed });
       // The open question belongs to a capture the server now has: close it.
       // The loop sees the hand-off and asks the server for the result.
       if (resolveRef.current && askForRef.current && handed.includes(askForRef.current)) answer(null);
@@ -572,7 +583,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
       if (document.visibilityState === 'visible') {
         noteFront();
         drain();
-      } else if (document.visibilityState === 'hidden') handOff();
+      } else if (document.visibilityState === 'hidden') handOff(hiddenByOwnAd());
     };
     const onOnline = () => drain();
     document.addEventListener('visibilitychange', onVisible);
