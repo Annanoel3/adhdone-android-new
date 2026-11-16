@@ -697,6 +697,37 @@ Deno.serve(async (req) => {
         const dropped = schedule.filter((e: any) => !e.sent).length;
         schedule = schedule.filter((e: any) => e.sent);
         console.log(`[SMART NUDGE] ${email}: plan was not made with the current brief — dropped ${dropped} waiting nudge(s), re-planning`);
+        // AN OLDER COPY ANSWERED THEIR LAST "RE-PLAN NOW" (found Nov 15 2026).
+        // onTaskUpdate asks this function to re-plan one person the moment a
+        // task of theirs changes (kickPlanner), and a function called by
+        // another function runs the copy from the last Publish, not the
+        // newest one. After a brief change that copy still has the old brief:
+        // it threw out the plan made here, made its own under the old wording
+        // (never sent: a one-person request doesn't send, and this run drops
+        // it), and this run then plans again. Two AI calls per task change
+        // instead of one, and old-brief reasons in their saved notes (Anna's
+        // account, 9:29:51 and 9:32:02 PM: brief r44 against r47 here). So
+        // when the plan being thrown out was made by such a request (planned
+        // within a minute after smart_nudge_kick_at), those requests are
+        // held off for this person for 6 hours by moving smart_nudge_kick_at
+        // ahead: onTaskUpdate only asks when the last ask is over 2 minutes
+        // old, so until then a change just marks the plan out of date and
+        // the next scheduled run (always the newest copy, 10 minutes at most)
+        // plans it. Nothing reaches them later than it did: the old copy's
+        // plan was being replaced at that same run anyway. After 6 hours one
+        // request goes through again; if the copies match by then (a Publish)
+        // it stays on, if not it is held off again. Scheduled runs only.
+        const kickMs = utcMs(user.smart_nudge_kick_at);
+        const plannedMs = utcMs(user.smart_nudge_planned_at);
+        if (!onlyEmail && user.smart_nudge_brief_version && Number.isFinite(kickMs) && Number.isFinite(plannedMs)
+          && plannedMs >= kickMs && plannedMs - kickMs <= 60 * 1000) {
+          try {
+            await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_kick_at: new Date(nowMs + 6 * 60 * 60 * 1000).toISOString() });
+            console.log(`[SMART NUDGE] ${email}: an older copy (${user.smart_nudge_brief_version}) answered their last re-plan request — holding those requests for 6 hours`);
+          } catch (e: any) {
+            console.error(`[SMART NUDGE] Could not hold re-plan requests for ${email}:`, e?.message || e);
+          }
+        }
       }
 
       // ARE THEY HELPING? (Anna, Oct 31 2026: some people keep pressing Later
