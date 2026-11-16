@@ -391,7 +391,6 @@ final class AlarmSpeech {
         }
     }
 
-    /** Stops speaking and releases the engine. Safe to call more than once. */
     /**
      * Later was pressed before the reminder had been read out once (Anna, Nov 16
      * 2026: "I keep pressing later without even reading the alarm". Her presses
@@ -426,6 +425,7 @@ final class AlarmSpeech {
         }
     }
 
+    /** Stops speaking and releases the engine. Safe to call more than once. */
     void stop() {
         stopped = true;
         handler.removeCallbacks(giveUp);
