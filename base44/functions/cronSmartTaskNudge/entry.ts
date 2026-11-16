@@ -2579,7 +2579,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         const left = lc.how === 'home' || lc.how === 'back' ? `pressed ${lc.how === 'home' ? 'Home' : 'Back'} on its alarm` : 'its alarm screen closed';
         const what = lc.choice === 'snooze' && lc.how ? `${left}, so it rings again in ${lc.minutes || 10} min`
           : lc.choice === 'snooze' ? `snoozed it${lc.minutes ? ` ${lc.minutes} min` : ''}`
-          : lc.choice === 'closed' ? `${left} without answering`
+          // Home / Back reads the same way Later does two lines down (Anna,
+          // Nov 15 2026: counted the same): a way out of the alarm.
+          : lc.choice === 'closed' ? (lc.how === 'home' || lc.how === 'back' ? `got out of its alarm with ${lc.how === 'home' ? 'Home' : 'Back'}` : left)
           : lc.choice === 'dismiss' ? 'stopped its alarm'
           : lc.choice === 'ignored' ? 'let its alarm ring out with no answer'
           : lc.choice === 'later' ? 'got out of its alarm with Later' : String(lc.choice);
