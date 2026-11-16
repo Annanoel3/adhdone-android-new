@@ -296,7 +296,7 @@ Deno.serve(async (req) => {
     // Finished top-level tasks per user: when (for her rule that a person's
     // own history only shapes their reminders after 10 finished tasks spread
     // over at least a week) and what (today's, as context).
-    const completionsByUser: Record<string, { at: number; title: string }[]> = {};
+    const completionsByUser: Record<string, { at: number; title: string; anchor?: string }[]> = {};
 
     // Work shifts (for people whose schedule changes week to week), from
     // yesterday on.
@@ -392,7 +392,7 @@ Deno.serve(async (req) => {
           // updated_date is the server's own clock; completed_at is written by
           // the phone in more than one format (some local time marked UTC).
           const at = utcMs(task.updated_date || task.completed_at);
-          if (Number.isFinite(at)) (completionsByUser[task.created_by] ||= []).push({ at, title: task.title || '' });
+          if (Number.isFinite(at)) (completionsByUser[task.created_by] ||= []).push({ at, title: task.title || '', anchor: task.anchor_time || '' });
         }
       }
       if (task.silenced) {
@@ -912,7 +912,7 @@ Deno.serve(async (req) => {
         // day, not just its own nudges.
         const localMin = localMinutesOfDay(now, timeZone);
         const dayStartMs = nowMs - localMin * 60 * 1000;
-        const dayPushes: { at: number; title: string; mine: boolean }[] = [];
+        const dayPushes: { at: number; title: string; mine: boolean; taskId?: string; answer?: { choice: string; at: number; how?: string } }[] = [];
         let sentSinceSeen = 0;
         try {
           const ledgerFrom = Math.min(dayStartMs, Number.isFinite(seenMs) ? Math.max(seenMs, nowMs - 3 * DAY_MS) : dayStartMs);
@@ -927,10 +927,31 @@ Deno.serve(async (req) => {
             if (replay && at > nowMs && r.kind === 'smart_nudge') continue;
             if (at <= nowMs && Number.isFinite(seenMs) && at > seenMs) sentSinceSeen++;
             if (at >= dayStartMs && at < dayStartMs + DAY_MS) {
-              dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge' });
+              dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge', taskId: r.task_id ? String(r.task_id) : '' });
             }
           }
           dayPushes.sort((a, b) => a.at - b.at);
+          // What they did with each one, as their phone reported it (the task's
+          // last_alarm_choice): the newest notification for that task at or
+          // before the answer carries it. An answer is proof they saw it, app
+          // opened or not. Until Nov 15 2026 the planner was only told "they
+          // have not opened the app since", so a day of alarms each answered
+          // with Later within seconds read as nobody looking, and it stopped
+          // for the day (Anna: "Smart reminders is being dumb as fuck").
+          {
+            const withTask = new Set(dayPushes.map((p) => p.taskId).filter(Boolean));
+            for (const t of allTasks) {
+              if (!t?.id || !withTask.has(String(t.id))) continue;
+              const c = t.last_alarm_choice;
+              const cAt = utcMs(c?.at);
+              if (!c?.choice || !Number.isFinite(cAt)) continue;
+              let hit: any = null;
+              for (const p of dayPushes) {
+                if (p.taskId === String(t.id) && p.at <= nowMs && p.at <= cAt + 60 * 1000 && cAt - p.at < 6 * 60 * 60 * 1000) hit = p;
+              }
+              if (hit) hit.answer = { choice: String(c.choice), at: cAt, how: c.how ? String(c.how) : '' };
+            }
+          }
         } catch (e) {
           console.error(`[SMART NUDGE] ${email}: today's notifications unavailable:`, e);
         }
@@ -1102,7 +1123,12 @@ Deno.serve(async (req) => {
           doneToday: (completionsByUser[email] || [])
             .filter((c) => dayOf(c.at) === todayStr)
             .sort((a, b) => a.at - b.at)
-            .map((c) => c.title)
+            // With its own set time when it has one: three tasks all named
+            // "Take heart pill" (10 AM, 3 PM, 8 PM) read as one, and after
+            // one was checked off the planner wrote "which dose is unclear;
+            // avoid prompting an additional dose" and never brought the 3 PM
+            // one back (Anna, Nov 15 2026: "leaving things out ... is a HUGE NO").
+            .map((c) => (c.title && c.anchor && hhmmLabel(c.anchor) ? `${c.title} (the one set for ${hhmmLabel(c.anchor)})` : c.title))
             .filter(Boolean),
           showReactions: hasEnoughHistory(email),
           dayPushes,
@@ -1935,7 +1961,7 @@ interface PlanContext {
   showReactions: boolean;
   // Every notification the app sends them today (all senders), and whether
   // they're looking at the app at all.
-  dayPushes: { at: number; title: string; mine: boolean }[];
+  dayPushes: { at: number; title: string; mine: boolean; taskId?: string; answer?: { choice: string; at: number; how?: string } }[];
   // How their day has started (dayStartLine).
   dayStart?: string;
   // Joined in the last day, nothing from Smart Reminders yet.
@@ -2516,6 +2542,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (putOff >= 3) parts.push(`put off ${putOff} times in all, so nothing you send about it repeats the words, the angle or the time of day of what it already got${past.length ? ' (listed above)' : ''}${hhmmLabel(t.anchor_time) ? ', except the time they named' : ''}`);
       const breakMs = utcMs(t.later_until);
       if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
+      // And one that has ended: until Nov 15 2026 the line went silent about
+      // the break the moment it was over, and the planner read the Later as
+      // the end of the matter ("Already answered Later today; no known
+      // deadline warrants another mention tonight"). Anna: "I never said that
+      // ONE later press means forgrt it on a medium task."
+      else if (Number.isFinite(breakMs) && nowMs - breakMs < 18 * 60 * 60 * 1000) parts.push(`they tapped Later on it; that break ended at ${clock(breakMs)}`);
       // The last thing they did with its alarm or reminder (the phone reports
       // each choice as it's made, build 39 on).
       const lc = t.last_alarm_choice;
@@ -2546,7 +2578,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const seenAfter = (at: number) => Number.isFinite(lastSeenMs) && lastSeenMs > at;
     const pushLines = dayPushes.slice(0, 40).map((p) => {
       if (p.at > nowMs) return `- ${clock(p.at)} ${p.title} — booked, not sent yet`;
-      return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
+      // What they did with it on the phone comes first: an answer means they
+      // saw it, whether or not the app was opened afterwards.
+      const a = p.answer;
+      const did = !a ? ''
+        : a.choice === 'later' ? `they saw it and tapped Later, ${clock(a.at)}`
+        : a.choice === 'snooze' ? `they saw it and snoozed it, ${clock(a.at)}`
+        : a.choice === 'dismiss' ? `they saw it and stopped its alarm, ${clock(a.at)}`
+        : a.choice === 'closed' ? `they saw its alarm and left it with ${a.how === 'back' ? 'Back' : 'Home'} without answering, ${clock(a.at)}`
+        : a.choice === 'ignored' ? 'its alarm rang out with no answer'
+        : '';
+      return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
     });
 
     const out: string[] = [];
