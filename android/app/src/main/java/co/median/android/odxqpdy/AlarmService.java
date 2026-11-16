@@ -489,6 +489,9 @@ public class AlarmService extends Service {
 
     private void startSound(final AlarmStore.Entry e) {
         stopSound();
+        // A voice still finishing the last alarm's sentence (after Later) stops
+        // for this one, whatever this one rings with.
+        AlarmSpeech.silenceLingering();
         // The spoken alarm: the phone reads the reminder out loud instead of a
         // tone, unless this alarm brought its own sound (a timer's pick). If no
         // speech engine can start, the tone path below takes over.
@@ -689,6 +692,13 @@ public class AlarmService extends Service {
             waiting.remove(id);
             RingLog.ended(this, id, RingLog.END_LATER, 0);
             Log.d(TAG, "AlarmService: later " + id);
+        }
+        // The spoken alarm gets to the end of the reminder once even when Later
+        // comes first (AlarmSpeech.finishOnce; Anna, Nov 16 2026): the ring is
+        // over and the break has started, only the voice goes on. Not for an
+        // alarm that was waiting behind the one ringing.
+        if (speech != null && (id == null || currentId == null || id.equals(currentId)) && speech.finishOnce()) {
+            speech = null;
         }
         finishRinging(id);
     }
