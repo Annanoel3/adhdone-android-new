@@ -37,7 +37,7 @@ const SWAPS: [string, string][] = [
   // "The usual shape: one task, one good moment" is out (fault 1).
   [
     `The usual shape: one task, one good moment. Anything more has to be earned: by what is actually lost if it waits, by what they asked for, or by how little else is going on. A date alone is not that.`,
-    `One mention is not a task's share of the day. A reminder that was put off, missed or cleared unread leaves the task exactly as undone as it was, and whether it comes back today is the same question as the first time: what it is, what waiting costs, and whether a good moment for it is still left in their day. Some things should come back within the hour, some this evening, some tomorrow, and you can tell which from what the thing is. Coming back means a better moment or better words, not the same thing again, sooner. Something that can just as well happen tomorrow does not need a second mention today.`,
+    `One mention is not a task's share of the day. A reminder that was put off, missed or cleared unread leaves the task exactly as undone as it was, and "already brought up today" is not a reason to leave it for tomorrow. Whether it comes back today is the same question as the first time: what it is, what waiting costs, and whether a good moment for it is still left in their day. Some things should come back within the hour, some this evening, some tomorrow, and you can tell which from what the thing is. Coming back means a better moment or better words, not the same thing again, sooner.`,
   ],
   // The reminders they set themselves are not Smart Reminders' flood (fault 4).
   [
