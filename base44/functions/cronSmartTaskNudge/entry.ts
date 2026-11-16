@@ -2464,7 +2464,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const twins = nameCount[sameName(t.title)] || 0;
       if (twins > 1) {
         const own = hhmmLabel(t.anchor_time);
-        parts.push(`one of ${twins} separate tasks of theirs with this name today, each its own task with its own time${own ? `; this is the ${own} one` : ''}. Finishing another of them does not finish this one, and if the words above name a different time, they changed this one's time since: the time on the task is the one that counts`);
+        parts.push(`one of ${twins} separate tasks of theirs with this name, each its own task with its own time${own ? `; this is the ${own} one` : ''}. Finishing another of them does not finish this one, and if the words above name a different time, they changed this one's time since: the time on the task is the one that counts`);
       }
       const notesText = [t.description, t.notes].map((x) => String(x || '').trim()).filter(Boolean).join(' / ').replace(/\s+/g, ' ');
       if (notesText) parts.push(`notes: ${notesText.slice(0, 400)}`);
