@@ -1,3 +1,10 @@
+// WORDING (Anna, Nov 15 2026, when these became cards: as few words as get
+// the point across). The name question is "What can we call you?" everywhere.
+// The about-you question is "Tell us a bit about your life?" with one made-up
+// example and what it's for ("Reminders fit around it."); the example that
+// used to sit beside it was Anna's own line of work, and example text never
+// comes from a real person (hers included).
+//
 // The catch-up conversation for accounts that onboarded BEFORE the name +
 // about-me questions existed. Same shape as welcomeScript (beats with an
 // optional `input`), but deliberately shorter: it skips the introduction and
@@ -20,7 +27,7 @@ const CATCH_UP_SCRIPT = [
   },
   {
     text: () =>
-      "First: what should we call you? You can change it in Settings anytime.",
+      "First: what can we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
@@ -28,7 +35,7 @@ const CATCH_UP_SCRIPT = [
   },
   {
     text: () =>
-      "Second: tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Second: tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -51,7 +58,7 @@ export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
   },
   {
     text: () =>
-      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -68,7 +75,7 @@ export const FIRST_DONE_SCRIPT = [
     text: () => "First one done — nice. Two quick questions now that you've seen how this works.",
   },
   {
-    text: () => "What should we call you? You can change it in Settings anytime.",
+    text: () => "What can we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
@@ -76,7 +83,7 @@ export const FIRST_DONE_SCRIPT = [
   },
   {
     text: () =>
-      "And tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "And tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -93,7 +100,7 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
   },
   {
     text: () =>
-      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -116,7 +123,7 @@ export const ABOUT_NOW_SCRIPT = [
     text: () => "Two quick questions that make ADHDone a lot better at helping *you*.",
   },
   {
-    text: () => "What should we call you? You can change it in Settings anytime.",
+    text: () => "What can we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
@@ -124,7 +131,7 @@ export const ABOUT_NOW_SCRIPT = [
   },
   {
     text: () =>
-      "And tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "And tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -140,7 +147,7 @@ export const ABOUT_NOW_ABOUT_ONLY_SCRIPT = [
   },
   {
     text: () =>
-      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Tell us a bit about your life? Like \"I'm a nurse on night shifts.\" Reminders fit around it.",
     input: 'about',
   },
   {
@@ -155,7 +162,7 @@ export const ABOUT_NOW_ABOUT_ONLY_SCRIPT = [
 export const NAME_ONLY_SCRIPT = [
   {
     text: () =>
-      "Quick one: we never caught your name. What should we call you?",
+      "Quick one: we never caught your name. What can we call you?",
     input: 'name',
   },
   {

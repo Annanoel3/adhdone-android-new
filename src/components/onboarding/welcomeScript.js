@@ -51,7 +51,10 @@ const SCRIPT = [
     text: () => "Hey, welcome to ADHDone. Built by Anna, who got tired of missing doctor's appointments and of apps that don't work.",
   },
   {
-    text: () => "First things first: what should we call you? You can change it in Settings anytime.",
+    // Anna, Nov 15 2026 (the cards' wording, as few words as get the point
+    // across): "what can we call you" for "First things first: what should
+    // we call you?".
+    text: () => "What can we call you? You can change it in Settings anytime.",
     input: 'name',
     // The one question that used to have no way past it. Nov 11 2026 a new
     // account left 14 seconds in, right as this question finished appearing
@@ -86,12 +89,15 @@ const SCRIPT = [
   },
   {
     // The notifications question, asked at the one moment it makes sense —
-    // right after they set a time — with the reason on it. Only in the phone
+    // right after they set a time. (Until Nov 15 2026 the line was "So it can
+    // reach you, Android's about to ask if ADHDone can send notifications";
+    // Anna: "Android will ask for notification permission or something
+    // shorter".) Only in the phone
     // app; the browser has nothing to ask (WelcomeChat skips it there).
     text: (name, handle, about, task, when) =>
       task
-        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`
-        : `So reminders can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`,
+        ? `${when ? `Set for ${when}. ` : ''}${phoneOs({ capital: true })} will ask to allow notifications.`
+        : `${phoneOs({ capital: true })} will ask to allow notifications.`,
     input: 'notify',
   },
   {
@@ -99,10 +105,10 @@ const SCRIPT = [
     // about-you question waits for the second open.
     text: (name, handle, about, task, when, notify) =>
       notify === 'declined'
-        ? "Without notifications nothing from ADHDone can reach you. You can turn them on any time from the row at the top of Home."
+        ? "Reminders can't reach you without notifications. Turn them on anytime at the top of Home."
         : task
           ? `You're set. ${when ? `First reminder: ${when}.` : "It'll remind you when it's time."}`
-          : "You're set — add something from Home whenever you're ready.",
+          : "You're set. Add a task from Home anytime.",
     final: true,
   },
 ];

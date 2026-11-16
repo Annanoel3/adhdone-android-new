@@ -533,7 +533,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
               <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">Pin a quick-capture shortcut</p>
-                  <p className="text-xs text-muted-foreground">A shortcut in your notification tray. Thought hits, you tap it, it's saved — no opening the app.</p>
+                  <p className="text-xs text-muted-foreground">Save a thought from your notification tray without opening the app.</p>
                 </div>
                 <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
               </div>
