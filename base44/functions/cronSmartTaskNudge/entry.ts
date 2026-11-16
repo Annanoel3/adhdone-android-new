@@ -1,4 +1,4 @@
-// Nov 16 2026 (night): PLANNER V2, behind the switch PLANNER_V2_LIVE (off; an owner replay with candidate: true turns it on for that replay only). Five things Anna approved after the planner passed the same tasks look after look with the same excuse: every answer of the day is shown with its seconds (not just the newest per task); reminders they set themselves are listed apart from Smart Reminders' own; every task held back gets a time it comes back (back_in_minutes) and the planner is shown what it said at its earlier looks; the one-a-day cap on a task put off on 3 days becomes a fact on its line; and "they saw it" is no longer said of a Later, Home or Back. See PLANNER V2 below.
+// Nov 16 2026 (night): PLANNER V2 is LIVE with brief r49 (the switch PLANNER_V2_LIVE below; it was tried first on owner replays with the candidate brief, and with the switch off the planner is shown exactly what it was shown before, checked character for character on two real moments). Five things Anna approved after the planner passed the same tasks look after look with the same excuse: every answer of the day is shown with its seconds (not just the newest per task); reminders they set themselves are listed apart from Smart Reminders' own; every task held back gets a time it comes back (back_in_minutes) and the planner is shown what it said at its earlier looks; the one-a-day cap on a task put off on 3 days becomes a fact on its line; and "they saw it" is no longer said of a Later, Home or Back. See PLANNER V2 below.
 // Nov 16 2026: each sent reminder's line now says how FAST it was answered, when the answer came while it was still ringing ("they saw it and got out of its alarm with Later about 2 seconds after it went out"; until now only the minute, "..., 9:59 PM"). Anna: "I keep pressing later without even reading the alarm. Pure adhd.", then "smart reminders seeing the amount of time it takes for someone to swipe away is a great idea". On her own account, Nov 13 to 16: 26 alarms answered, 25 with Later and 1 with Home, half of them within about 5 seconds of ringing and 10 within 3. A fact on the line and nothing else: the brief is unchanged (its wording is hers), nothing is removed, no plan is redone. See answeredIn in briefData.
 // Nov 15 2026 (10:30 PM): brief r48, the lists are out (shared/reminderBrief.ts, Anna's doc updated to match). Anna: "The brief shouldnt have to have hour-sense for specific things ... It should be too smart for a dumb list of things with hour-sense", then "Ok do it". The two judgment sections are the job and the judgment only; every list of specific things and hours added since rev 40 is gone, with one general paragraph on timing and one on the end of the day in their place (her own Oct 9 paragraph, "There is no fixed limit on pings", stays word for word). Checked first on owner replays of six real moments with the new replay extras here (candidate, dry, task_overrides: see "Replay extras" in the handler). Two things the planner is SHOWN changed in this file because they were untrue as worded and were making it wrong: a task family's timer minutes no longer read "usually takes them about N min" (it sent laundry at 10:10 PM because "their usual 24-minute laundry task fits"), and the parser's stock phrase for a bare "asap" is no longer shown as their own reminder wish (it sent "Buy body wash now" at 9:09 PM on "Explicit start-now wish").
 // Nov 15 2026 (9:30 PM): brief r46 and r47 (shared/reminderBrief.ts, Anna's doc updated to match). r46: Later is a way out of an alarm, counted the same as Home or Back (Anna: "later should be counted the same as home presses and back presses to get out of an alarm"), so the lines below say "got out of its alarm with Later" / "with Home" in the same words and never "answered". r47: no date never means it doesn't matter (Anna: "things without a date are probably things the user still wants to get done in the near future unless they say otherwise ... weigh PRIORITY, DATE, WHAT THE TASK IS, ALL OF IT"); the planner had passed over her no-date text four runs in a row with "no known deadline". No code changed for r47, only the brief.
@@ -102,8 +102,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 //     plan for a low-stakes repeating task (Anna, Nov 11 2026) stays a cap.
 //  5. "they saw it" is gone from Later, Home and Back (Anna: "A home or back
 //     press means they probably didn't read it").
-// Off: nothing the planner is shown or asked changes by a single character.
-// An owner replay with candidate: true runs V2 with the candidate brief.
+// Off: nothing the planner is shown or asked changes by a single character
+// (checked on two replayed moments before it went live), so setting this
+// back to false is the way out if V2 misbehaves. An owner replay with
+// candidate: true runs V2 with the candidate brief either way.
+// Until Anna's next Publish, the copy onTaskUpdate calls for a re-plan is the
+// older one (RULES.md, "An older copy of the planner must not answer"): what
+// it writes to smart_nudge_passed is in the old shape (no back_at) and is
+// folded in at the next scheduled look.
 const PLANNER_V2_LIVE = false;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
@@ -3104,11 +3110,14 @@ Return ONLY valid JSON:
       .slice(0, v2 ? 80 : 30);
     out.passed = lastPassed;
     // The next look comes at the earliest time it said it would come back to
-    // something (nextLookIso keeps that between 15 minutes and 3 waking hours).
+    // something, never sooner than 30 minutes (a look costs an AI call, and
+    // anything that should reach them sooner is the nudge itself; a nudge
+    // going out, a Later or an edit brings a look at once anyway), and
+    // nextLookIso keeps it within 3 waking hours.
     if (v2) {
       const backs = lastPassed.map((p: any) => (utcMs(p?.back_at) - nowMs) / 60000).filter((m: number) => Number.isFinite(m) && m > 0);
       if (backs.length) {
-        const first = Math.min(...backs);
+        const first = Math.max(30, Math.min(...backs));
         lastLookAgain = lastLookAgain === null ? first : Math.min(lastLookAgain, first);
         out.lookAgain = lastLookAgain;
       }
