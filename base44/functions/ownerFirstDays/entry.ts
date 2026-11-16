@@ -237,6 +237,9 @@ Deno.serve(async (req) => {
         s.end = Math.max(s.end, a.ts);
         if (a.name === 'session_end') s.sec = Math.max(s.sec, a.sec);
         if (a.name === 'welcome_chat' && a.p?.beat && s.beats[s.beats.length - 1] !== a.p.beat) s.beats.push(String(a.p.beat));
+        // The welcome asks the same questions as cards since Nov 15 2026
+        // (WelcomeChat.jsx; those events carry ui: 'cards', the chat's carry none).
+        if (a.name === 'welcome_chat' && a.p?.ui) s.ui = String(a.p.ui);
         if (a.name === 'page_view' && a.page && s.pages[s.pages.length - 1] !== a.page) s.pages.push(a.page);
         if (a.name === 'task_created') s.made++;
         if (a.name === 'app_error') s.err++;
@@ -272,6 +275,8 @@ Deno.serve(async (req) => {
         perm: u?.alarm_permissions?.notifications ?? null,
         s1_sec: s1 ? s1.sec : null,
         s1_beats: s1 ? s1.beats.join('>') : '',
+        // 'cards' or 'chat': which welcome their first visit showed ('' = none on record).
+        s1_welcome: s1 && s1.beats.length ? (s1.ui === 'cards' ? 'cards' : 'chat') : '',
         s1_made: s1 ? s1.made : 0,
         s1_pages: s1 ? s1.pages.slice(0, 8).join('>') : '',
         d0_visits: d0Sessions.length,
@@ -332,6 +337,9 @@ Deno.serve(async (req) => {
     const splits = [
       split('made a task in the first visit', (r) => r.s1_made > 0),
       split('welcome chat reached its last step in the first visit', (r) => r.s1_beats.split('>').includes('done')),
+      // Cards against the chat: did the welcome get finished, and did they come back?
+      split('first visit showed the welcome as cards (yes) or as the chat (no)', (r) => (r.s1_welcome ? r.s1_welcome === 'cards' : null)),
+      split('cards only: welcome reached its last step in the first visit', (r) => (r.s1_welcome === 'cards' ? r.s1_beats.split('>').includes('done') : null)),
       split('first visit lasted 2 minutes or more', (r) => (r.s1_sec === null ? null : r.s1_sec >= 120)),
       split('came back the same day, 30+ minutes later', (r) => r.back_same_day),
       split('finished a task in the first 24h', (r) => r.d0_done > 0),
