@@ -82,7 +82,10 @@ function notesButtonsFor(task, nowMs) {
   if (typeof window === "undefined" || !window.Capacitor?.Plugins?.RecorderBridge) return null;
   if (!task || task.classification !== "event") return null;
   const flagged = (task.reminder_schedule || []).some((r) => NOTES_LABELS.includes(r?.label))
-    || (task.prep_questions || []).length > 0;
+    || (task.prep_questions || []).length > 0
+    // No reminders on it yet (more than a month out): the same judgment, made
+    // when it was added (RecordNotesButton.isRecordable).
+    || (task.notes_worthy === true && !(task.reminder_schedule || []).length);
   if (!flagged) return null;
   const start = new Date(task.event_time || task.next_reminder || "").getTime();
   if (!Number.isFinite(start)) return null;
@@ -178,6 +181,20 @@ export default function TaskNotification() {
       setTask(loaded);
       taskRef.current = loaded;
       setIsLoading(false);
+
+      // The last reminder of something worth recording (a meeting, a doctor's
+      // appointment) goes straight to the notes recorder for it (Anna, Nov 16
+      // 2026: "for things that should be recording like just meetings and
+      // doctors appointments, maybe the last alarm/notification should take
+      // them to the notes recorder"). The same window the Record notes button
+      // below uses: 20 minutes before it starts to 3 hours after. It opens the
+      // recorder's page for that event and nothing more: recording only starts
+      // when they press Record there. Not when Done was pressed on the alarm.
+      if (urlParams.get('done') !== '1' && notesButtonsFor(loaded, Date.now())?.record) {
+        actedRef.current = true; // going to record isn't brushing the reminder off
+        navigate(`${createPageUrl("Notes")}?task=${encodeURIComponent(loaded.id)}`, { replace: true });
+        return;
+      }
 
       // "Done ✓" on the phone's alarm opens this page with done=1: finish the
       // task right away, the same way this page's own Done button does.
