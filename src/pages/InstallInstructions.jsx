@@ -50,7 +50,7 @@ import { isIPhoneApp } from "@/lib/phonePlatform";
 // which is the one that's enforced.
 const FREE_MINUTES = 60;
 import RemoveFromNotesButton from "@/components/notes/RemoveFromNotesButton";
-import PrepPointsList from "@/components/notes/PrepPointsList";
+import PrepPointsList, { MAX_POINTS, splitPoints } from "@/components/notes/PrepPointsList";
 
 const recorder = () => (typeof window !== "undefined" && window.Capacitor?.Plugins?.RecorderBridge) || null;
 
@@ -79,7 +79,7 @@ function isMeeting(task) {
 }
 
 function cleanQuestions(list) {
-  return (Array.isArray(list) ? list : []).map((q) => String(q || "").trim()).filter(Boolean).slice(0, 20);
+  return (Array.isArray(list) ? list : []).map((q) => String(q || "").trim()).filter(Boolean).slice(0, MAX_POINTS);
 }
 
 // Questions checked off by hand during a recording: only a reminder on screen
@@ -882,11 +882,17 @@ export default function NotesPage() {
     });
   };
 
+  // Each thing between commas is its own point (splitPoints says why). What
+  // doesn't fit under the limit stays in the box; it used to be dropped
+  // without a word.
   const addQuestion = () => {
-    const q = draft.trim();
-    if (!q || !prepTask) return;
-    saveQuestions(prepTask, [...cleanQuestions(prepTask.prep_questions), q]);
-    setDraft("");
+    if (!prepTask) return;
+    const typed = splitPoints(draft);
+    if (!typed.length) return;
+    const have = cleanQuestions(prepTask.prep_questions);
+    const room = Math.max(0, MAX_POINTS - have.length);
+    if (room > 0) saveQuestions(prepTask, [...have, ...typed.slice(0, room)]);
+    setDraft(typed.slice(room).join(", "));
   };
 
   const addTodo = async (record, index) => {
@@ -1515,6 +1521,9 @@ export default function NotesPage() {
                 <Plus className="w-4 h-4 mr-1" />Add
               </Button>
             </form>
+            {qs.length >= MAX_POINTS && draft.trim() && (
+              <p className={`text-xs ${soft}`}>The agenda holds {MAX_POINTS} things. Remove one to add this.</p>
+            )}
           </div>
           {supported ? (
           <Button onClick={() => startRecording({ task: prepTask })} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
