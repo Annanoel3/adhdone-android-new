@@ -2469,6 +2469,20 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   const DAY_LABELS = new Set(['shift', 'none', 'private']);
   const dayLabel = (t: any) => DAY_LABELS.has(t?.day_entry_kind) && t?.classification === 'event' && !t?.event_time;
   const unreminded: string[] = [];
+  // 8b. In the same 7 PM hour: a high-priority or urgent task with NO date
+  //     (or one already late) that nothing mentioned today or yesterday
+  //     (Anna, Nov 16 2026, with Smart Reminders' PLANNER V2: "Our goal is
+  //     for it to not leave things out that should have happened"; she was
+  //     promised a free daily note of any task due today or high priority
+  //     that got nothing). Two days, not one: an undated task is not owed a
+  //     mention every single day, and a note that fires daily for every such
+  //     task would stop being read. Not counted: one added in the last 3
+  //     hours, one on a Later break that runs past today, a subtask, an event
+  //     or birthday, and (as for 8) a reminder of its own still to come.
+  //     Smart Reminders' own latest reason for holding the task back
+  //     (User.smart_nudge_passed) is printed with it, so the note says why
+  //     and not only that. No AI call.
+  const pressingQuiet: string[] = [];
   try {
     for (const u of allUsers) {
       if (!u?.email || !realUser(u.email) || !activeLately(u)) continue;
@@ -2479,7 +2493,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const dueToday = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
         && (t.notification_recipient_email || t.created_by) === u.email && !dayLabel(t)
         && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
-      if (!dueToday.length) continue;
+      const pressing = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
+        && (t.notification_recipient_email || t.created_by) === u.email && !dayLabel(t)
+        && (t.urgency === 'high' || t.urgency === 'urgent')
+        && t.classification !== 'event' && t.classification !== 'birthday' && !t.birthday_person
+        && (!t.due_date || localDateKey(new Date(t.due_date), tz) < today)
+        && !(msOf(t.created_date) > nowMs - 3 * H_HOUR)
+        && !(msOf(t.later_until) > nowMs && localDateKey(new Date(msOf(t.later_until)), tz) > today));
+      if (!dueToday.length && !pressing.length) continue;
       // Since local midnight for "today"; the 24 hours before that too, for
       // the every-other-day plan below.
       const sinceToday = nowMs - 19 * H_HOUR;
@@ -2501,12 +2522,22 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // planned day off, not a miss. Two days running with nothing is a miss.
       const dayOff = (t: any) => easeNow(t)?.gapDays === 2 && mentionedYesterday.has(t.id);
       for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t) && !dayOff(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      // 8b: nothing today and nothing yesterday.
+      const passes = Array.isArray(u.smart_nudge_passed) ? u.smart_nudge_passed : [];
+      for (const t of pressing) {
+        if (mentioned.has(t.id) || mentionedYesterday.has(t.id) || stillAhead(t)) continue;
+        const last = passes.filter((p: any) => p?.task_id === t.id && p?.why).sort((a: any, b: any) => msOf(b.at) - msOf(a.at))[0];
+        pressingQuiet.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"${last ? ` (Smart Reminders: ${String(last.why).slice(0, 90)})` : ''}`);
+      }
     }
   } catch (e) {
     console.error('[HEALTH] due-today check failed:', e);
   }
   if (unreminded.length) {
     problems.push({ title: '⚠️ ADHDone: due today, never reminded', body: `${unreminded.length} task(s) due today got no reminder from anything by 7 PM: ${unreminded.slice(0, 3).join('; ')}.` });
+  }
+  if (pressingQuiet.length) {
+    problems.push({ title: '⚠️ ADHDone: high priority, nothing in two days', body: `${pressingQuiet.length} high-priority task(s) with no date got nothing today or yesterday: ${pressingQuiet.slice(0, 3).join('; ')}.` });
   }
 
   // 9-11. The app failing one person, told to Anna by name (Anna, Oct 19
