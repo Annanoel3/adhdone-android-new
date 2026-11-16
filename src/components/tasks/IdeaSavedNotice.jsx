@@ -8,6 +8,7 @@ import { enqueueCapture } from "@/lib/pendingCaptures";
 import { anyPopupOpen, usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { winLook } from "@/components/wins/winsTheme";
 import { trackFire } from "@/lib/appTrack";
+import { adUp, whenAdGone } from "@/lib/adCover";
 
 // Something typed into the app that gets sorted as an idea lands in the Parking
 // Lot, not on Tasks. A 1.5-second toast was the only sign of that, so it could
@@ -60,11 +61,18 @@ export default function IdeaSavedNotice({ theme, specialMode }) {
   }, [path]);
 
   // So does leaving the app: it shouldn't be sitting there, holding back other
-  // popups, when they come back later.
+  // popups, when they come back later. Our own ad covering the app is not
+  // leaving (on Android it hides the page all the same, src/lib/adCover.js):
+  // the notice is still there when the ad closes, unless they left from the ad.
   useEffect(() => {
     if (!idea) return undefined;
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") setIdea(null);
+      if (document.visibilityState !== "hidden") return;
+      if (adUp()) {
+        whenAdGone(() => { if (document.visibilityState === "hidden") setIdea(null); });
+        return;
+      }
+      setIdea(null);
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
