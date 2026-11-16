@@ -2544,7 +2544,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const tag = String(t.tag || '').trim().replace(/\s+/g, ' ').slice(0, 60);
       if (tag) parts.push(`tag: "${tag}"`);
       const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
-      if (wish) parts.push(`reminder wish: "${wish}"`);
+      // "ASAP, no due date: start now" is not something they wrote: it is the
+      // stock phrase the parser files for a bare "asap" (taskParsePrompt.ts,
+      // Oct 8 2026). Shown as a reminder wish it read as their own order and
+      // beat everything: on a replay of a Saturday at 9:09 PM the planner sent
+      // "Buy body wash now" for "I need to get body wash asap" and gave
+      // "Explicit start-now wish" as its reason (Nov 15 2026; the same thing
+      // Anna called too late on Nov 7). Their own words are already on the
+      // line, so this one is said as the fact it is and the planner judges
+      // when ASAP can actually happen.
+      if (/^asap, no due date: start now$/i.test(wish)) parts.push('they said ASAP and named no day');
+      else if (wish) parts.push(`reminder wish: "${wish}"`);
       // A task that IS sending someone a text (Task.texts_someone). The app
       // has a spot on it to type the text ahead of time, and the reminder
       // page a Send button. Anna, Nov 15 2026: "mention drafting the text in
