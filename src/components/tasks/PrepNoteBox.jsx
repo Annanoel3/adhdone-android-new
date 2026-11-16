@@ -67,7 +67,7 @@ export default function PrepNoteBox({ task, theme, autoFocus = false, compact = 
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); } }}
         maxLength={PREP_MAX}
         rows={compact ? 1 : 2}
-        placeholder="Fasting? Papers to bring? Anything to do first?"
+        placeholder={compact ? 'Fasting? Papers to bring?' : 'Fasting? Papers to bring? Anything to do first?'}
         className={`w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 ${
           dark
             ? 'border-gray-700 bg-gray-900 text-gray-100 placeholder:text-gray-500 focus:ring-amber-700'
