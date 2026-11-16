@@ -85,8 +85,12 @@ export function markAdNotShown() {
   gone();
 }
 
-// The ad plugin says the ad is off the screen.
+// The ad plugin says the ad is off the screen. On Android it can say so a
+// moment before the page is back on screen: what is held then waits for the
+// page (the listener above), because a message shown to a hidden page is the
+// same as not shown.
 export function markAdGone() {
+  if (wentHidden && typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
   gone();
 }
 
