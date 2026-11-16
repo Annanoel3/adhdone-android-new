@@ -2135,10 +2135,10 @@ export function AppUpdatePrompt({ user, theme }) {
         {askVibrate && choiceLive && (
           <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
             <p className={`text-sm font-medium ${main}`}>
-              Should alarms only vibrate when your phone is quiet?
+              When should alarms stay quiet?
             </p>
             <p className={`text-xs mt-1 ${sub}`}>
-              This starts working once you update. You can change it any time in Settings.
+              Quiet means they buzz and light up the screen with no sound. This starts working once you update. You can change it any time in Settings.
             </p>
             <QuietWhenButtons value={quietWhen} onPick={pickQuietWhen} disabled={saving} />
           </div>
@@ -2147,7 +2147,7 @@ export function AppUpdatePrompt({ user, theme }) {
         {askVibrate && !choiceLive && (
           <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
             <p className={`text-sm font-medium ${main}`}>
-              When your phone is on silent, vibrate or Do Not Disturb, should alarms only vibrate?
+              Should alarms stay quiet when your phone is on silent, vibrate or Do Not Disturb?
             </p>
             <p className={`text-xs mt-1 ${sub}`}>
               This starts working once you update. You can change it any time in Settings.
