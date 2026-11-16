@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { trackFire } from '@/lib/appTrack';
 import { Button } from '@/components/ui/button';
@@ -6,9 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { base44 } from '@/api/base44Client';
-import ChatBubble from './ChatBubble';
 import OnboardingBrandMark from './OnboardingBrandMark';
-import useTypewriter from './useTypewriter';
+import TourProgressDots from './TourProgressDots';
 import SCRIPT from './welcomeScript';
 import { claimHandle } from '@/functions/claimHandle';
 import { enqueueCapture } from '@/lib/pendingCaptures';
@@ -85,11 +84,56 @@ function settleNotifications() {
   markStepDone(ONBOARDING_STEPS.permissions);
 }
 
-// The first-run conversation. Answers are saved as they're given (not batched at
-// the end) so someone who closes the app halfway through still keeps their name.
+// CARDS, NOT A CHAT (Anna, Nov 15 2026: "people dont like the chat aspect of
+// it. Makes it seem like more work maybe. We should make it more like brief
+// cards that pop up with simple answers. (Same answers as now, just seems like
+// less effort than a chat maybe)"). Until then every line typed itself out a
+// letter at a time into a chat bubble, answers stacked up as a conversation to
+// scroll, and each question's box only appeared once its line had finished
+// typing. Now one question is on screen at a time, all of it at once: the
+// question in bold, anything said on the way to it in small type above, the
+// same answers under it, and dots for how far along they are. The script
+// files, the questions, the answers, what each answer saves and the order are
+// all unchanged; the file keeps its name because the same player runs every
+// script (first run, picked back up, the second-open about-you question, the
+// name re-ask).
+//
+// A beat that asks something (or closes the flow) gets a card. A beat that
+// only says something has no card of its own: it is the small print at the
+// top of the next card, so nobody taps through a card with nothing to answer.
+const isStop = (b) => !!b && (!!b.input || !!b.final);
+function nextStop(script, from) {
+  let i = from;
+  while (i < script.length && !isStop(script[i])) i += 1;
+  return i;
+}
+
+// One line of a script, laid out for a card without rewording it: the
+// sentence that asks is the bold question, what comes before it sits above in
+// small type and what comes after sits below. A line that asks nothing leads
+// with its first sentence. ("Nice to meet you, Sam! What's one thing you keep
+// forgetting that you could knock out today? Type it in and it's on your
+// list." is those three parts.)
+export function cardParts(text) {
+  const bits = (String(text || '').match(/[^.!?]+(?:[.!?]+["\u201d\u2019')]*|$)/g) || []).map((b) => b.trim()).filter(Boolean);
+  const ends = (b) => /\?["\u201d\u2019')]*$/.test(b);
+  const q = bits.findIndex(ends);
+  if (q >= 0) return { lead: bits.slice(0, q).join(' '), title: bits[q], sub: bits.slice(q + 1).join(' ') };
+  return { lead: '', title: bits[0] || '', sub: bits.slice(1).join(' ') };
+}
+
+// The scripts mark a stressed word *like this*; it shows in italics.
+const rich = (text) => String(text || '').split(/\*([^*]+)\*/g).map((bit, i) => (i % 2 ? <em key={i}>{bit}</em> : bit));
+
+// The first-run questions, one card at a time. Answers are saved as they're
+// given (not batched at the end) so someone who closes the app halfway through
+// still keeps their name.
 export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' }) {
-  const [idx, setIdx] = useState(0);
-  const [history, setHistory] = useState([]);
+  // Always on a beat that has a card (see isStop).
+  const [idx, setIdx] = useState(() => nextStop(script, 0));
+  // Where the small print for the card on screen starts: every line said
+  // since the last card they answered.
+  const [leadFrom, setLeadFrom] = useState(0);
   // A name the profile already holds, so a script without a name beat can
   // still address the person by it.
   const [name, setName] = useState(initialName || '');
@@ -112,11 +156,6 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // promised sharing the app doesn't have — so the wait was a pause for
   // nothing; the handle is still minted, just not waited for.)
   const [draft, setDraft] = useState('');
-  const endRef = useRef(null);
-  // The chat's own scroll box, kept at the bottom while a line types out.
-  const listRef = useRef(null);
-  const pinnedRef = useRef(true);
-  const lastLenRef = useRef(0);
   // "Add my work hours" under the last line (Anna, Nov 2 2026, "idea 1"):
   // only when checkQuietHoursFit judged that their about-you answer has a
   // job, shifts or school with set hours in it, and none are saved yet. It
@@ -155,7 +194,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // notifications question outside the phone app, where there is nothing to
   // ask). Decided as each beat comes up, not once at the start: the phone's
   // notification bridge attaches a moment after the web layer boots.
-  useEffect(() => {
+  // (A layout effect: it runs before the screen is drawn, so a card that
+  // doesn't apply is stepped over without ever showing.)
+  useLayoutEffect(() => {
     const b = script[idx];
     if (!b) return;
     const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
@@ -170,8 +211,15 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     // answered it when the chat is picked back up): the task goes in now
     // instead of after that answer.
     if (b.input === 'notify' && gone && task && hasWhenBeat) captureTask(task, phraseRef.current);
-    if (gone) setIdx((i) => i + 1);
+    if (gone) setIdx((i) => nextStop(script, i + 1));
   }, [idx, script, name, handle, about, task, when, notify, phoneAllows]);
+  // The same test, for this render: is the beat we're on one of those?
+  const beatGone = (b) => {
+    if (!b) return false;
+    const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+    const alreadyOn = b.input === 'notify' && !offerPin && phoneAllows === true && !notify;
+    return (typeof b.skip === 'function' && !!b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn;
+  };
 
   // The about-you question is asked once per account, wherever it comes up
   // (the welcome chat ends with it; the catch-up asks it otherwise): reaching
@@ -181,65 +229,39 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   }, [idx, script]);
 
   const beat = script[idx];
+  const skippedNow = beatGone(beat);
   // The last argument says whether there is a name to say (they can skip the
   // name question); lines that greet by name drop it when there isn't.
-  const line = beat ? beat.text(name || 'you', handle, about, task, when, notify, { named: !!name }) : '';
-  const { shown, done } = useTypewriter(line, 28, idx);
+  const sayArgs = [name || 'you', handle, about, task, when, notify, { named: !!name }];
+  const line = beat ? beat.text(...sayArgs) : '';
+  // Everything said since the last card they answered, as this card's small
+  // print (a hello, a "Thanks, Sam!", a "welcome back").
+  const saidOnTheWay = [];
+  for (let i = leadFrom; i < idx && i < script.length; i += 1) {
+    if (script[i] && !isStop(script[i])) saidOnTheWay.push(script[i].text(...sayArgs));
+  }
 
-  // Where someone is in the chat: one event each time a question (or the
-  // closing "Let's go") is fully on screen. Nov 12 2026: a new account left 14
+  // Where someone is in the welcome: one event each time a question (or the
+  // closing "Let's go") is on screen. Nov 12 2026: a new account left 14
   // seconds in, and nothing recorded which line it was on (Anna: "find out
   // why ... This is too strong of a trend for there not to be a reason").
-  // Only the step is kept, never what anyone typed.
+  // Only the step is kept, never what anyone typed. `ui: 'cards'` tells these
+  // apart from the chat that asked the same questions until Nov 15 2026 (its
+  // events have no `ui`), so the two can be compared (ownerFirstDays).
   const beatKind = beat ? (beat.final ? 'done' : beat.input || '') : '';
   useEffect(() => {
-    if (!done || !beatKind) return;
-    trackFire('welcome_chat', { props: { beat: beatKind, step: idx } });
-  }, [done, beatKind, idx]);
+    if (!beatKind || skippedNow) return;
+    trackFire('welcome_chat', { props: { beat: beatKind, step: idx, ui: 'cards' } });
+  }, [beatKind, idx, skippedNow]);
 
-  // Anna, Nov 6 2026 (iPhone): "The chat scrolls really slowly down while
-  // it's sending things". This was a smooth scrollIntoView on every typed
-  // letter (every 28 ms): each one restarted the last one's animation, so the
-  // box crawled and lagged behind the text. Now the box itself jumps to the
-  // bottom once per frame, no animation, and only while they're at the
-  // bottom: someone who scrolls up to reread isn't pulled back down until
-  // the next message lands.
-  const onListScroll = () => {
-    const el = listRef.current;
-    if (!el) return;
-    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  };
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el) return undefined;
-    if (history.length !== lastLenRef.current) {
-      lastLenRef.current = history.length;
-      pinnedRef.current = true;
-    }
-    if (!pinnedRef.current) return undefined;
-    const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
-    return () => cancelAnimationFrame(id);
-  }, [shown, history.length]);
-
-  // Lines with nothing to answer roll on by themselves after a short beat.
-  useEffect(() => {
-    if (!done || !beat || beat.input || beat.final) return;
-    const t = setTimeout(() => {
-      setHistory((h) => [...h, { from: 'app', text: line }]);
-      setIdx((i) => i + 1);
-    }, 550);
-    return () => clearTimeout(t);
-  }, [done, beat, line]);
-
-  const answer = (value) => {
-    setHistory((h) => [
-      ...h,
-      { from: 'app', text: line },
-      ...(value ? [{ from: 'user', text: value }] : []),
-    ]);
+  // On to the next card. What was said before this point has been read.
+  const advance = () => {
     setDraft('');
-    setIdx((i) => i + 1);
+    setLeadFrom(idx + 1);
+    setIdx(nextStop(script, idx + 1));
   };
+
+  const answer = () => advance();
 
   const submitName = async () => {
     const value = draft.trim();
@@ -248,14 +270,12 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     // The name they give IS their username (display_name) — the same field the
     // Settings page edits. Names collide, so the server also mints a unique
     // handle (name + number) that future social features can key on. Neither
-    // save holds the chat up: the next line starts at once.
+    // save holds anything up: the next card shows at once.
     base44.auth.updateMe({ preferred_name: value, display_name: value }).catch(() => {});
     claimHandle({ name: value })
       .then((r) => { const got = r?.data?.handle || ''; if (got) setHandle(got); })
       .catch(() => { /* no line needs it */ });
-    setHistory((h) => [...h, { from: 'app', text: line }, { from: 'user', text: value }]);
-    setDraft('');
-    setIdx((i) => i + 1);
+    advance();
   };
 
   // Skip on the name (only where the script allows it: the first-run chat).
@@ -264,7 +284,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const skipName = () => {
     markStepDone(ONBOARDING_STEPS.nameSkipped);
     trackFire('welcome_name_skip', {});
-    answer('');
+    answer();
   };
 
   const submitAbout = () => {
@@ -279,10 +299,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         .then((r) => { if (r?.data?.offer_work_hours === true) setOfferWork(true); })
         .catch(() => {});
     }
-    answer(value);
+    answer();
   };
 
-  const showWorkOffer = offerWork && done && !!beat?.final;
+  const showWorkOffer = offerWork && !!beat?.final;
   useEffect(() => {
     if (showWorkOffer) trackFire('work_hours_offer', { props: { action: 'shown' } });
   }, [showWorkOffer]);
@@ -326,16 +346,15 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     if (!value) return;
     setTask(value);
     if (!hasWhenBeat) captureTask(value, '');
-    answer(value);
+    answer();
   };
 
-  // Skip on the task: the offers come up under their own line (see
-  // TASK_OFFERS). The beat stays the task beat; only what's under it changes.
+  // Skip on the task: the card turns into the offers, under their own line
+  // (see TASK_OFFERS). The beat stays the task beat; only the card changes.
   const [taskOffers, setTaskOffers] = useState(null);
   const skipTask = () => {
     const offers = pickTaskOffers();
     setTaskOffers(offers);
-    setHistory((h) => [...h, { from: 'app', text: line }, { from: 'app', text: TASK_OFFER_LINE }]);
     setDraft('');
     trackFire('welcome_task_offer', { props: { action: 'shown' } });
   };
@@ -343,15 +362,13 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     trackFire('welcome_task_offer', { props: { action: 'picked', pick: TASK_OFFERS.indexOf(text) } });
     setTask(text);
     if (!hasWhenBeat) captureTask(text, '');
-    setHistory((h) => [...h, { from: 'user', text }]);
     setTaskOffers(null);
-    setIdx((i) => i + 1);
+    advance();
   };
   const declineTaskOffers = () => {
     trackFire('welcome_task_offer', { props: { action: 'declined' } });
-    setHistory((h) => [...h, { from: 'user', text: TASK_OFFER_DECLINE }]);
     setTaskOffers(null);
-    setIdx((i) => i + 1);
+    advance();
   };
 
   // The time they tapped is kept until the notifications question is answered;
@@ -369,7 +386,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         first_win_pick: { pick: opt.firstWin, at: new Date().toISOString(), text: String(task).slice(0, 200) },
       }).catch(() => {});
     }
-    answer(opt ? opt.label : '');
+    answer();
   };
 
   // Android's own prompt, from the chat, and the pinned shortcut right behind
@@ -394,152 +411,161 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     // the task still goes in: with a "no" nothing can be booked, and the
     // reminder plan is kept for when notifications get turned on.
     if (task) captureTask(task, phraseRef.current);
-    answer(allow ? 'Allow notifications' : 'Not now');
+    answer();
   };
 
+  // What the card says. While the task offers are up, their own line is the card.
+  const parts = cardParts(taskOffers ? TASK_OFFER_LINE : line);
+  const smallPrint = taskOffers ? [] : [...saidOnTheWay, parts.lead].filter(Boolean);
+  // Dots: one per card this script can show, the one on screen wide.
+  const stops = script.map((b, i) => (isStop(b) ? i : -1)).filter((i) => i >= 0);
+  const stepNumber = stops.indexOf(idx) + 1;
+  // The first card of a sitting doesn't put the keyboard up by itself: they
+  // get to read it whole first (the dialogs don't focus anything on opening
+  // either). Every card after it is ready to type into, as the chat was.
+  const typeReady = leadFrom > 0;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <OnboardingBrandMark />
 
-      <div ref={listRef} onScroll={onListScroll} className="space-y-2.5 max-h-[45vh] overflow-y-auto pr-1">
-        {history.map((m, i) => (
-          <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
-        ))}
-        {/* While the task offers are up, the question is already in the
-            history above them, so the live bubble steps aside. */}
-        {beat && !taskOffers && (
-          <ChatBubble from="app">
-            {/* The rest of the line is already there, invisible, so every
-                word sits where it will end up. Typed one letter at a time
-                into an empty bubble, a long word started at the end of a
-                row and then jumped down to the next one once it no longer
-                fit, which looked like it started the word over (Anna, Nov 6
-                2026: "it will like type the word build and super quickly
-                start over the word"). No cursor: its gray block sat where
-                the first letter goes before typing began ("the first letter
-                of each message has like a gray highlight over it"). */}
-            {shown}
-            {!done && <span className="opacity-0 select-none" aria-hidden="true">{line.slice(shown.length)}</span>}
-          </ChatBubble>
-        )}
-        <div ref={endRef} />
-      </div>
-
-      {done && beat?.input === 'name' && !beat.skippable && (
-        <div className="flex gap-2">
-          <Input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitName()}
-            placeholder="Your name"
-          />
-          <Button onClick={submitName} disabled={!draft.trim()}>Send</Button>
-        </div>
-      )}
-
-      {/* The first-run chat's name question: the same box, with Skip beside
-          Send, laid out like the task question that follows it. */}
-      {done && beat?.input === 'name' && beat.skippable && (
-        <div className="space-y-2">
-          <Input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitName()}
-            placeholder="Your name"
-          />
-          <div className="flex gap-2">
-            <Button onClick={submitName} disabled={!draft.trim()} className="flex-1">Send</Button>
-            <Button variant="ghost" onClick={skipName}>Skip</Button>
-          </div>
-        </div>
-      )}
-
-      {done && beat?.input === 'about' && (
-        <div className="space-y-2">
-          <Textarea
-            autoFocus
-            rows={3}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="A sentence or two — whatever feels relevant."
-          />
-          <div className="flex gap-2">
-            <Button onClick={submitAbout} disabled={!draft.trim()} className="flex-1">Send</Button>
-            <Button variant="ghost" onClick={() => answer('')}>Skip</Button>
-          </div>
-        </div>
-      )}
-
-      {done && beat?.input === 'task' && !taskOffers && (
-        <div className="space-y-2">
-          <Input
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submitTask()}
-            placeholder="Like: call the pharmacy"
-          />
-          <div className="flex gap-2">
-            <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1">Add it</Button>
-            <Button variant="ghost" onClick={skipTask}>Skip</Button>
-          </div>
-        </div>
-      )}
-
-      {beat?.input === 'task' && taskOffers && (
-        <div className="space-y-2">
-          {taskOffers.map((text) => (
-            <Button key={text} variant="outline" onClick={() => pickTaskOffer(text)} className="w-full h-auto py-2 text-sm leading-tight whitespace-normal">
-              {text}
-            </Button>
-          ))}
-          <Button variant="ghost" onClick={declineTaskOffers} className="w-full text-xs">{TASK_OFFER_DECLINE}</Button>
-        </div>
-      )}
-
-      {done && beat?.input === 'when' && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-2">
-            {whenOptions().map((opt) => (
-              <Button key={opt.label} variant="outline" onClick={() => submitWhen(opt)} className="h-auto py-2 text-sm leading-tight whitespace-normal">
-                {opt.label}
-              </Button>
+      {beat && !skippedNow && (
+        <div
+          key={`${idx}${taskOffers ? '-offers' : ''}`}
+          className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
+        >
+          <div className="space-y-2">
+            {smallPrint.map((t, i) => (
+              <p key={i} className="text-sm leading-relaxed text-muted-foreground">{rich(t)}</p>
             ))}
+            <h3 className="text-lg font-bold leading-snug text-foreground">{rich(parts.title)}</h3>
+            {parts.sub && <p className="text-sm leading-relaxed text-muted-foreground">{rich(parts.sub)}</p>}
           </div>
-        </div>
-      )}
 
-      {done && beat?.input === 'notify' && (
-        <div className="space-y-2">
-          {offerPin && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Pin a quick-capture shortcut</p>
-              <p className="text-xs text-muted-foreground">A shortcut in your notification tray. Thought hits, you tap it, it's saved — no opening the app.</p>
+          {beat.input === 'name' && !beat.skippable && (
+            <div className="space-y-2">
+              <Input
+                autoFocus={typeReady}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitName()}
+                placeholder="Your name"
+                className="h-11"
+              />
+              <Button onClick={submitName} disabled={!draft.trim()} className="w-full h-11 text-base">Send</Button>
             </div>
-            <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
-          </div>
           )}
-          <div className="flex gap-2">
-            <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1">
-              {busy ? 'One sec...' : 'Allow notifications'}
-            </Button>
-            <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy}>Not now</Button>
-          </div>
+
+          {/* The first-run name question: the same box, with Skip beside
+              Send, laid out like the task question that follows it. */}
+          {beat.input === 'name' && beat.skippable && (
+            <div className="space-y-2">
+              <Input
+                autoFocus={typeReady}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitName()}
+                placeholder="Your name"
+                className="h-11"
+              />
+              <div className="flex gap-2">
+                <Button onClick={submitName} disabled={!draft.trim()} className="flex-1 h-11 text-base">Send</Button>
+                <Button variant="ghost" onClick={skipName} className="h-11">Skip</Button>
+              </div>
+            </div>
+          )}
+
+          {beat.input === 'about' && (
+            <div className="space-y-2">
+              <Textarea
+                autoFocus={typeReady}
+                rows={3}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="A sentence or two — whatever feels relevant."
+              />
+              <div className="flex gap-2">
+                <Button onClick={submitAbout} disabled={!draft.trim()} className="flex-1 h-11 text-base">Send</Button>
+                <Button variant="ghost" onClick={() => answer()} className="h-11">Skip</Button>
+              </div>
+            </div>
+          )}
+
+          {beat.input === 'task' && !taskOffers && (
+            <div className="space-y-2">
+              <Input
+                autoFocus={typeReady}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitTask()}
+                placeholder="Like: call the pharmacy"
+                className="h-11"
+              />
+              <div className="flex gap-2">
+                <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1 h-11 text-base">Add it</Button>
+                <Button variant="ghost" onClick={skipTask} className="h-11">Skip</Button>
+              </div>
+            </div>
+          )}
+
+          {beat.input === 'task' && taskOffers && (
+            <div className="space-y-2">
+              {taskOffers.map((text) => (
+                <Button key={text} variant="outline" onClick={() => pickTaskOffer(text)} className="w-full h-auto min-h-11 py-2.5 text-sm leading-tight whitespace-normal">
+                  {text}
+                </Button>
+              ))}
+              <Button variant="ghost" onClick={declineTaskOffers} className="w-full text-xs">{TASK_OFFER_DECLINE}</Button>
+            </div>
+          )}
+
+          {beat.input === 'when' && (
+            <div className="space-y-2">
+              {whenOptions().map((opt) => (
+                <Button key={opt.label} variant="outline" onClick={() => submitWhen(opt)} className="w-full h-11 text-base">
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {beat.input === 'notify' && (
+            <div className="space-y-2">
+              {offerPin && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Pin a quick-capture shortcut</p>
+                  <p className="text-xs text-muted-foreground">A shortcut in your notification tray. Thought hits, you tap it, it's saved — no opening the app.</p>
+                </div>
+                <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
+              </div>
+              )}
+              <div className="flex gap-2">
+                <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1 h-11 text-base">
+                  {busy ? 'One sec...' : 'Allow notifications'}
+                </Button>
+                <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy} className="h-11">Not now</Button>
+              </div>
+            </div>
+          )}
+
+          {showWorkOffer && (
+            <div className="rounded-xl border p-3 space-y-2">
+              <p className="text-sm">Add your work hours and nudges can stay quiet while you're working.</p>
+              <Button variant="outline" onClick={openWorkHours} className="w-full">Add my work hours</Button>
+            </div>
+          )}
+
+          {beat.final && (
+            <Button onClick={onDone} className="w-full h-11 text-base">Let's go</Button>
+          )}
         </div>
       )}
 
-      {showWorkOffer && (
-        <div className="rounded-xl border p-3 space-y-2">
-          <p className="text-sm">Add your work hours and nudges can stay quiet while you're working.</p>
-          <Button variant="outline" onClick={openWorkHours} className="w-full">Add my work hours</Button>
+      {stepNumber > 0 && (
+        <div className="flex justify-center">
+          <TourProgressDots stepNumber={stepNumber} totalSteps={stops.length} />
         </div>
-      )}
-
-      {done && beat?.final && (
-        <Button onClick={onDone} className="w-full">Let's go</Button>
       )}
     </div>
   );
