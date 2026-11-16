@@ -2584,7 +2584,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         // 50 minutes to bedtime the planner sent two loads of laundry because
         // "their usual 24-minute laundry task fits" (Nov 15 2026). A fact the
         // planner is handed has to be true as worded.
-        if (mins > 0) parts.push(`their own timer on this kind of task usually runs about ${Math.round(mins)} min (the minutes they spent on it, not how long the whole thing takes from start to finish)`);
+        if (mins > 0) parts.push(`their own timer on this kind of task usually runs about ${Math.round(mins)} min (time on the timer; for anything with waiting in it, start to finish is longer)`);
         const pref = famYes[t.task_family] || (/^\d{2}:\d{2}$/.test(hb.preferred_time || '') ? hb.preferred_time : null);
         if (pref && !(t.anchor_time && !t.day_only_task)) parts.push(`they asked to be reminded about this around ${hhmmLabel(pref)}, when they usually do it`);
       }
