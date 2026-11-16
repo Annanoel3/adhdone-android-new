@@ -1436,7 +1436,16 @@ Deno.serve(async (req) => {
 
         // They tapped Later on this task's alarm after this nudge was planned:
         // the break they asked for wins over the plan.
-        if (referencedIds.some((id: string) => { const b = utcMs(taskById.get(id)?.later_until); return Number.isFinite(b) && b > nowMs; })) {
+        // A break that ends within the minute counts as over (the same grace
+        // the due check above gives), and a nudge the planner timed for the
+        // end of the break (due at or after it) waits for the break instead
+        // of being thrown out. Nov 16 2026: the planner picked 5:20:19 PM for
+        // a task whose break ended at 5:20:00, this run started at 5:19:19,
+        // and the nudge was dropped 41 seconds early, to be picked again ten
+        // minutes later (Nov 14: four in a row that way, each a paid look).
+        const breakEnds = referencedIds.map((id: string) => utcMs(taskById.get(id)?.later_until)).filter((b: number) => Number.isFinite(b) && b > nowMs + 60 * 1000);
+        if (breakEnds.length && Math.max(...breakEnds) <= utcMs(entry.send_at)) continue;
+        if (breakEnds.length) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
           entry.skipped_reason = 'later';
