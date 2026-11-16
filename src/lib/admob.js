@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { trackFire } from '@/lib/appTrack';
 import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
 import { waitForCalm } from '@/components/onboarding/onboardingSurface';
+import { markAdGoingUp, markAdNotShown } from '@/lib/adCover';
 
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
 
@@ -281,8 +282,12 @@ export async function showInterstitialAd(source = 'auto') {
     shownThisLaunch = true;              // set before show so a retry can't double-show
     preloadedAt = 0;                     // the loaded ad is used up by this show
     try {
+      // Said before the ad goes up: on Android it covers the app like leaving
+      // does, and a task still being set up must stay with the app (adCover.js).
+      markAdGoingUp();
       await AdMob.showInterstitial();
     } catch (e) {
+      markAdNotShown();
       // The ad loaded ahead may have gone stale: one fresh load before giving up.
       if (!usePreloaded) throw e;
       await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
@@ -293,6 +298,7 @@ export async function showInterstitialAd(source = 'auto') {
         trackFire('ad_skipped', { props: { source, reason: 'busy after stale reload' } });
         return false;
       }
+      markAdGoingUp();
       await AdMob.showInterstitial();
     }
     setStatus(usePreloaded ? 'shown (loaded ahead)' : 'shown');
@@ -305,6 +311,7 @@ export async function showInterstitialAd(source = 'auto') {
     return true;
   } catch (e) {
     // No-fill / load failure / consent refusal all land here: just don't show.
+    markAdNotShown();
     console.warn('[AdMob] interstitial skipped:', e);
     setStatus(`ad request failed: ${e?.message || e}`);
     trackFire('ad_failed', { props: { source, error: String(e?.message || e).slice(0, 200) } });
