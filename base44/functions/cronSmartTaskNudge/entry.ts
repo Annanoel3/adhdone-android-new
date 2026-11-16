@@ -1224,6 +1224,9 @@ Deno.serve(async (req) => {
             email,
             planner: useCandidate ? 'candidate (shared/reminderBriefCandidate.ts)' : useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
             dry_run: dryRun,
+            // Which text the planner had in front of it, as a length: a quick
+            // way to see that a re-saved candidate is the one that ran.
+            brief_chars: (useCandidate ? REMINDER_BRIEF_CANDIDATE : REMINDER_BRIEF).length,
             one_a_day: oneADay,
             shown: planOut.prompt,
             nudges: newEntries,
