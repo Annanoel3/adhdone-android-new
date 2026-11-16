@@ -571,7 +571,8 @@ export default function TaskCaptureProcessor({ userEmail }) {
         }
         handed.push(c.id);
       }
-      if (underOwnAd) trace('captureUnderAd', { kept: keptUnderAd, handed });
+      // On record, so the steps that follow show the app working under the ad.
+      if (underOwnAd && (keptUnderAd.length || handed.length)) trace('captureUnderAd', { kept: keptUnderAd, handed });
       // The open question belongs to a capture the server now has: close it.
       // The loop sees the hand-off and asks the server for the result.
       if (resolveRef.current && askForRef.current && handed.includes(askForRef.current)) answer(null);
