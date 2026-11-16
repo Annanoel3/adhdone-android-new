@@ -114,7 +114,35 @@ Deno.serve(async (req) => {
         }
         close();
       }
-      return Response.json({ success: true, as_of: iso(nowMs), rows: rows.length, first: rows.length ? iso(rows[0].ts) : null, models, byDay, bursts });
+      // The parser outside those bursts (people adding tasks, imports, single
+      // checks): how many calls came within 30 minutes of the one before. That
+      // is how often a cached rule book would be read at the low price instead
+      // of written at the higher one.
+      const parserAll = (byFn['runTaskParse'] || []);
+      const inBurst = new Set<any>();
+      {
+        let run: any[] = [];
+        const close = () => { if (run.length >= 12) for (const x of run) inBurst.add(x); run = []; };
+        for (const x of parserAll) { if (run.length && x.ts - run[run.length - 1].ts > 30 * 1000) close(); run.push(x); }
+        close();
+      }
+      const real = parserAll.filter((x) => !inBurst.has(x));
+      const WINDOW = 30 * 60 * 1000;
+      let warmSliding = 0;
+      let warmFixed = 0;
+      let windowStart = -Infinity;
+      for (let i = 0; i < real.length; i++) {
+        if (i > 0 && real[i].ts - real[i - 1].ts <= WINDOW) warmSliding++;
+        if (real[i].ts - windowStart <= WINDOW) warmFixed++;
+        else windowStart = real[i].ts;
+      }
+      const parserRealUse = {
+        calls: real.length,
+        within_30_min_of_the_call_before: warmSliding,
+        inside_a_30_min_window_from_its_first_call: warmFixed,
+        avg_input_tokens: real.length ? Math.round(real.reduce((n, x) => n + (Number(x.p.input) || 0), 0) / real.length) : 0,
+      };
+      return Response.json({ success: true, as_of: iso(nowMs), rows: rows.length, first: rows.length ? iso(rows[0].ts) : null, models, parserRealUse, byDay, bursts });
     }
 
     const [users, events, ledger] = await Promise.all([
