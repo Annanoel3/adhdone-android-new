@@ -68,6 +68,7 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 // meeting on their calendar; a chore they keep putting off keeps its daily
 // mention, something that doesn't have to happen yet gets space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
+import { REMINDER_BRIEF_CANDIDATE } from '../../shared/reminderBriefCandidate.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { countUsage } from '../../shared/aiCost.ts';
@@ -200,6 +201,16 @@ Deno.serve(async (req) => {
     try { body = await req.clone().json(); } catch { body = null; }
     const asOfMs = body?.preview === true && typeof body?.email === 'string' && typeof body?.as_of === 'string' ? Date.parse(body.as_of) : NaN;
     const replay = Number.isFinite(asOfMs);
+    // Replay extras (owner only, like every replay; nothing saved or sent).
+    // candidate: true = plan with shared/reminderBriefCandidate.ts instead of
+    // the live brief. dry: true = build what the planner would be shown and
+    // hand it back WITHOUT asking the model (free: to check a replayed moment
+    // is set up right before paying for the real look). task_overrides:
+    // { "<task id>": { field: value } } = put fields a replay cannot rewind
+    // (a Later pressed since, an alarm answered since) back to what they were.
+    const useCandidate = replay && body?.candidate === true;
+    const dryRun = replay && body?.dry === true;
+    const taskOverrides: Record<string, any> | null = replay && body?.task_overrides && typeof body.task_overrides === 'object' ? body.task_overrides : null;
     if (replay) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
@@ -282,6 +293,7 @@ Deno.serve(async (req) => {
             ? { ...t, status: 'active', completed_at: null, put_off_days: [], ease_plan: null }
             : { ...t, put_off_days: (t.put_off_days || []).filter((d: string) => d <= new Date(nowMs).toISOString().slice(0, 10)) };
         });
+      if (taskOverrides) allTasks = allTasks.map((t: any) => (t?.id && taskOverrides[t.id] && typeof taskOverrides[t.id] === 'object' ? { ...t, ...taskOverrides[t.id] } : t));
     }
     const taskById = new Map<string, any>();
     for (const t of allTasks) if (t && t.id) taskById.set(t.id, t);
@@ -1200,6 +1212,8 @@ Deno.serve(async (req) => {
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
           // When the parked-list roundup last went out (the sent log keeps a week).
           useBrief,
+          briefText: useCandidate ? REMINDER_BRIEF_CANDIDATE : null,
+          dryRun,
           fixed: fixedByUser[email] || [],
           habits: user.task_habits || {},
           lastRoundupMs: (() => { const ms = sentLog.filter((l: any) => l?.type === 'roundup' && !l.skip).map((l: any) => utcMs(l.at)).filter((x: number) => Number.isFinite(x)); return ms.length ? Math.max(...ms) : NaN; })(),
@@ -1208,7 +1222,8 @@ Deno.serve(async (req) => {
         if (previewOnly) {
           results.push({
             email,
-            planner: useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
+            planner: useCandidate ? 'candidate (shared/reminderBriefCandidate.ts)' : useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
+            dry_run: dryRun,
             one_a_day: oneADay,
             shown: planOut.prompt,
             nudges: newEntries,
@@ -2018,6 +2033,11 @@ interface PlanContext {
   laterLook: boolean;
   lastRoundupMs: number;
   useBrief: boolean;
+  // Owner replays only (see "Replay extras" at the top of the handler): a
+  // candidate brief to plan with instead of the live one, and a dry run that
+  // stops before the model is asked.
+  briefText?: string | null;
+  dryRun?: boolean;
   fixed: any[];
   habits?: Record<string, any>;
   // Filled in by generateDailySchedule for THIS call (see PlanOut).
@@ -2808,6 +2828,8 @@ Return ONLY valid JSON:
 
   lastPrompt = prompt;
   out.prompt = prompt;
+  // A dry run (owner replay) stops here: what would be shown, no AI call.
+  if (ctx.dryRun) return [];
   try {
     const response = await openai.chat.completions.create({
       // Deciding WHAT to surface today, WHEN, and how often is the heaviest
@@ -2818,7 +2840,7 @@ Return ONLY valid JSON:
       model: 'gpt-6-astra',
       messages: ctx.useBrief
         ? [
-          { role: 'system', content: REMINDER_BRIEF },
+          { role: 'system', content: ctx.briefText || REMINDER_BRIEF },
           { role: 'user', content: prompt },
         ]
         : [
