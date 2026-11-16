@@ -29,7 +29,8 @@
 // they set inside quiet hours rings as an alarm (throughQuiet), RULES.md §9 Q4.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
-import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
+import { userTimeZone, resolveQuietHours, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { judgeBreakMinutes, BREAK_MIN_MINUTES } from '../../shared/notNowBreak.ts';
 import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 import { putOffFields, easeStep } from '../../shared/easeOff.ts';
@@ -144,12 +145,67 @@ function clipToTheirTime(task: any, timeZone: string, startMs: number, untilMs: 
   return cap > startMs && cap < untilMs ? cap : untilMs;
 }
 
-// When this "not now" break ends. startMs: when it starts (the tap for Later,
-// the snooze's ring for a snooze).
-function notNowUntil(task: any, timeZone: string, startMs: number, owner: any, level: number): number {
+// The table's own end for this "not now" (Anna's table above), from startMs.
+function tableUntil(task: any, timeZone: string, startMs: number, owner: any, level: number): number {
   const steps = NOT_NOW_STEPS[String(task?.urgency || '')] || NOT_NOW_STEPS.medium;
   const step = steps[Math.min(Math.max(1, level), steps.length) - 1];
-  let until = step === 'day' ? nextMorning(startMs, timeZone, owner) : startMs + step * HOUR_MS;
+  return step === 'day' ? nextMorning(startMs, timeZone, owner) : startMs + step * HOUR_MS;
+}
+
+// JUDGED LENGTH (Anna, Nov 16 2026; shared/notNowBreak.ts). The table is the
+// limit, not the length: the model reads what the task is and may make this
+// break shorter than the table, never longer and never under 20 minutes. A
+// second or third "not now" the same day is never shorter than the one before
+// it (when that one's length is still on the task). Null = no answer in time,
+// a tap that reached us long after it was made, or nothing to shorten: the
+// table's own length is used, exactly as before this existed.
+async function judgedBreak(
+  base44: any, task: any, owner: any, timeZone: string, startMs: number, nowMs: number,
+  level: number, day: string, how: 'later' | 'snooze', tapMs: number,
+): Promise<{ minutes: number; why: string } | null> {
+  try {
+    if (!owner || task?.status !== 'active') return null;
+    if (nowMs - tapMs > 10 * 60 * 1000) return null;
+    const limitMinutes = (tableUntil(task, timeZone, startMs, owner, level) - startMs) / 60000;
+    if (!(limitMinutes > BREAK_MIN_MINUTES)) return null;
+    const q = resolveQuietHours(owner);
+    // How fast a Later was pressed: the newest reminder about this task that
+    // went out in the minute before the press (an alarm rings for a minute).
+    let answeredSecs: number | null = null;
+    if (how === 'later') {
+      const rows = await base44.asServiceRole.entities.NotificationLedger.filter({ task_id: task.id }, '-send_at', 20).catch(() => []);
+      let best = NaN;
+      for (const r of rows || []) {
+        const at = new Date(r?.send_at || 0).getTime();
+        if (Number.isFinite(at) && at <= tapMs + 3000 && tapMs - at <= 60 * 1000 && !(best > at)) best = at;
+      }
+      if (Number.isFinite(best)) answeredSecs = Math.max(0, (tapMs - best) / 1000);
+    }
+    const judged = await judgeBreakMinutes(task, owner, {
+      nowMs, timeZone, level, how, limitMinutes,
+      quietStartMin: q.enabled ? q.startMin : 0,
+      quietEndMin: q.enabled ? q.endMin : 0,
+      localMin: localMinutesOfDay(new Date(nowMs), timeZone),
+      answeredSecs,
+    });
+    if (!judged) return null;
+    // Never shorter than the break before it today.
+    const prev = task?.not_now_day === day ? Number(task?.last_alarm_choice?.break_minutes) : NaN;
+    const minutes = Math.min(Math.round(limitMinutes), Number.isFinite(prev) && prev > judged.minutes ? Math.round(prev) : judged.minutes);
+    return { minutes, why: judged.why };
+  } catch (e) {
+    console.error('[cancelTaskNotifications] break length not judged, the table stands:', (e as any)?.message || e);
+    return null;
+  }
+}
+
+// When this "not now" break ends. startMs: when it starts (the tap for Later,
+// the snooze's ring for a snooze). judgedMinutes: JUDGED LENGTH above.
+function notNowUntil(task: any, timeZone: string, startMs: number, owner: any, level: number, judgedMinutes: number | null = null): number {
+  let until = tableUntil(task, timeZone, startMs, owner, level);
+  if (judgedMinutes !== null && Number.isFinite(judgedMinutes) && judgedMinutes > 0) {
+    until = Math.min(until, startMs + Math.max(BREAK_MIN_MINUTES, judgedMinutes) * 60 * 1000);
+  }
   // Never shorter than a break already running.
   const prevMs = parseMs(task?.later_until);
   if (Number.isFinite(prevMs) && prevMs > until) until = prevMs;
@@ -253,12 +309,17 @@ async function applyLaterBreak(base44: any, task: any, body: any, _appId: string
   const owner = owners?.[0] || null;
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
   const notNow = notNowLevel(task, timeZone, tapMs);
-  const untilMs = notNowUntil(task, timeZone, tapMs, owner, notNow.level);
+  const judged = await judgedBreak(base44, task, owner, timeZone, tapMs, nowMs, notNow.level, notNow.day, 'later', tapMs);
+  const untilMs = notNowUntil(task, timeZone, tapMs, owner, notNow.level, judged ? judged.minutes : null);
   const extra: any = {
     later_count: (task.later_count || 0) + 1,
     not_now_day: notNow.day,
     not_now_count: notNow.level,
-    last_alarm_choice: { choice: 'later', at: new Date(tapMs).toISOString(), until: new Date(untilMs).toISOString() },
+    last_alarm_choice: {
+      choice: 'later', at: new Date(tapMs).toISOString(), until: new Date(untilMs).toISOString(),
+      // JUDGED LENGTH: what it chose and why, for reading back later.
+      ...(judged ? { break_minutes: judged.minutes, break_why: judged.why } : {}),
+    },
   };
   if (reportId) extra.alarm_report_ids = [...seenIds, reportId].slice(-20);
   // Later counts as putting it off (Anna, Oct 22 2026): put off on 3
@@ -266,7 +327,7 @@ async function applyLaterBreak(base44: any, task: any, body: any, _appId: string
   Object.assign(extra, putOffFields(task, tapMs, timeZone));
   Object.assign(extra, await easeStep({ ...task, ...extra }, owner, nowMs).catch(() => ({})));
   const { fields, cancelled } = await breakTask(base44, task, owner, untilMs, nowMs, extra, 'laterBreak', false);
-  console.log(`[cancelTaskNotifications] Later (not now #${notNow.level} today) for task ${task.id}: break until ${fields.later_until}, ${cancelled} push(es) cancelled`);
+  console.log(`[cancelTaskNotifications] Later (not now #${notNow.level} today) for task ${task.id}: break until ${fields.later_until}${judged ? ` (judged ${judged.minutes} min: ${judged.why})` : ' (the table)'}, ${cancelled} push(es) cancelled`);
   return { success: true, taskId: task.id, later_until: fields.later_until, canceledCount: cancelled };
 }
 
@@ -281,9 +342,13 @@ async function snoozeBreak(base44: any, task: any, saved: any, owner: any, timeZ
   const sameRun = Number.isFinite(prevSnoozeMs) && prevSnoozeMs <= atMs + 2 * 60 * 1000 && prevSnoozeMs >= atMs - 30 * 60 * 1000;
   const notNow = notNowLevel(task, timeZone, atMs);
   const level = sameRun && notNow.level > 1 ? notNow.level - 1 : notNow.level;
-  const breakUntil = notNowUntil(task, timeZone, backMs, owner, level);
-  const { fields } = await breakTask(base44, { ...task, ...saved }, owner, breakUntil, nowMs, { not_now_day: notNow.day, not_now_count: level }, 'snoozeBreak', true);
-  console.log(`[phoneReport] snooze (not now #${level} today${sameRun ? ', same run' : ''}) on task ${task.id}: break until ${fields.later_until}`);
+  const judged = await judgedBreak(base44, task, owner, timeZone, backMs, nowMs, level, notNow.day, 'snooze', atMs);
+  const breakUntil = notNowUntil(task, timeZone, backMs, owner, level, judged ? judged.minutes : null);
+  const extra: any = { not_now_day: notNow.day, not_now_count: level };
+  // JUDGED LENGTH: kept on the snooze's own record, for the next "not now".
+  if (judged && saved?.last_alarm_choice) extra.last_alarm_choice = { ...saved.last_alarm_choice, break_minutes: judged.minutes, break_why: judged.why };
+  const { fields } = await breakTask(base44, { ...task, ...saved }, owner, breakUntil, nowMs, extra, 'snoozeBreak', true);
+  console.log(`[phoneReport] snooze (not now #${level} today${sameRun ? ', same run' : ''}) on task ${task.id}: break until ${fields.later_until}${judged ? ` (judged ${judged.minutes} min: ${judged.why})` : ' (the table)'}`);
 }
 
 // Every choice made on an alarm or a reminder's notification, one row each,
@@ -696,6 +761,33 @@ Deno.serve(async (req) => {
         console.warn('[cancelTaskNotifications] refused: caller does not own this task');
         return Response.json({ success: false, error: 'Not allowed' }, { status: 403 });
       }
+    }
+
+    // Owner check of JUDGED LENGTH ({ taskId, mode: 'break_preview' }, admin
+    // only): what a Later pressed on this task right now would get, and what
+    // the table alone would have given. Nothing is changed, booked or
+    // cancelled. level: pretend it is the 2nd or 3rd "not now" today.
+    if (body?.mode === 'break_preview') {
+      if (isInternal || me?.role !== 'admin') return Response.json({ success: false, error: 'Not allowed' }, { status: 403 });
+      const nowMs = Date.now();
+      const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
+      const owner = owners?.[0] || null;
+      const timeZone = userTimeZone(owner);
+      const notNow = notNowLevel(task, timeZone, nowMs);
+      const level = Number.isFinite(Number(body?.level)) && Number(body.level) >= 1 ? Math.floor(Number(body.level)) : notNow.level;
+      const judged = await judgedBreak(base44, task, owner, timeZone, nowMs, nowMs, level, notNow.day, 'later', nowMs);
+      const minutesTo = (ms: number) => Math.round((ms - nowMs) / 60000);
+      return Response.json({
+        success: true,
+        preview: true,
+        level,
+        priority: task.urgency || 'medium',
+        table_minutes: minutesTo(notNowUntil(task, timeZone, nowMs, owner, level)),
+        judged_minutes: judged ? judged.minutes : null,
+        why: judged ? judged.why : null,
+        break_minutes: minutesTo(notNowUntil(task, timeZone, nowMs, owner, level, judged ? judged.minutes : null)),
+        note: 'Preview only: nothing was changed.',
+      });
     }
 
     // Later tapped on the task's alarm or reminder: a break, not a full cancel.
