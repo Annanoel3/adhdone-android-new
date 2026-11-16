@@ -409,8 +409,8 @@ export function AlarmEventQuietChoice({ value, onChange, theme, className = '' }
 // you need to choose WHEN you want it to ring. Not when you DON'T want it to
 // ring ... It should just be like 'When should alarms stay quiet?'"; she had
 // picked "On silent or vibrate" believing she'd picked Do Not Disturb only).
-// The four answers:
-// once the phone can tell silent mode and Do Not Disturb apart (1.3.12+).
+// The four answers, once the phone can tell silent mode and Do Not Disturb
+// apart (1.3.12+):
 // `value`: 'off' | 'silent' | 'dnd' | 'both', or null = not answered yet.
 // Shared by the alarm set-up, Settings and the update popup.
 export const QUIET_WHEN_OPTIONS = [
