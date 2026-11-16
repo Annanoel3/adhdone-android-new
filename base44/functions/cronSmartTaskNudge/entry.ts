@@ -2547,8 +2547,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.snooze_count || 0) > 0) react.push(`snoozed ${t.snooze_count}x`);
       if ((t.dismissed_count || 0) > 0) react.push(`swiped away or closed ${t.dismissed_count}x`);
       if ((t.ignored_count || 0) > 0) react.push(`rang out with no answer ${t.ignored_count}x`);
-      if ((t.later_count || 0) > 0) react.push(`answered "Later" ${t.later_count}x`);
-      if ((t.closed_count || 0) > 0) react.push(`closed its alarm with Home or Back ${t.closed_count}x`);
+      if ((t.later_count || 0) > 0) react.push(`got out of its alarm with Later ${t.later_count}x`);
+      if ((t.closed_count || 0) > 0) react.push(`got out of its alarm with Home or Back ${t.closed_count}x`);
       if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
       // The eased plan (shared/easeOff.ts): what's left of its reminders.
       const eased = easeNow(t);
@@ -2581,7 +2581,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
           : lc.choice === 'closed' ? `${left} without answering`
           : lc.choice === 'dismiss' ? 'stopped its alarm'
           : lc.choice === 'ignored' ? 'let its alarm ring out with no answer'
-          : lc.choice === 'later' ? 'tapped Later' : String(lc.choice);
+          : lc.choice === 'later' ? 'got out of its alarm with Later' : String(lc.choice);
         parts.push(`last thing they did with its reminder: ${what}, ${clock(lcMs)}`);
       }
       return `${i + 1}. "${t.title}" — ${parts.join('; ')}`;
@@ -2604,10 +2604,13 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       // saw it, whether or not the app was opened afterwards.
       const a = p.answer;
       const did = !a ? ''
-        : a.choice === 'later' ? `they saw it and tapped Later, ${clock(a.at)}`
+        // Later is said the same way as Home and Back (Anna, Nov 15 2026:
+        // "later should be counted the same as home presses and back presses
+        // to get out of an alarm"): a way out of the alarm, not a decision.
+        : a.choice === 'later' ? `they saw it and got out of its alarm with Later, ${clock(a.at)}`
         : a.choice === 'snooze' ? `they saw it and snoozed it, ${clock(a.at)}`
         : a.choice === 'dismiss' ? `they saw it and stopped its alarm, ${clock(a.at)}`
-        : a.choice === 'closed' ? `they saw its alarm and left it with ${a.how === 'back' ? 'Back' : 'Home'} without answering, ${clock(a.at)}`
+        : a.choice === 'closed' ? `they saw it and got out of its alarm with ${a.how === 'back' ? 'Back' : 'Home'}, ${clock(a.at)}`
         : a.choice === 'ignored' ? 'its alarm rang out with no answer'
         : '';
       return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
