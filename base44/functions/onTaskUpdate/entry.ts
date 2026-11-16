@@ -1338,7 +1338,18 @@ async function handleTaskEvent(req: Request): Promise<Response> {
 async function judgeNotesForUndatedEvent(base44: any, task: any, id: string) {
   try {
     if (!task || !id || task.classification !== 'event' || task.status !== 'active') return;
-    if (task.event_time || task.due_date || task.parent_task_id || task.birthday_person) return;
+    if (task.parent_task_id || task.birthday_person) return;
+    // Also an event dated more than about 30 days out (Anna, Nov 16 2026: "why
+    // is this not on my upcoming note recordings?", about an appointment six
+    // weeks away, added 5 minutes before). Its reminders can't be booked that
+    // far ahead, and the plan that carries the answer is only written by the
+    // hourly refill job, so until then it had no Record notes button and was
+    // missing from the Notes page's "Coming up". Any other dated event gets
+    // the answer with its reminders, as before.
+    const whenMs = Date.parse(String(task.event_time || task.due_date || ''));
+    const farOff = Number.isFinite(whenMs) && whenMs - Date.now() > 30 * 24 * 60 * 60 * 1000;
+    const noReminders = !(Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0);
+    if ((task.event_time || task.due_date) && !(farOff && noReminders)) return;
     if (typeof task.notes_worthy === 'boolean') return;
     const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by });
     if (owners?.[0]?.notes_can_record !== true) return;
