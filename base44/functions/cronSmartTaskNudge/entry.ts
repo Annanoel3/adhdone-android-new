@@ -928,7 +928,13 @@ Deno.serve(async (req) => {
       // each look, and set to "now" whenever its nudge goes out or is skipped.
       const lookAtMs = utcMs(user.smart_nudge_look_at);
       const lookSet = Number.isFinite(lookAtMs) && user.smart_nudge_schedule_date === todayStr;
-      const lookDue = lookSet && lookAtMs <= nowMs;
+      // A few seconds' grace: a look asked for "an hour from now" is stamped
+      // an exact number of minutes after the run that asked, and each run
+      // starts a few hundredths of a second apart, so the run it was meant
+      // for could find it 0.1 seconds in the future and leave it to the next
+      // one, ten minutes on (Nov 16 2026: a look due 5:09:19.564 PM missed
+      // the run that started at 5:09:19.422).
+      const lookDue = lookSet && lookAtMs <= nowMs + 5 * 1000;
       const hasValidSchedule = user.smart_nudge_schedule_date === todayStr && !stale && !lookDue &&
         (schedule.length > 0 || lookSet);
 
