@@ -404,12 +404,17 @@ export function AlarmEventQuietChoice({ value, onChange, theme, className = '' }
   );
 }
 
-// The four answers to "should alarms only vibrate when your phone is quiet?"
+// The question is "When should alarms stay quiet?" (Anna, Nov 16 2026: the old
+// "Should alarms only vibrate when your phone is quiet?" "makes it sound like
+// you need to choose WHEN you want it to ring. Not when you DON'T want it to
+// ring ... It should just be like 'When should alarms stay quiet?'"; she had
+// picked "On silent or vibrate" believing she'd picked Do Not Disturb only).
+// The four answers:
 // once the phone can tell silent mode and Do Not Disturb apart (1.3.12+).
 // `value`: 'off' | 'silent' | 'dnd' | 'both', or null = not answered yet.
 // Shared by the alarm set-up, Settings and the update popup.
 export const QUIET_WHEN_OPTIONS = [
-  { value: 'off', label: 'No, ring out loud' },
+  { value: 'off', label: 'Never, always ring' },
   { value: 'silent', label: 'On silent or vibrate' },
   { value: 'dnd', label: 'On Do Not Disturb' },
   { value: 'both', label: 'On both' },
@@ -490,10 +495,10 @@ export function AlarmQuietChoice({ value, when, onChange, theme, className = '' 
     return (
       <div className={className}>
         <p className={`text-sm font-medium ${textMain}`}>
-          Should alarms only vibrate when your phone is quiet?
+          When should alarms stay quiet?
         </p>
         <p className={`text-xs mt-1 ${textSub}`}>
-          Then alarms and timers buzz and light up the screen with no sound. Pick when that happens.
+          Quiet means alarms and timers buzz and light up the screen with no sound.
         </p>
         <QuietWhenButtons value={current} onPick={pickWhen} disabled={busy} />
         {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
@@ -504,7 +509,7 @@ export function AlarmQuietChoice({ value, when, onChange, theme, className = '' 
   return (
     <div className={className}>
       <p className={`text-sm font-medium ${textMain}`}>
-        Only vibrate when your phone is on silent, vibrate or Do Not Disturb?
+        Should alarms stay quiet when your phone is on silent, vibrate or Do Not Disturb?
       </p>
       <p className={`text-xs mt-1 ${textSub}`}>
         Yes: while your phone is quiet, alarms and timers buzz and light up the screen with no sound. No: they ring out loud even then.
