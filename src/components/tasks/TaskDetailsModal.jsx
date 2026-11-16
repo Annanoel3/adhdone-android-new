@@ -2635,7 +2635,7 @@ Return JSON:
 
             {v2 && (
               <div className={v2Group}>
-                <div className={v2Label}>About this task</div>
+                <div className={v2Label}>{isEvent ? 'About this event' : 'About this task'}</div>
                 <div className="flex flex-wrap gap-2">
                   {energyControl}
                   {priorityControl}
