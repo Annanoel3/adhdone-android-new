@@ -2751,13 +2751,16 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const putOff = (t.snooze_count || 0) + (t.dismissed_count || 0) + (t.ignored_count || 0) + (t.later_count || 0) + (t.closed_count || 0);
       if (putOff >= 3) parts.push(`put off ${putOff} times in all, so nothing you send about it repeats the words, the angle or the time of day of what it already got${past.length ? ' (listed above)' : ''}${hhmmLabel(t.anchor_time) ? ', except the time they named' : ''}`);
       const breakMs = utcMs(t.later_until);
-      if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
+      // PLANNER V2: a snooze is followed by the same kind of break (snoozeBreak
+      // in cancelTaskNotifications), and the line called that a Later too.
+      const bySnooze = v2 && t.last_alarm_choice?.choice === 'snooze';
+      if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(bySnooze ? `they snoozed it, and a snooze is followed by a break from its reminders; that break runs until ${clock(breakMs)}` : `they tapped Later on it; that break runs until ${clock(breakMs)}`);
       // And one that has ended: until Nov 15 2026 the line went silent about
       // the break the moment it was over, and the planner read the Later as
       // the end of the matter ("Already answered Later today; no known
       // deadline warrants another mention tonight"). Anna: "I never said that
       // ONE later press means forgrt it on a medium task."
-      else if (Number.isFinite(breakMs) && nowMs - breakMs < 18 * 60 * 60 * 1000) parts.push(`they tapped Later on it; that break ended at ${clock(breakMs)}`);
+      else if (Number.isFinite(breakMs) && nowMs - breakMs < 18 * 60 * 60 * 1000) parts.push(bySnooze ? `they snoozed it, and the break that followed ended at ${clock(breakMs)}` : `they tapped Later on it; that break ended at ${clock(breakMs)}`);
       // The last thing they did with its alarm or reminder (the phone reports
       // each choice as it's made, build 39 on).
       const lc = t.last_alarm_choice;
