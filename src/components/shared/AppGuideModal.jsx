@@ -89,6 +89,15 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           description: "A notification sits in your tray until you look. An alarm rings full screen, even on silent, until you deal with it. You picked one during setup; each task also has its own switch on its card.",
           link: { label: "Change the default in Settings", to: "/settings?section=reminders#alarms" },
         },
+        // What Later means, in Anna's words (Nov 16 2026): "Later just means, I
+        // acknowledge this needs to happen, but I'll do it later. So, the smart
+        // reminders will bring it back up later." No time is promised: when it
+        // comes back is Smart Reminders' call.
+        {
+          icon: AlarmClock,
+          title: "What Later means",
+          description: "Later on a reminder means \"I know this needs doing, just not right now.\" It stops, and Smart Reminders brings it back up later, at a better moment.",
+        },
         ] : []),
         {
           icon: HelpCircle,
