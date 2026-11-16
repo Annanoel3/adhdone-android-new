@@ -119,7 +119,10 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
   }
   if (currentType === 'event' && task.event_time) {
     const d = new Date(task.event_time);
-    pillLabel = `Event ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    // Just "Event": the date and time are on their own pill right below, and
+    // showing the date here too was one of three places it appeared on the
+    // card (Anna, Nov 16 2026: "this is super messy and overwhelming").
+    pillLabel = d ? 'Event' : pillLabel;
   }
 
   const handleSelect = (type, sub) => {
