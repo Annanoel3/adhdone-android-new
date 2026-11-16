@@ -26,7 +26,7 @@ import {
   keepEarliest,
   trace,
 } from "../utils/taskCreationPipeline";
-import { hiddenByOwnAd } from "@/lib/adCover";
+import { hiddenByOwnAd, whenAdGone } from "@/lib/adCover";
 
 // Base44 timestamps come back without a timezone marker but are UTC. Parsed
 // as-is the browser reads them as local time, hours off.
@@ -511,7 +511,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 setTimeout(() => drainRef.current(), pause + 100);
                 keep = true;
               } else {
-                toast({ title: "Couldn't set up this task: " + capture.text.slice(0, 60), description: 'Please add it again. ' + (failure.message || ''), variant: 'destructive' });
+                // Said once our own ad is off the screen, if one is up: under
+                // it this would be gone before they could read it.
+                const gaveUp = { title: "Couldn't set up this task: " + capture.text.slice(0, 60), description: 'Please add it again. ' + (failure.message || ''), variant: 'destructive' };
+                whenAdGone(() => toast(gaveUp));
               }
             }
             if (!keep) {
