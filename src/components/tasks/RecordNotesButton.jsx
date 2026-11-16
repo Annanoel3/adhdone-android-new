@@ -11,7 +11,12 @@ export function isRecordable(task) {
     || (task.prep_questions || []).length > 0
     // An event with no date or time yet has no reminders to carry the label:
     // the same judgment, made when it was added (Anna, Oct 20 2026).
-    || (task.notes_worthy === true && !task.event_time && !task.due_date);
+    || (task.notes_worthy === true && !task.event_time && !task.due_date)
+    // An event more than about a month out has no reminders yet either (they
+    // can't be booked that far ahead; the hourly refill job writes its plan):
+    // the same judgment, made when it was added (Anna, Nov 16 2026: "why is
+    // this not on my upcoming note recordings?").
+    || (task.notes_worthy === true && !(task.reminder_schedule || []).length);
 }
 
 // A clear "Record notes" pill on the card, straight to this event on the Notes page.
