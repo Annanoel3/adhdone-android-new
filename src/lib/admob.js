@@ -2,7 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { trackFire } from '@/lib/appTrack';
 import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
 import { waitForCalm } from '@/components/onboarding/onboardingSurface';
-import { markAdGoingUp, markAdNotShown } from '@/lib/adCover';
+import { markAdGoingUp, markAdNotShown, markAdGone } from '@/lib/adCover';
 
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
 
@@ -120,6 +120,11 @@ export function initAdMob() {
       await new Promise(r => setTimeout(r, 3000));
 
       AdMob = plugin;
+      // The ad leaving the screen: what the app held back under it can show
+      // (adCover.js). Event names are the plugin's own (InterstitialAdPluginEvents).
+      ['interstitialAdDismissed', 'interstitialAdFailedToShow'].forEach((name) => {
+        try { Promise.resolve(plugin.addListener(name, () => markAdGone())).catch(() => {}); } catch (e) { /* older plugin: adCover has other ways to tell */ }
+      });
       console.log('[AdMob] ready');
       return true;
     } catch (e) {
