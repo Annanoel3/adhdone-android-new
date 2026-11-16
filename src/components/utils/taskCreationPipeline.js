@@ -10,6 +10,14 @@ import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStar
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds, dropBookingIfMoved } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
+import { whenAdGone } from "@/lib/adCover";
+
+// Where something typed in went when it did NOT become a task (an idea, a
+// birthday, a note for ADHDone) is only ever said in a message that shows for
+// a few seconds. Since Nov 16 2026 the ad after an Add can be on screen while
+// this runs, so each of those messages waits for the ad to be gone; with no
+// ad up it shows at once, as before (src/lib/adCover.js).
+const say = (message) => whenAdGone(() => toast(message));
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
 // records. Pure async functions with no React state, so the pipeline can keep
@@ -179,7 +187,7 @@ async function saveAppFeedback(inputText, captureId = null) {
     ...(captureId ? { capture_id: captureId } : {})
   });
   window.dispatchEvent(new Event('parking-lot-changed'));
-  toast({
+  say({
     title: 'Saved to your Parking Lot 📝',
     description: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
     duration: 3000
@@ -266,7 +274,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
       try {
         const birthday = await createBirthdayFromKind(kind, inputText, currentUser.email);
         if (birthday) {
-          toast({
+          say({
             title: birthday.own ? '🎂 Added your birthday!' : `🎂 Added ${birthday.person}'s birthday!`,
             description: birthday.own
               ? "We'll wish you a happy birthday on the day, every year."
@@ -284,9 +292,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
       if (handedOff()) return HANDED_OFF;
       const idea = await saveIdeas(kind, inputText, captureId);
       if (idea) {
-        window.dispatchEvent(new CustomEvent('idea-saved', { detail: { id: idea.id, text: inputText.trim() } }));
+        const saved = { id: idea.id, text: inputText.trim() };
+        whenAdGone(() => window.dispatchEvent(new CustomEvent('idea-saved', { detail: saved })));
       } else {
-        toast({ title: '💡 Saved to your Parking Lot', duration: 1500 });
+        say({ title: '💡 Saved to your Parking Lot', duration: 1500 });
       }
       return { status: 'done', kind: 'idea' };
     }
