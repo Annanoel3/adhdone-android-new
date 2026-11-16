@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
+// What is typed into the agenda's "add" box, as separate points: each thing
+// between commas is its own point, so each gets its own check while
+// recording (Anna, Nov 16 2026: "each thing separated by commas was a new
+// check. Now it saves as just one long thing"). From the day the agenda was
+// built (Sept 27 2026) the box added the whole line as one point; the boxes
+// that split on commas were the "add steps" ones on a task (SubtaskQuickAdd,
+// TaskDetailsModal), and the agenda now follows the same rule. A point that
+// needs a comma of its own can have it typed back in on its row.
+export const MAX_POINTS = 20;
+export function splitPoints(text) {
+  return String(text || "").split(",").map((p) => p.trim()).filter(Boolean);
+}
+
 // Points to bring up at an event. Each one can be edited in place; it saves
 // when the person leaves the box (an emptied box removes the point).
 export default function PrepPointsList({ points, onChange, dark, soft }) {
