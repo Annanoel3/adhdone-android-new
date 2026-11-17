@@ -231,6 +231,13 @@ public class AlarmShotTest {
         barBottom = 0;
         tile("19 on its side", SIDEWAYS, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, false);
         tile("20 on its side, earlier screen", SIDEWAYS, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, true);
+        tile("21 on its side, a text task", SIDEWAYS, 1f, 0, "light", text, 0f, false);
+        tile("22 on its side, task timer's end", SIDEWAYS, 1f, 0, "", sprint, 0f, false);
+        barTop = 40;
+        barBottom = 48;
+        tile("23 a very small phone, Android 15+", "w320dp-h480dp-xhdpi", 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, false);
+        barTop = 0;
+        barBottom = 0;
 
         int tw = 360, pad = 16, cols = 5;
         int rows = (tiles.size() + cols - 1) / cols;
