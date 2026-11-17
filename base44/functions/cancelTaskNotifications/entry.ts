@@ -1,3 +1,4 @@
+// Nov 16 2026 (late): the off switch for the phone's new alarm screen (Android build 49: a big round Done, a Later bar that has to be held; Anna: "Your design is good too"). The answers to the phone's own reports (the 12-hour check-in, and a choice made on an alarm) now carry alarm_screen, "classic" or "new" (shared/alarmScreen.ts: User.alarm_screen for one person, a constant for everyone). Builds before 49 ignore the extra word; nothing else changes.
 // Nov 16 2026 (night): how long a Later or a snooze keeps a task quiet is JUDGED per task (shared/notNowBreak.ts, gpt-6-astra), with Anna's table as the limit: shorter than the table when the task should not wait that long, never longer, never under 20 minutes, and never shorter than the break before it that day. No answer within 8 seconds and the table's own length is used, as before. Anna: "it's supposed to be smart, so how quick something comes back should be based on intelligence", and yes to it "as long as it doesn't go too long or overload with notifications". See "Not now" below.
 // Re-saved Nov 15 2026 (evening) so the bundled shared/nextCopy.ts, taskParsePrompt.ts and runTaskParse.ts are picked up: the next copy of a repeating call-someone task keeps who it's to and their number (Task.calls_someone, call_person, call_phone), and the parser says when a task IS making a phone call. Nothing else changes here.
 // Re-saved Nov 15 2026 (afternoon) so the bundled shared/nextCopy.ts, taskParsePrompt.ts and runTaskParse.ts are picked up: the next copy of a repeating text-someone task (Task.texts_someone) keeps who it's to and their number, the same as the app's own copy does (the words are typed fresh each round); the parser says when a task IS sending someone a text (Anna: "If someone makes a task to text someone, maybe we should use our ability to press send from the app").
@@ -32,6 +33,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { userTimeZone, resolveQuietHours, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { judgeBreakMinutes, BREAK_MIN_MINUTES } from '../../shared/notNowBreak.ts';
+import { alarmScreenFor } from '../../shared/alarmScreen.ts';
 import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 import { putOffFields, easeStep } from '../../shared/easeOff.ts';
@@ -497,7 +499,8 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
         console.warn('[phoneReport] push_state next-copy repair failed:', (e as any)?.message || e);
       }
     }
-    return Response.json({ success: true });
+    // The answer also names the alarm screen this phone shows (build 49 on).
+    return Response.json({ success: true, alarm_screen: alarmScreenFor(owner) });
   }
 
   // Every change to the phone's push sign-up, the moment it happens
@@ -696,7 +699,8 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     await svc.User.update(owner.id, userFields).catch(() => {});
   }
   console.log(`[phoneReport] ${choice}${choice === 'snooze' ? ` ${minutes} min` : ''} on task ${task.id}`);
-  return Response.json({ success: true });
+  // The answer also names the alarm screen this phone shows (build 49 on).
+  return Response.json({ success: true, alarm_screen: alarmScreenFor(owner) });
 }
 
 Deno.serve(async (req) => {
