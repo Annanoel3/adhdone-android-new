@@ -17,6 +17,22 @@
 // doc). Afterwards put this file back to the one line below so the two never
 // drift. First used Nov 15 2026 for r48 (the lists taken out of the brief),
 // then Nov 16 2026 for r49.
+//
+// IN USE (Nov 16 2026, evening): the r50 candidate. On r49's first evening the
+// planner sent Anna one alarm every 30 minutes (5:29, 5:59, 6:29 PM), each put
+// off with Later inside a minute, working down the come-back times it had
+// handed out at 5:19. Two passages gain a sentence.
 import { REMINDER_BRIEF } from './reminderBrief.ts';
 
-export const REMINDER_BRIEF_CANDIDATE = REMINDER_BRIEF;
+const SWAPS: [string, string][] = [
+  [
+    `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once.`,
+    `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once. And when they put off one thing after another in a short stretch, that is about the moment, not the things: they are in the middle of something. Give them real room before anything else from you, and when you do come back, bring what matters most, not the next thing in line.`,
+  ],
+  [
+    `The same reason given look after look is a task being left out.`,
+    `The same reason given look after look is a task being left out. A time you gave is a time to look again, not a booking: by then they may have shown you something about the moment, and that counts as what changed.`,
+  ],
+];
+
+export const REMINDER_BRIEF_CANDIDATE = SWAPS.reduce((text, [from, to]) => text.split(from).join(to), REMINDER_BRIEF);
