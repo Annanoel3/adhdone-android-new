@@ -525,7 +525,7 @@ export function AlertStyleInfo({ dark = false }) {
         <AlarmClock className="w-4 h-4 mt-0.5 flex-shrink-0" />
         <div>
           <p className="font-medium">Full-screen alarm</p>
-          <p className={`text-xs ${sub}`}>Rings out loud and takes over the screen, even locked, until you snooze or dismiss it.</p>
+          <p className={`text-xs ${sub}`}>Rings out loud and takes over the screen, even locked, until you answer it.</p>
         </div>
       </div>
       <p className={`text-xs ${sub}`}>Same reminder times either way — only how they reach you changes.</p>
