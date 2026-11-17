@@ -2038,6 +2038,7 @@ async function departureFacts(base44: any, u: any, lastMs: number, nowMs: number
   const at = (v: any) => { if (!v) return NaN; const x = String(v); return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(x) ? x : `${x}Z`); };
   const DAY = 24 * 60 * 60 * 1000;
   const parts: string[] = [];
+  let dayBefore = '';
   // How long, and how much.
   try {
     const joined = at(u.signed_up_at || u.created_date);
@@ -2070,15 +2071,19 @@ async function departureFacts(base44: any, u: any, lastMs: number, nowMs: number
     const errs = ses.filter((r: any) => r.e === 'app_error').length;
     parts.push(`Last in the app ${clock(lastMs)}${secs ? ` for ${secs < 90 ? `${secs} sec` : `${Math.round(secs / 60)} min`}` : ''}${pages.length ? ` (${pages.slice(0, 6).join(' > ')})` : ''}${popups.length ? `, popups: ${popups.slice(0, 3).join(', ')}` : ''}${ads ? `, ${ads} ad${ads === 1 ? '' : 's'}` : ''}${errs ? `, ${errs} error${errs === 1 ? '' : 's'}` : ''}`);
   } catch (_) { /* left out */ }
-  // The first push that bounced after it, from OneSignal's own list (newest
-  // first; stops once it is past their last open, 12 pages at most).
+  // The first push that bounced after it, and what had gone out in the 24
+  // hours before it, both from OneSignal's own list (newest first; stops a
+  // day before their last open, 20 pages at most). Not from the send ledger:
+  // it keeps 3 days and has no silent pushes, and its count for someone whose
+  // last open was 3 days back came out short (2 where OneSignal had 5).
   try {
     const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
     const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
     if (appId && key) {
-      const rows: { t: number; ok: boolean }[] = [];
+      const rows: { t: number; ok: boolean; type: string }[] = [];
       let offset = 0;
-      for (let pageNo = 0; pageNo < 12; pageNo++) {
+      let reached = false;
+      for (let pageNo = 0; pageNo < 20; pageNo++) {
         const res = await fetch(`https://onesignal.com/api/v1/notifications?app_id=${appId}&limit=50&offset=${offset}`, { headers: { Authorization: `Basic ${key}` } });
         if (!res.ok) break;
         const json: any = await res.json();
@@ -2087,16 +2092,21 @@ async function departureFacts(base44: any, u: any, lastMs: number, nowMs: number
         for (const n of batch) {
           const t = Number(n?.send_after || n?.queued_at || 0) * 1000;
           if (t && t < oldest) oldest = t;
-          if (!t || t < lastMs - 60 * 1000 || n?.canceled || !n?.completed_at) continue;
+          if (!t || t < lastMs - DAY || n?.canceled || !n?.completed_at) continue;
           const targets = [...(n?.include_external_user_ids || []), ...(n?.include_aliases?.external_id || [])].map((x: any) => String(x).toLowerCase());
-          if (targets.includes(email)) rows.push({ t, ok: Number(n?.successful) > 0 });
+          if (targets.includes(email)) rows.push({ t, ok: Number(n?.successful) > 0, type: String(n?.data?.type || (n?.headings?.en ? 'visible' : 'silent')) });
         }
         offset += 50;
-        if (!batch.length || oldest < lastMs - 60 * 1000) break;
+        if (!batch.length || oldest < lastMs - DAY) { reached = true; break; }
         await new Promise((r) => setTimeout(r, 300));
       }
       rows.sort((a, b) => a.t - b.t);
-      const firstBad = rows.find((r) => !r.ok);
+      if (reached) {
+        const before = rows.filter((r) => r.ok && r.type !== 'silent' && r.t <= lastMs + 60 * 1000);
+        const smart = before.filter((r) => r.type === 'smart_nudge').length;
+        dayBefore = `${before.length} push${before.length === 1 ? '' : 'es'} reached them in the 24 hours before, ${smart} from Smart Reminders`;
+      }
+      const firstBad = rows.find((r) => !r.ok && r.t >= lastMs - 60 * 1000);
       if (firstBad) {
         const between = rows.filter((r) => r.ok && r.t > lastMs + 2 * 60 * 1000 && r.t < firstBad.t).length;
         const gap = Math.max(0, Math.round((firstBad.t - lastMs) / 60000));
@@ -2106,13 +2116,7 @@ async function departureFacts(base44: any, u: any, lastMs: number, nowMs: number
       }
     }
   } catch (_) { /* left out */ }
-  // What had gone out in the 24 hours before (the send ledger keeps 3 days).
-  try {
-    const led = await filterAll(base44.asServiceRole.entities.NotificationLedger, { user_email: u.email, send_at: { $gte: new Date(lastMs - DAY).toISOString() } });
-    const before = (led || []).filter((r: any) => at(r?.send_at) <= lastMs + 60 * 1000 && !String(r?.kind || '').startsWith('owner_'));
-    const smart = before.filter((r: any) => r?.kind === 'smart_nudge').length;
-    parts.push(`${before.length} push${before.length === 1 ? '' : 'es'} in the 24 hours before, ${smart} from Smart Reminders`);
-  } catch (_) { /* left out */ }
+  if (dayBefore) parts.push(dayBefore);
   const seen = at(u.phone_seen_at);
   if (Number.isFinite(seen) && nowMs - seen >= 12 * 60 * 60 * 1000) {
     parts.push(`Phone check-ins missed since ${clock(seen)}: ${Math.floor((nowMs - seen) / (12 * 60 * 60 * 1000))}`);
