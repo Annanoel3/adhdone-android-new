@@ -777,7 +777,8 @@ public class AlarmActivity extends Activity {
             k = kk;
             round = r;
             wordsH = h;
-            wanted = want;
+            // What the lines that will actually show take, with the space around them.
+            wanted = pads + (kk ? kickerH : 0) + tt * bigLH + (uu > 0 ? gapUnder + uu * underLH : 0);
             if (tt >= Math.min(bigN, 4) && (underN == 0 || uu >= 1)) {
                 break;
             }
