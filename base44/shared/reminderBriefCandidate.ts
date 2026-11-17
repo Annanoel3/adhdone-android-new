@@ -30,6 +30,12 @@ const SWAPS: [string, string][] = [
     `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once. And when they put off one thing after another in a short stretch, that is about the moment, not the things: they are in the middle of something, and whatever it is rarely ends in the next half hour. Leave them alone for a good while, long enough to be a real break and not the same interruption again, and when you do come back, bring the one thing that matters most, not the next thing in line. What truly cannot wait still goes at its time.`,
   ],
   [
+    `And a task you've brought up day after day with nothing happening needs a different approach, never more of the same.`,
+    `And a task you've brought up day after day with nothing happening needs a different approach, never more of the same.
+
+When several things are waiting at once, don't hand each one a turn. Decide how much this stretch of their day can take, pick the few that most need it, and let the rest wait for a later stretch or for tomorrow, and say so. A turn for everything, one after another, is flooding with a reason attached to each ping.`,
+  ],
+  [
     `The same reason given look after look is a task being left out.`,
     `The same reason given look after look is a task being left out. A time you gave is a time to look again, not a booking: by then they may have shown you something about the moment, and that counts as what changed.`,
   ],
