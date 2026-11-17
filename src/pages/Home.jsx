@@ -43,7 +43,7 @@ export default function Home() {
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
   // The day review opens on its own, so it takes its turn: it waits until no
   // other popup is on screen and then holds the screen until it's closed.
-  const endOfDayReviewShown = usePopupTurn(showEndOfDayReview, { name: 'Home' });
+  const endOfDayReviewShown = usePopupTurn(showEndOfDayReview, { name: 'Home.endOfDayReview' });
   const [selectedTask, setSelectedTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [birthdayTextTask, setBirthdayTextTask] = useState(null);
