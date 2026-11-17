@@ -3,7 +3,7 @@ import { isOverDayLabel } from "../components/utils/todayTasks";
 import { Task } from "@/entities/Task";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter, Download, Loader2, List, CalendarDays } from "lucide-react";
+import { Plus, Filter, Download, Loader2, List, CalendarDays, Tag } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -24,6 +24,7 @@ import { useTaskSort, sortTasks, COMPLETED_SORT, COMPLETED_SORT_LABEL } from "@/
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 import WeeklyStar from "../components/tasks/WeeklyStar";
 import TaskSections from "../components/tasks/TaskSections";
+import { normalizeTag, tagKey } from "../components/tasks/LifeAreaPill";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { isBirthdayTask } from "../components/utils/birthdayHelpers";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
@@ -42,6 +43,9 @@ export default function Tasks() {
   const [statusFilter, setStatusFilter] = useState('active');
   const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  // 'all', 'none' (tasks with no tag) or 't:' + a tag's key (its text in
+  // lower case, LifeAreaPill.tagKey), so no tag can be mistaken for the two.
+  const [tagFilter, setTagFilter] = useState('all');
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -53,7 +57,7 @@ export default function Tasks() {
   const [showCelebration, setShowCelebration] = useState(false);
   const { sortBy } = useTaskSort();
 
-  // Sections or Days: kept on this phone and on the account, so it survives a
+  // Sections, Days or Tags: kept on this phone and on the account, so it survives a
   // reinstall and follows the user to a new phone. Layout fills the local copy
   // from the profile when this phone has none (and says so), so a fresh
   // install lands on the layout they use.
@@ -65,7 +69,7 @@ export default function Tasks() {
   useEffect(() => {
     const onSeeded = (e) => {
       const mode = e.detail?.mode;
-      if (mode === 'sections' || mode === 'days') setViewMode(mode);
+      if (mode === 'sections' || mode === 'days' || mode === 'tags') setViewMode(mode);
     };
     window.addEventListener('tasks-view-mode-seeded', onSeeded);
     return () => window.removeEventListener('tasks-view-mode-seeded', onSeeded);
@@ -164,15 +168,39 @@ export default function Tasks() {
       }
     }
 
+    // One tag, or the tasks that have none (Nov 17 2026). "Home" and "home"
+    // are one tag. "No tag" leaves birthdays out: they are never tagged.
+    if (tagFilter === 'none') {
+      filtered = filtered.filter(t => !tagKey(t.tag) && !isBirthdayTask(t));
+    } else if (tagFilter !== 'all') {
+      filtered = filtered.filter(t => `t:${tagKey(t.tag)}` === tagFilter);
+    }
+
     // Sort tasks using the shared sort preference. "Recently Completed" only
     // means something in the Completed list; elsewhere it falls back.
     const effectiveSort = sortBy === COMPLETED_SORT && statusFilter !== 'completed' ? 'created_date' : sortBy;
     setFilteredTasks(sortTasks(filtered, effectiveSort));
-  }, [allTasks, statusFilter, urgencyFilter, typeFilter, sortBy]);
+  }, [allTasks, statusFilter, urgencyFilter, typeFilter, tagFilter, sortBy]);
 
   useEffect(() => {
     applyFilters();
   }, [applyFilters]);
+
+  // The tags in use among the tasks this list can show (same Active /
+  // Completed / Snoozed choice), A to Z, for the Tag box in "Filter & sort".
+  // The chosen tag stays listed even when its last task has just lost it, so
+  // the box never goes blank.
+  const tagOptions = React.useMemo(() => {
+    const seen = new Map();
+    allTasks.forEach((t) => {
+      if (t.parent_task_id || t.status !== statusFilter) return;
+      const key = tagKey(t.tag);
+      if (key && !seen.has(key)) seen.set(key, normalizeTag(t.tag));
+    });
+    if (tagFilter.startsWith('t:') && !seen.has(tagFilter.slice(2))) seen.set(tagFilter.slice(2), tagFilter.slice(2));
+    return Array.from(seen, ([key, label]) => ({ value: `t:${key}`, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  }, [allTasks, statusFilter, tagFilter]);
 
   // Changes made on this screen that may not have reached the server yet (a
   // step's checkbox tapped a moment ago). A reload already in flight — a
@@ -401,6 +429,7 @@ export default function Tasks() {
     { completed: 'Completed', snoozed: 'Snoozed' }[statusFilter],
     { urgent: 'Urgent', high: 'High priority', medium: 'Medium priority', low: 'Low priority' }[urgencyFilter],
     { payment: 'Payments', event: 'Events', birthday: 'Birthdays', task: 'Tasks only' }[typeFilter],
+    tagFilter === 'none' ? 'No tag' : tagFilter !== 'all' ? `Tag: ${(tagOptions.find(o => o.value === tagFilter) || {}).label || tagFilter.slice(2)}` : null,
   ].filter(Boolean);
 
   return (
@@ -529,6 +558,23 @@ export default function Tasks() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* One tag, or the tasks with none (Nov 17 2026). The list is
+                  the tags in use, so there is nothing to set up first. */}
+              <div className="space-y-1">
+                <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Tag</p>
+                <Select value={tagFilter} onValueChange={setTagFilter}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All tags</SelectItem>
+                    {tagOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                    <SelectItem value="none">No tag</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1">
                 <p className={`text-xs font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`}>Sort</p>
                 <TaskSortDropdown className="!w-full" extra={statusFilter === 'completed' ? { [COMPLETED_SORT]: COMPLETED_SORT_LABEL } : null} />
@@ -536,7 +582,7 @@ export default function Tasks() {
               {filtersOn.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => { setStatusFilter('active'); setUrgencyFilter('all'); setTypeFilter('all'); }}
+                  onClick={() => { setStatusFilter('active'); setUrgencyFilter('all'); setTypeFilter('all'); setTagFilter('all'); }}
                   className={`text-sm font-medium underline ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`}
                 >
                   Clear filters
@@ -570,23 +616,39 @@ export default function Tasks() {
               variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => chooseViewMode('sections')}
-              className={`h-8 px-3 text-xs ${
+              className={`h-8 px-2 sm:px-3 text-xs ${
                 isSeasonalTheme() ? 'bg-white/70 text-gray-800' : viewPill(viewMode === 'sections')
               }`}
             >
-              <List className="w-3.5 h-3.5 mr-1" />
+              <List className="hidden sm:inline-block w-3.5 h-3.5 mr-1" />
               Sections
             </Button>
             <Button
               variant={viewMode === 'days' ? 'secondary' : 'ghost'}
               size="sm"
               onClick={() => chooseViewMode('days')}
-              className={`h-8 px-3 text-xs ${
+              className={`h-8 px-2 sm:px-3 text-xs ${
                 isSeasonalTheme() ? 'bg-white/70 text-gray-800' : viewPill(viewMode === 'days')
               }`}
             >
-              <CalendarDays className="w-3.5 h-3.5 mr-1" />
+              <CalendarDays className="hidden sm:inline-block w-3.5 h-3.5 mr-1" />
               Days
+            </Button>
+            {/* Tags: the list under each tag in use (TaskSections). With a
+                third button the row no longer fit a phone with icons on (it
+                wrapped onto a second line, measured at 320 to 393 px), so
+                the three are words only on a phone and keep their icons on
+                a wider screen. */}
+            <Button
+              variant={viewMode === 'tags' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => chooseViewMode('tags')}
+              className={`h-8 px-2 sm:px-3 text-xs ${
+                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : viewPill(viewMode === 'tags')
+              }`}
+            >
+              <Tag className="hidden sm:inline-block w-3.5 h-3.5 mr-1" />
+              Tags
             </Button>
             <WeeklyStar slot={3} />
           </div>
