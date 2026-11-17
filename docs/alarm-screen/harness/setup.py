@@ -43,6 +43,7 @@ here = '/app/docs/alarm-screen/harness/'
 open(os.path.join(proj, 'android', 'app', 'build.gradle'), 'a').write(open(here + 'build-additions.gradle').read())
 t = os.path.join(proj, 'android', 'app', 'src', 'test', 'java', 'co', 'median', 'android', 'odxqpdy'); os.makedirs(t, exist_ok=True)
 shutil.copy(here + 'AlarmShotTest.java', t)
+shutil.copy(here + 'AlarmBehaviorTest.java', t)
 shutil.copy(here + 'build.sh', AB); os.chmod(os.path.join(AB, 'build.sh'), 0o755)
 os.makedirs(os.path.join(AB, 'shots'), exist_ok=True)
 log('SETUP DONE')
