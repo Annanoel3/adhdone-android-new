@@ -168,6 +168,11 @@ public class AlarmShotTest {
         AlarmStore.Entry three = task("Three things for now", "", "Water the plants");
         three.companionsJson = "[{\"taskId\":\"t2\",\"title\":\"Feed the cat\"},{\"taskId\":\"t3\",\"title\":\"Take out the trash\"}]";
         tile("12 three tasks", PHONE, 1f, 0, "", three, 0f, false);
+        AlarmStore.Entry ask = task("Are your reminders helping?", "Tap No and you'll only get one a day.", "");
+        ask.taskId = "";
+        ask.actionsJson = "[{\"label\":\"Yes\",\"path\":\"/Home?remindersHelping=yes\"},{\"label\":\"No\",\"path\":\"/Home?remindersHelping=no\"}]";
+        tile("13 are your reminders helping", PHONE, 1f, 0, "", ask, 0f, false);
+        tile("14 the same, small phone, light", SMALL, 1.3f, 0, "light", ask, 0f, false);
 
         int tw = 360, pad = 16, cols = 5;
         int rows = (tiles.size() + cols - 1) / cols;

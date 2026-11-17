@@ -262,6 +262,21 @@ public class AlarmBehaviorTest {
     }
 
     @Test
+    public void theHelpingQuestionShowsYesAndNo() {
+        AlarmStore.Entry e = task("ask");
+        e.taskId = "";
+        e.actionsJson = "[{\"label\":\"Yes\",\"path\":\"/Home?remindersHelping=yes\"},{\"label\":\"No\",\"path\":\"/Home?remindersHelping=no\"}]";
+        AlarmActivity a = open(e, false);
+        assertFalse(shown(a, R.id.alarm_done));
+        assertFalse(shown(a, R.id.alarm_later_hold));
+        assertEquals("Yes", ((Button) a.findViewById(R.id.alarm_snooze_10)).getText().toString());
+        assertEquals("No", ((Button) a.findViewById(R.id.alarm_snooze_30)).getText().toString());
+        assertFalse(shown(a, R.id.alarm_snooze_60));
+        a.findViewById(R.id.alarm_snooze_30).performClick();
+        assertEquals("/Home?remindersHelping=no", openedPath(a));
+    }
+
+    @Test
     public void threeTasksAtOnceOpenTheList() {
         AlarmStore.Entry e = task("three");
         e.companionsJson = "[{\"taskId\":\"t2\",\"title\":\"Feed the cat\"},{\"taskId\":\"t3\",\"title\":\"Take out the trash\"}]";
