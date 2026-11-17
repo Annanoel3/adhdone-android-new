@@ -1,3 +1,4 @@
+// Re-saved Nov 16 2026 (late) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
