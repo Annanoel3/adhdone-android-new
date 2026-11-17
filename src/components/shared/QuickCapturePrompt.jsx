@@ -1347,7 +1347,7 @@ export function AlertStylePrompt({ user, theme }) {
               <AlarmClock className="w-5 h-5" /> New: full-screen reminders
             </DialogTitle>
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              A reminder can now ring like an alarm clock, full screen and out loud, until you snooze or dismiss it. Same reminders, same times. Harder to miss.
+              A reminder can now ring like an alarm clock, full screen and out loud, until you answer it. Same reminders, same times. Harder to miss.
             </DialogDescription>
           </DialogHeader>
 
@@ -1397,7 +1397,7 @@ export function AlertStylePrompt({ user, theme }) {
           <button type="button" className={card} onClick={() => preview(false)} disabled={busy}>
             <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
             <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Rings out loud and takes over the screen, even locked, until you snooze or dismiss it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}. Tap to see one first.
+              Rings out loud and takes over the screen, even locked, until you answer it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}. Tap to see one first.
             </p>
           </button>
         </div>
