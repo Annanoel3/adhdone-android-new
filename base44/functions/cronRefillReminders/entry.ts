@@ -2012,6 +2012,113 @@ async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Pro
   return out;
 }
 
+// THE FACTS ABOUT A DEPARTURE (Anna, Nov 16 2026: "We really need to figure
+// out the reasons people leave. We cant keep making bad guesses", and yes to
+// "facts in the phone stopped alert"). The alert said "this reads as an
+// uninstall" and nothing about the person's last days, so every departure
+// started a round of guessing. This is a second alert beside it, told once
+// per departure, made only of things on record: how long they used the app
+// and how much, their last time in it screen by screen (the popups that came
+// up are there once the web app's popup log is published), what had gone out
+// in the 24 hours before, and the first push that bounced afterwards, read
+// from OneSignal's own list (a silent push bounces too, and those are not in
+// the send ledger). A bounce within 10 minutes of an app open is said to be
+// what the known push sign-up fault looks like as well (PushHealthWorker's
+// notes: a sign-up that died as the app opened from a reminder), because it
+// is NOT proof of an uninstall: Anna, of one that bounced a minute after the
+// app was closed, "seems suspicious". No AI call. No task titles.
+async function departureFacts(base44: any, u: any, lastMs: number, nowMs: number): Promise<string> {
+  const email = String(u?.email || '').toLowerCase();
+  if (!email || !Number.isFinite(lastMs)) return '';
+  const tz = userTimeZone(u);
+  const clock = (t: number) => {
+    try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(t)); } catch (_) { return new Date(t).toISOString(); }
+  };
+  const at = (v: any) => { if (!v) return NaN; const x = String(v); return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(x) ? x : `${x}Z`); };
+  const DAY = 24 * 60 * 60 * 1000;
+  const parts: string[] = [];
+  // How long, and how much.
+  try {
+    const joined = at(u.signed_up_at || u.created_date);
+    const tasks = await base44.asServiceRole.entities.Task.filter({ created_by: u.email }, '-created_date', 500).catch(() => []);
+    const mine = (tasks || []).filter((t: any) => !t.parent_task_id);
+    const done = mine.filter((t: any) => t.status === 'completed').length;
+    const opens = await base44.asServiceRole.entities.AppEvent.filter({ user_email: email, event: 'session_start' }, '-created_date', 500).catch(() => []);
+    const days = Number.isFinite(joined) ? Math.max(1, Math.ceil((lastMs - joined) / DAY)) : 0;
+    const n = (opens || []).length;
+    parts.push(`${days ? `Used it over ${days} day${days === 1 ? '' : 's'}` : 'Used it'}, ${n}${n >= 500 ? '+' : ''} open${n === 1 ? '' : 's'}, finished ${done} of ${mine.length} task${mine.length === 1 ? '' : 's'}`);
+  } catch (_) { /* a fact that can't be read is left out */ }
+  // Their last time in the app, screen by screen.
+  try {
+    const rows = await base44.asServiceRole.entities.AppEvent.filter({ user_email: email, created_date: { $gte: new Date(lastMs - 40 * 60 * 1000).toISOString() } }, 'created_date', 300).catch(() => []);
+    const evs = (rows || []).map((r: any) => ({ e: String(r?.event || ''), t: at(r?.created_date), page: String(r?.page || ''), seconds: Number(r?.seconds) || 0, name: String(r?.props?.name || '') }))
+      .filter((r: any) => Number.isFinite(r.t) && r.t <= lastMs + 10 * 60 * 1000).sort((a: any, b: any) => a.t - b.t);
+    let startAt = NaN;
+    for (const r of evs) if (r.e === 'session_start') startAt = r.t;
+    const ses = Number.isFinite(startAt) ? evs.filter((r: any) => r.t >= startAt - 2000) : evs;
+    const pages: string[] = [];
+    for (const r of ses) {
+      if (r.e !== 'page_view' || !r.page) continue;
+      const pg = r.page.replace(/^\//, '').toLowerCase() || 'home';
+      const nice = pg === 'tasknotification' ? 'reminder page' : pg;
+      if (pages[pages.length - 1] !== nice) pages.push(nice);
+    }
+    const secs = ses.filter((r: any) => r.e === 'session_end').reduce((n: number, r: any) => n + r.seconds, 0);
+    const popups = ses.filter((r: any) => r.e === 'popup_shown' && r.name).map((r: any) => r.name);
+    const ads = ses.filter((r: any) => r.e === 'ad_shown').length;
+    const errs = ses.filter((r: any) => r.e === 'app_error').length;
+    parts.push(`Last in the app ${clock(lastMs)}${secs ? ` for ${secs < 90 ? `${secs} sec` : `${Math.round(secs / 60)} min`}` : ''}${pages.length ? ` (${pages.slice(0, 6).join(' > ')})` : ''}${popups.length ? `, popups: ${popups.slice(0, 3).join(', ')}` : ''}${ads ? `, ${ads} ad${ads === 1 ? '' : 's'}` : ''}${errs ? `, ${errs} error${errs === 1 ? '' : 's'}` : ''}`);
+  } catch (_) { /* left out */ }
+  // The first push that bounced after it, from OneSignal's own list (newest
+  // first; stops once it is past their last open, 12 pages at most).
+  try {
+    const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+    const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+    if (appId && key) {
+      const rows: { t: number; ok: boolean }[] = [];
+      let offset = 0;
+      for (let pageNo = 0; pageNo < 12; pageNo++) {
+        const res = await fetch(`https://onesignal.com/api/v1/notifications?app_id=${appId}&limit=50&offset=${offset}`, { headers: { Authorization: `Basic ${key}` } });
+        if (!res.ok) break;
+        const json: any = await res.json();
+        const batch = json?.notifications || [];
+        let oldest = Infinity;
+        for (const n of batch) {
+          const t = Number(n?.send_after || n?.queued_at || 0) * 1000;
+          if (t && t < oldest) oldest = t;
+          if (!t || t < lastMs - 60 * 1000 || n?.canceled || !n?.completed_at) continue;
+          const targets = [...(n?.include_external_user_ids || []), ...(n?.include_aliases?.external_id || [])].map((x: any) => String(x).toLowerCase());
+          if (targets.includes(email)) rows.push({ t, ok: Number(n?.successful) > 0 });
+        }
+        offset += 50;
+        if (!batch.length || oldest < lastMs - 60 * 1000) break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      rows.sort((a, b) => a.t - b.t);
+      const firstBad = rows.find((r) => !r.ok);
+      if (firstBad) {
+        const between = rows.filter((r) => r.ok && r.t > lastMs + 2 * 60 * 1000 && r.t < firstBad.t).length;
+        const gap = Math.max(0, Math.round((firstBad.t - lastMs) / 60000));
+        const span = gap < 90 ? `${gap} min` : `${Math.round(gap / 6) / 10} hours`;
+        parts.push(`First bounce ${clock(firstBad.t)}, ${span} after that open${between ? `, ${between} delivered in between` : ', nothing delivered in between'}`);
+        if (gap <= 10) parts.push('A bounce that close to an open is also how the known push sign-up fault looks, so this is not proof of an uninstall');
+      }
+    }
+  } catch (_) { /* left out */ }
+  // What had gone out in the 24 hours before (the send ledger keeps 3 days).
+  try {
+    const led = await filterAll(base44.asServiceRole.entities.NotificationLedger, { user_email: u.email, send_at: { $gte: new Date(lastMs - DAY).toISOString() } });
+    const before = (led || []).filter((r: any) => at(r?.send_at) <= lastMs + 60 * 1000 && !String(r?.kind || '').startsWith('owner_'));
+    const smart = before.filter((r: any) => r?.kind === 'smart_nudge').length;
+    parts.push(`${before.length} push${before.length === 1 ? '' : 'es'} in the 24 hours before, ${smart} from Smart Reminders`);
+  } catch (_) { /* left out */ }
+  const seen = at(u.phone_seen_at);
+  if (Number.isFinite(seen) && nowMs - seen >= 12 * 60 * 60 * 1000) {
+    parts.push(`Phone check-ins missed since ${clock(seen)}: ${Math.floor((nowMs - seen) / (12 * 60 * 60 * 1000))}`);
+  }
+  return parts.length ? `${parts.join('. ')}. (their time) ${u.email}` : '';
+}
+
 async function sentToOwner(base44: any, kind: string, title: string | null, sinceMs: number): Promise<boolean> {
   const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
     user_email: OWNER_ALERT_EMAIL, kind, send_at: { $gte: new Date(sinceMs).toISOString() },
@@ -2775,6 +2882,20 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         sinceMs: lastMs,
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       });
+      // THE FACTS ABOUT A DEPARTURE (departureFacts, above): a second alert,
+      // once per departure, with its own mark.
+      {
+        const factsKey = `facts:${String(u.email).toLowerCase()}`;
+        if (Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY && msOf(String(marks[factsKey] || '')) !== lastMs) {
+          const facts = await departureFacts(base44, u, lastMs, nowMs).catch(() => '');
+          if (facts) problems.push({
+            title: `📋 ADHDone: ${nameOf(u)}'s last days`,
+            body: facts,
+            sinceMs: lastMs,
+            mark: { key: factsKey, value: new Date(lastMs).toISOString() },
+          });
+        }
+      }
       continue;
     }
     // Told their phone stopped (or its pushes broke), and the phone has since
