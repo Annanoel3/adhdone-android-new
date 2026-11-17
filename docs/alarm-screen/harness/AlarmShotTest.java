@@ -50,6 +50,15 @@ public class AlarmShotTest {
 
     private static final String PHONE = "w360dp-h760dp-xhdpi";
     private static final String SMALL = "w320dp-h568dp-xhdpi";
+    private static final String SIDEWAYS = "w760dp-h360dp-land-xhdpi";
+    /**
+     * The phone's own bars, in dp, for the next picture: from Android 15 the
+     * app is drawn UNDER the status bar and the navigation bar, and is told how
+     * tall they are. Drawn on the picture as two red bands. 0 = an older phone,
+     * where the app is kept out of the bars by the system.
+     */
+    private int barTop = 0;
+    private int barBottom = 0;
     private final List<Bitmap> tiles = new ArrayList<>();
     private final List<String> names = new ArrayList<>();
 
@@ -90,6 +99,16 @@ public class AlarmShotTest {
         ShadowLooper.idleMainLooper(2, TimeUnit.SECONDS);
         AlarmActivity a = c.get();
         View root = a.getWindow().getDecorView();
+        float bd = a.getResources().getDisplayMetrics().density;
+        int barTopPx = Math.round(barTop * bd);
+        int barBottomPx = Math.round(barBottom * bd);
+        if (barTop > 0 || barBottom > 0) {
+            android.view.WindowInsets wi = new android.view.WindowInsets.Builder()
+                    .setInsets(android.view.WindowInsets.Type.systemBars(), android.graphics.Insets.of(0, barTopPx, 0, barBottomPx))
+                    .build();
+            a.findViewById(android.R.id.content).dispatchApplyWindowInsets(wi);
+            ShadowLooper.idleMainLooper(2, TimeUnit.SECONDS);
+        }
         View hold = a.findViewById(R.id.alarm_later_hold);
         if (holdAt > 0f && hold != null) {
             java.lang.reflect.Field f = HoldLaterView.class.getDeclaredField("progress");
@@ -122,9 +141,29 @@ public class AlarmShotTest {
         if (area != null && words != null && words.getHeight() > area.getHeight() - area.getPaddingTop() - area.getPaddingBottom()) {
             line.append(" | WORDS CUT BY THEIR BOX (").append(words.getHeight()).append(" in ").append(area.getHeight()).append(")");
         }
+        if (barTop > 0 || barBottom > 0) {
+            int[] at = new int[2];
+            for (int id : new int[] { R.id.alarm_clock, R.id.alarm_done, R.id.alarm_later_hold, R.id.alarm_later_hint, R.id.alarm_dismiss }) {
+                View v = a.findViewById(id);
+                if (v == null || v.getVisibility() != View.VISIBLE || v.getHeight() == 0) {
+                    continue;
+                }
+                v.getLocationInWindow(at);
+                if (at[1] < barTopPx || at[1] + v.getHeight() > h - barBottomPx) {
+                    line.append(" | UNDER A BAR: ").append(a.getResources().getResourceEntryName(id));
+                }
+            }
+        }
         System.out.println(line);
         Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         root.draw(new Canvas(b));
+        if (barTop > 0 || barBottom > 0) {
+            Canvas bc = new Canvas(b);
+            Paint bp = new Paint();
+            bp.setColor(0x59FF0000);
+            bc.drawRect(0, 0, w, barTopPx, bp);
+            bc.drawRect(0, h - barBottomPx, w, h, bp);
+        }
         c.pause().stop().destroy();
         return b;
     }
@@ -173,6 +212,18 @@ public class AlarmShotTest {
         ask.actionsJson = "[{\"label\":\"Yes\",\"path\":\"/Home?remindersHelping=yes\"},{\"label\":\"No\",\"path\":\"/Home?remindersHelping=no\"}]";
         tile("13 are your reminders helping", PHONE, 1f, 0, "", ask, 0f, false);
         tile("14 the same, small phone, light", SMALL, 1.3f, 0, "light", ask, 0f, false);
+        // Android 15 and up: the red bands are the phone's own bars.
+        barTop = 40;
+        barBottom = 48;
+        tile("15 Android 15+, three-button bar", PHONE, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, false);
+        tile("16 Android 15+, small phone, a text task", SMALL, 1f, 2, "", text, 0f, false);
+        barBottom = 24;
+        tile("17 Android 15+, swipe bar, light", PHONE, 1f, 1, "light", task("Water the plants", words, "Water the plants"), 0f, false);
+        tile("18 Android 15+, task timer's end", PHONE, 1f, 0, "", sprint, 0f, false);
+        barTop = 0;
+        barBottom = 0;
+        tile("19 on its side", SIDEWAYS, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, false);
+        tile("20 on its side, earlier screen", SIDEWAYS, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, true);
 
         int tw = 360, pad = 16, cols = 5;
         int rows = (tiles.size() + cols - 1) / cols;
