@@ -726,8 +726,10 @@ public class AlarmActivity extends Activity {
             android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) v.getLayoutParams();
             space -= v.getHeight() + lp.topMargin + lp.bottomMargin;
         }
-        int maxRound = Math.round(Math.max(168f, Math.min(264f, dm.heightPixels / d * 0.33f)) * d);
-        int minRound = Math.round(132f * d);
+        // An alarm with the app's own choices has no round button (arrangeV2).
+        boolean noRound = done.getVisibility() != View.VISIBLE;
+        int maxRound = noRound ? 0 : Math.round(Math.max(168f, Math.min(264f, dm.heightPixels / d * 0.33f)) * d);
+        int minRound = noRound ? 0 : Math.round(132f * d);
         int comfort = Math.max(minRound, Math.round(maxRound * 0.76f));
         int pads = area.getPaddingTop() + area.getPaddingBottom() + words.getPaddingTop() + words.getPaddingBottom();
         int gapBig = ((android.view.ViewGroup.MarginLayoutParams) big.getLayoutParams()).topMargin;
@@ -832,7 +834,7 @@ public class AlarmActivity extends Activity {
             row.setLayoutParams(rowAt);
             changed = true;
         }
-        if (done.getLayoutParams().width != side) {
+        if (!noRound && done.getLayoutParams().width != side) {
             roundPx = round;
             styleRound(done, side);
             fitRound(done, side, shared);
@@ -979,16 +981,47 @@ public class AlarmActivity extends Activity {
             }
         }
         if (parseActions(e) != null) {
-            // The app's own choices for this moment (a sprint's "Keep going" /
-            // "I'm done") sit where Snooze does: full-size here, not chips.
+            // The app's own choices for this moment (the task timer's end:
+            // "Keep going", "I finished the task", "Stop working") are the
+            // answer here, so they are what the screen shows: one under the
+            // other, full width, the first in the theme's accent. No round
+            // button; the plain way out (the earlier screen's big button,
+            // with its words) is the quiet bar under them.
             float d = getResources().getDisplayMetrics().density;
+            boolean dark = AlarmTheme.isDark(this);
+            int text = ((TextView) findViewById(R.id.alarm_heading)).getCurrentTextColor();
+            int quiet = dark ? 0x24FFFFFF : 0x80FFFFFF;
+            done.setVisibility(View.GONE);
+            open.setVisibility(View.VISIBLE);
+            open.setBackground(rounded(quiet, 20f * d));
+            open.setTextColor(text);
+            LinearLayout choices = findViewById(R.id.alarm_snooze_row);
+            choices.setOrientation(LinearLayout.VERTICAL);
+            boolean first = true;
             for (int id : new int[] { R.id.alarm_snooze_10, R.id.alarm_snooze_30, R.id.alarm_snooze_60 }) {
                 Button choice = findViewById(id);
-                android.view.ViewGroup.LayoutParams lp = choice.getLayoutParams();
-                lp.height = Math.round(56f * d);
+                if (choice.getVisibility() != View.VISIBLE) {
+                    continue;
+                }
+                LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) choice.getLayoutParams();
+                lp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT;
+                lp.height = Math.round(54f * d);
+                lp.weight = 0f;
+                lp.setMarginEnd(0);
+                lp.topMargin = first ? 0 : Math.round(10f * d);
                 choice.setLayoutParams(lp);
-                choice.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f);
+                choice.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17f);
                 choice.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                choice.setMaxLines(1);
+                choice.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                if (first) {
+                    choice.setBackground(rounded(AlarmTheme.accent(this, getColor(R.color.alarm_dismiss)), 20f * d));
+                    choice.setTextColor(AlarmTheme.onAccent(this, android.graphics.Color.WHITE));
+                } else {
+                    choice.setBackground(rounded(quiet, 20f * d));
+                    choice.setTextColor(text);
+                }
+                first = false;
             }
         }
         // Later is offered exactly where the earlier screen offers it.
