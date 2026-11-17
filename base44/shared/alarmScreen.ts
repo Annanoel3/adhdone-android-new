@@ -21,6 +21,18 @@
 
 export const ALARM_SCREEN_CLASSIC_FOR_EVERYONE = false;
 
+// The new screen shows its third button only when the task has something to
+// do in the app, which the phone knows by the alarm carrying its own words for
+// that button (openLabel: a birthday's "Send a text", an event's "Record
+// notes"). A task that IS sending someone a text (Task.texts_someone) has the
+// box to type it and the Send button on its page, so its alarms carry words
+// too. Empty for every other task. The app's own alarm list says the same
+// (alarmSetFor in src/components/utils/widgetBridge.js).
+export function textTaskOpenLabel(task: any): string {
+  if (!task || task.texts_someone !== true || task.birthday_person || task.classification === 'event') return '';
+  return String(task.text_message || '').trim() ? 'Send the text' : 'Write the text';
+}
+
 export function alarmScreenFor(user: any): 'new' | 'classic' {
   if (ALARM_SCREEN_CLASSIC_FOR_EVERYONE) return 'classic';
   return String(user?.alarm_screen || '').trim().toLowerCase() === 'classic' ? 'classic' : 'new';
