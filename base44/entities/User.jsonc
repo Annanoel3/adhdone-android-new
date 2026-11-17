@@ -583,7 +583,7 @@
     },
     "tasks_view_mode": {
       "type": "string",
-      "description": "My Tasks layout, sections or days, saved from the Sections/Days switch. Same rule as task_sort."
+      "description": "My Tasks layout, sections, days or tags, saved from the Sections/Days/Tags switch. Same rule as task_sort."
     },
     "wins_slump_shown_at": {
       "type": "string",
