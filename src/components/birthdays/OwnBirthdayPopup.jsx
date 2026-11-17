@@ -32,7 +32,7 @@ function isToday(iso) {
 export default function OwnBirthdayPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
   // Opens on its own, so it takes its turn: never on top of another popup.
-  const shown = usePopupTurn(isOpen);
+  const shown = usePopupTurn(isOpen, { name: 'OwnBirthdayPopup' });
 
   const check = useCallback(async () => {
     if (!user?.email) return;

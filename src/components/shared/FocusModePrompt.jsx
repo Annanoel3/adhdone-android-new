@@ -88,7 +88,7 @@ export default function FocusModePrompt({ user, theme }) {
   const askAboutId = morningTaskId || (morningOffer && !morningDismissed ? morningOffer.taskId : null);
   // The morning question opens on its own (a push tap, or the offer on the
   // profile at app open), so it takes its turn with every other popup.
-  const morningShown = usePopupTurn(!!morningTask, { reactive: true });
+  const morningShown = usePopupTurn(!!morningTask, { reactive: true, name: 'FocusModePrompt' });
   useEffect(() => {
     if (!askAboutId) { setMorningTask(null); return; }
     let gone = false;

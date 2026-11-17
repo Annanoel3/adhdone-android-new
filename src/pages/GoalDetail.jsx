@@ -176,15 +176,15 @@ function GoalDetail() {
   // The step "How did it go?" is about. Latched: set once when earned,
   // cleared only when the popup is answered or skipped.
   const [feedbackStep, setFeedbackStep] = useState(null);
-  const feedbackShown = usePopupTurn(feedbackStep != null, { reactive: true });
+  const feedbackShown = usePopupTurn(feedbackStep != null, { reactive: true, name: 'GoalDetail.feedback' });
   const openedOnce = useRef(false);
   const closeWeek = useCallback(() => setCelebrationWeek(null), []);
   const closeMonth = useCallback(() => setCelebrationMonth(null), []);
 
   // Celebrations open on their own after a check-off: one popup at a time.
   // Latched: set once when earned, cleared only when closed.
-  const weekShown = usePopupTurn(celebrationWeek != null, { reactive: true });
-  const monthShown = usePopupTurn(celebrationMonth != null, { reactive: true });
+  const weekShown = usePopupTurn(celebrationWeek != null, { reactive: true, name: 'GoalDetail.week' });
+  const monthShown = usePopupTurn(celebrationMonth != null, { reactive: true, name: 'GoalDetail.month' });
 
   const loadData = useCallback(async () => {
     try {

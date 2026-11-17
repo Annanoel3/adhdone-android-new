@@ -34,7 +34,7 @@ export default function WinsSpot({ theme, specialMode, openOnMount = false, clas
     if (fromLink) setAutoWanted(true);
   }, [fromLink, location.key]);
 
-  const autoShown = usePopupTurn(autoWanted, { reactive: true });
+  const autoShown = usePopupTurn(autoWanted, { reactive: true, name: 'WinsSpot' });
 
   // wins=1 comes off the address when the list closes, not while it's up: a
   // navigation while it's open could remount the page and close it in the

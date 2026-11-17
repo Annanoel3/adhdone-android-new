@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { track, trackFire, setTrackedEmail, newSessionId } from '@/lib/appTrack';
+import { popupOnScreen } from '@/components/onboarding/onboardingSurface';
 
 // A return after this long away is a new visit (Anna, Nov 1 2026: opens were
 // logged only when the app started fresh, so a phone that kept ADHDone in the
@@ -41,7 +42,10 @@ export default function UsageTracker({ user }) {
       accumulate();
       if (activeSecondsRef.current < 1) return;
       reportedRef.current = true;
-      track('session_end', { seconds: activeSecondsRef.current });
+      // What was up when they left, if a popup was (onboardingSurface.js,
+      // WHAT WAS ON SCREEN): its name only.
+      const up = popupOnScreen();
+      track('session_end', up ? { seconds: activeSecondsRef.current, props: { popup: up } } : { seconds: activeSecondsRef.current });
     };
 
     const onVisibility = () => {

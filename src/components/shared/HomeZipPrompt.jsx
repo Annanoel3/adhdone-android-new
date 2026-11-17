@@ -32,7 +32,7 @@ export default function HomeZipPrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
   // Takes its turn with other popups (never stacks on one) and waits for a
   // calm moment: nothing else up, and not while they're typing or tapping.
-  const shown = usePopupTurn(open);
+  const shown = usePopupTurn(open, { name: 'HomeZipPrompt' });
   // Second step, only after home base is saved: commuters get far more out of
   // this than anyone else, but asking about work up front would bury the ask
   // that actually matters.

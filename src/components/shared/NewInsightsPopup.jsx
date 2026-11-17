@@ -40,7 +40,7 @@ export default function NewInsightsPopup({ user, theme, specialMode, currentPage
   // Already on Insights: nothing to point at (it waits for another page).
   const wanted = eligible && currentPageName !== "Progress";
 
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'NewInsightsPopup' });
 
   // Counted as seen once it is actually on screen, so it never comes back.
   useEffect(() => {

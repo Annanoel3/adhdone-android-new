@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { setTourActive, isTourActive } from './tourActive';
+import { trackFire } from '@/lib/appTrack';
 
 // One shared registry for every blocking onboarding surface (welcome note, tour
 // cards, quick-capture offer). Two surfaces must never be on screen at once,
@@ -113,7 +114,22 @@ export function waitForClear() {
 // until it closes, so nothing can stack on top of it. Popups a user opens by
 // tapping something don't use this; opening one from inside another is by
 // design.
-export function usePopupTurn(wanted, { reactive = false } = {}) {
+//
+// WHAT WAS ON SCREEN (Anna, Nov 16 2026: "We really need to figure out the
+// reasons people leave. We cant keep making bad guesses", and yes to
+// "recording what shows on screen"). The app logged which page opened and
+// nothing about what came up on it, so when someone left there was no telling
+// what they had last been shown. Every popup that opens on its own now leaves
+// two rows in AppEvent: popup_shown { name } when it comes up and
+// popup_closed { name, seconds } when it goes. `name` is the component's own
+// name, given by the caller ('RepeatOfferPopup', 'GoalDetail.week'): never a
+// task's title or anything the person typed (the AppEvent rule). The session's
+// last row (UsageTracker, session_end) carries the popup that was up when the
+// app was left, if one was. Nothing is shown, asked or changed for the person.
+let popupUp = '';
+export const popupOnScreen = () => popupUp;
+
+export function usePopupTurn(wanted, { reactive = false, name = '' } = {}) {
   const [granted, setGranted] = useState(false);
 
   useEffect(() => {
@@ -133,8 +149,16 @@ export function usePopupTurn(wanted, { reactive = false } = {}) {
   useEffect(() => {
     if (!shown) return undefined;
     enterOnboardingSurface();
-    return exitOnboardingSurface;
-  }, [shown]);
+    const label = String(name || 'unnamed').slice(0, 60);
+    const upAt = Date.now();
+    popupUp = label;
+    try { trackFire('popup_shown', { props: { name: label } }); } catch (e) { /* logging never gets in a popup's way */ }
+    return () => {
+      exitOnboardingSurface();
+      if (popupUp === label) popupUp = '';
+      try { trackFire('popup_closed', { props: { name: label, seconds: Math.round((Date.now() - upAt) / 1000) } }); } catch (e) { /* same */ }
+    };
+  }, [shown, name]);
 
   return shown;
 }

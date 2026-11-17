@@ -243,7 +243,7 @@ export function QuietHoursNagPrompt({ user, theme }) {
   const [pending, setPending] = useState(null);
   // Takes its turn with other popups, but as the answer to something the user
   // just did it shows the moment the screen is free.
-  const shown = usePopupTurn(!!pending, { reactive: true });
+  const shown = usePopupTurn(!!pending, { reactive: true, name: 'QuietHoursNagPrompt' });
 
   useEffect(() => {
     window.__quietHoursNagAsk = (task) => new Promise((resolve) => {
@@ -1489,7 +1489,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
   const [was, setWas] = useState({ start: '22:00', end: '08:00' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'QuietHoursReviewPrompt' });
   const pageRef = useRef(currentPageName);
   pageRef.current = currentPageName;
   const checked = useRef(false);
@@ -1839,7 +1839,7 @@ export function PushPauseNotice({ user, theme }) {
   const [wanted, setWanted] = useState(false);
   const [needsUpdate, setNeedsUpdate] = useState(false);
   const [busy, setBusy] = useState(false);
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'PushPauseNotice' });
   const checked = useRef(false);
 
   useEffect(() => {
@@ -1950,7 +1950,7 @@ export function AppUpdatePrompt({ user, theme }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showSteps, setShowSteps] = useState(false);
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'AppUpdatePrompt' });
   const checked = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -2278,7 +2278,7 @@ export function WakeOfferPrompt({ user, theme }) {
   const [bgOnly, setBgOnly] = useState(false);
   // The background switch is off while wake-up detection is on.
   const [bgMissing, setBgMissing] = useState(false);
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'WakeOfferPrompt' });
   const pending = useRef(false);
   const AB = () => window.Capacitor?.Plugins?.AlarmBridge;
   const quietEnd = () => {

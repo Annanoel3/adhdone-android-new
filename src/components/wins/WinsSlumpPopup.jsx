@@ -96,7 +96,7 @@ export default function WinsSlumpPopup({ user, theme, specialMode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, shownAt]);
 
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'WinsSlumpPopup' });
 
   // Counted as shown only once it's actually on screen.
   useEffect(() => {

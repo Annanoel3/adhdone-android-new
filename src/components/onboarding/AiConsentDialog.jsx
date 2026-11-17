@@ -64,7 +64,7 @@ export default function AiConsentDialog({ user }) {
   const [given, setGiven] = useState(false);
   const [saving, setSaving] = useState(false);
   const wanted = aiConsentPending(user) && !given;
-  const shown = usePopupTurn(wanted, { reactive: true });
+  const shown = usePopupTurn(wanted, { reactive: true, name: 'AiConsentDialog' });
   // Apple's "Allow ADHDone to track…?" comes right after this popup, said
   // here first, so it isn't a box out of nowhere later (Anna, Nov 6 2026).
   // Only when this iPhone hasn't answered it yet.

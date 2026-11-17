@@ -30,7 +30,7 @@ const ONE_PER_OPEN_MS = 10 * 60 * 1000;
 
 export default function TextAskPopup({ user, theme }) {
   const [task, setTask] = useState(null);
-  const shown = usePopupTurn(!!task);
+  const shown = usePopupTurn(!!task, { name: 'TextAskPopup' });
   const busyRef = useRef(false);
   const lastShownAtRef = useRef(0);
   const markedRef = useRef(null);

@@ -112,9 +112,9 @@ export default function NotificationsOffBanner({ theme, specialMode, user }) {
   const [blocked, setBlocked] = useState(blockedThisLaunch === true);
   const [working, setWorking] = useState(false);
   const [reask, setReask] = useState(false);
-  const reaskShown = usePopupTurn(reask);
+  const reaskShown = usePopupTurn(reask, { name: 'NotificationsOffBanner.reask' });
   const [missed, setMissed] = useState(null);
-  const missedShown = usePopupTurn(!!missed && !reask);
+  const missedShown = usePopupTurn(!!missed && !reask, { name: 'NotificationsOffBanner.missed' });
 
   // A reminder that should have gone off while notifications were off.
   useEffect(() => {

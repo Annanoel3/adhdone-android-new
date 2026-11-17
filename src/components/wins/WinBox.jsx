@@ -187,7 +187,7 @@ export function WinAskFromLink({ theme, specialMode }) {
     return () => { gone = true; };
   }, [wanted, me]);
 
-  const shown = usePopupTurn(wanted, { reactive: true });
+  const shown = usePopupTurn(wanted, { reactive: true, name: 'WinAskFromLink' });
 
   // The same day key the evening card uses, for the mood and the win alike,
   // so an answer at 12:30 AM in a 9 PM-1 AM evening is the evening before's.

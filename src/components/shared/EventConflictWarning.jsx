@@ -45,7 +45,7 @@ export default function EventConflictWarning({ user, theme }) {
   const current = queue[0] || null;
   // Takes its turn with other popups (never stacks on one), but as the answer
   // to something the user just did it shows the moment the screen is free.
-  const shown = usePopupTurn(!!current, { reactive: true });
+  const shown = usePopupTurn(!!current, { reactive: true, name: 'EventConflictWarning' });
   const dark = theme === 'dark';
   const navigate = useNavigate();
 

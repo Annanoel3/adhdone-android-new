@@ -32,7 +32,7 @@ function daysUntil(iso) {
 export default function BirthdayTextPromptPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
   // Opens on its own, so it takes its turn: never on top of another popup.
-  const shown = usePopupTurn(isOpen);
+  const shown = usePopupTurn(isOpen, { name: 'BirthdayTextPromptPopup' });
   const [current, setCurrent] = useState(null);
   const [showWriter, setShowWriter] = useState(false);
   const dismissedRef = useRef(new Set());

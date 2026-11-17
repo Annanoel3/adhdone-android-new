@@ -322,7 +322,7 @@ export default function Calendar() {
   const [switchNote, setSwitchNote] = useState(false);
   // Opens on its own when the page loads, so it waits for the page's intro
   // card or any other popup to be gone first (Nov 4 2026 audit).
-  const switchNoteShown = usePopupTurn(switchNote, { reactive: true });
+  const switchNoteShown = usePopupTurn(switchNote, { reactive: true, name: 'Calendar' });
 
   const loadSyncedEvents = useCallback(async () => {
     try {

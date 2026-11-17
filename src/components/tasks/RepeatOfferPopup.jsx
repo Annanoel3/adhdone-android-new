@@ -186,7 +186,7 @@ export default function RepeatOfferPopup({ user, theme, specialMode }) {
     return () => { if (show === put) show = null; };
   }, [user?.email]);
 
-  const shown = usePopupTurn(!!task);
+  const shown = usePopupTurn(!!task, { name: 'RepeatOfferPopup' });
   // { id, at, saving } for the offer on screen now.
   const stamp = useRef(null);
 

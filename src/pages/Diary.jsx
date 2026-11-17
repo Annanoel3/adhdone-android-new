@@ -19,7 +19,7 @@ export default function Diary() {
   const [showFirstRun, setShowFirstRun] = useState(false);
   // Opens on its own the first time the page loads, so it waits for the
   // page's intro card or any other popup to be gone first (Nov 4 2026 audit).
-  const firstRunShown = usePopupTurn(showFirstRun, { reactive: true });
+  const firstRunShown = usePopupTurn(showFirstRun, { reactive: true, name: 'Diary' });
   const [completedToday, setCompletedToday] = useState([]);
   const [prefill, setPrefill] = useState("");
   // null = list view. Otherwise the entry being written (may be a brand-new one).

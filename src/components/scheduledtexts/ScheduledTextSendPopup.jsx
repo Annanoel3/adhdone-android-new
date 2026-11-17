@@ -24,7 +24,7 @@ import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 export default function ScheduledTextSendPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
   // Opens on its own, so it takes its turn: never on top of another popup.
-  const shown = usePopupTurn(isOpen);
+  const shown = usePopupTurn(isOpen, { name: 'ScheduledTextSendPopup' });
   const [current, setCurrent] = useState(null);
   const [processing, setProcessing] = useState(null);
   const queueRef = useRef([]);

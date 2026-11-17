@@ -31,7 +31,7 @@ export default function IdeaSavedNotice({ theme, specialMode }) {
   const [idea, setIdea] = useState(null);
   // Takes its turn like any popup that answers something they just did: never
   // on top of another popup, and nothing else opens on its own while it's up.
-  const shown = usePopupTurn(!!idea, { reactive: true });
+  const shown = usePopupTurn(!!idea, { reactive: true, name: 'IdeaSavedNotice' });
 
   // Lowercase, because the same page shows up as both /Home and /home.
   const path = location.pathname.toLowerCase();

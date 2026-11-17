@@ -287,7 +287,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
   // opens on its own, often while a capture from earlier is being finished at
   // app open, so it takes its turn with every other popup: nothing else on
   // screen first. The pipeline simply waits for the answer (Nov 4 2026 audit).
-  const askShown = usePopupTurn(!!ask, { reactive: true });
+  const askShown = usePopupTurn(!!ask, { reactive: true, name: 'TaskCaptureProcessor' });
 
   const requestInput = (type, data, captureId = null) =>
     new Promise((resolve) => {

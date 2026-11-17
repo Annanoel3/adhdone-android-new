@@ -154,7 +154,7 @@ export default function WhatsNextPopup({ user, theme, specialMode }) {
     return () => { if (show === put) show = null; };
   }, [user?.email, user?.signed_up_at, user?.created_date]);
 
-  const shown = usePopupTurn(wanted);
+  const shown = usePopupTurn(wanted, { name: 'WhatsNextPopup' });
 
   // Counted once it's actually on screen: at most once a day.
   useEffect(() => {

@@ -516,14 +516,14 @@ export default function ParkingLot() {
   // rather than just creating it" (a new user's "supplies to buy" had been
   // turned into a tracker on its own the night before).
   const [askTrack, setAskTrack] = useState(null);
-  const askTrackShown = usePopupTurn(!!askTrack, { reactive: true });
+  const askTrackShown = usePopupTurn(!!askTrack, { reactive: true, name: 'ParkingLot.askTrack' });
   const [remindChoice, setRemindChoice] = useState("none");
   const [remindTime, setRemindTime] = useState("09:00");
   const [trackerBusy, setTrackerBusy] = useState(false);
   const judging = useRef(new Set());
   // The "remind you to log?" question opens on its own after a tracker is
   // made, so it waits until nothing else is on screen.
-  const remindShown = usePopupTurn(!!remindFor, { reactive: true });
+  const remindShown = usePopupTurn(!!remindFor, { reactive: true, name: 'ParkingLot.remind' });
 
   const refreshIdeas = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
 

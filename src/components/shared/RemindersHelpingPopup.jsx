@@ -108,7 +108,7 @@ export default function RemindersHelpingPopup({ theme, specialMode }) {
   }, [direct, location.key]);
 
   // It's the answer to a push they just tapped: up as soon as the screen is free.
-  const shown = usePopupTurn(eligible, { reactive: true });
+  const shown = usePopupTurn(eligible, { reactive: true, name: 'RemindersHelpingPopup' });
 
   const close = () => {
     setEligible(false);
