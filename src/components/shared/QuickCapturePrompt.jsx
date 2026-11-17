@@ -957,8 +957,70 @@ if (typeof window !== 'undefined') {
 const PREVIEW_RING_MS = 20 * 1000;
 const PREVIEW_TITLE = 'Move the laundry to the dryer';
 
+// The Later bar of the alarm screen from build 49 on, as the preview shows it:
+// it has to be held (it fills while a finger is on it), the same 0.7 seconds
+// as the real one (android: HoldLaterView). A quick tap only says so.
+function HoldLaterPreview({ title, onHeld, onTapped }) {
+  const [filling, setFilling] = useState(false);
+  const timer = useRef(null);
+  const down = useRef(false);
+  const downAt = useRef(0);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const start = () => {
+    down.current = true;
+    downAt.current = Date.now();
+    setFilling(true);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      if (!down.current) return;
+      down.current = false;
+      setFilling(false);
+      onHeld();
+    }, 700);
+  };
+  const end = () => {
+    if (!down.current) return;
+    down.current = false;
+    clearTimeout(timer.current);
+    setFilling(false);
+    if (Date.now() - downAt.current < 300) onTapped();
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Hold for Later. ${title}`}
+      onPointerDown={start}
+      onPointerUp={end}
+      onPointerLeave={end}
+      onPointerCancel={end}
+      onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHeld(); } }}
+      className="relative mt-4 w-full overflow-hidden text-center select-none"
+      style={{ borderRadius: 28, background: 'rgba(255,255,255,0.13)', border: '1.5px solid rgba(255,255,255,0.34)', padding: '14px 16px', touchAction: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+    >
+      <div aria-hidden="true" style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: filling ? '100%' : '0%', background: 'rgba(232,121,170,0.55)', transition: filling ? 'width 700ms linear' : 'width 180ms linear' }} />
+      <p className="relative text-xl font-extrabold">Hold for Later</p>
+      <p className="relative text-sm truncate" style={{ opacity: 0.9 }}>{title}</p>
+    </div>
+  );
+}
+
 function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
   const [ringing, setRinging] = useState(true);
+  // The alarm screen this phone will actually show: the one from build 49 on
+  // (a big round Done to tap, a Later bar that has to be held; Anna, Nov 16
+  // 2026), unless the phone runs an older build or the new screen was switched
+  // off for this account (User.alarm_screen, base44/shared/alarmScreen.ts).
+  // Then the earlier screen is previewed, as before.
+  const newScreenOn = (build) => build >= 49 && user?.alarm_screen !== 'classic' && !isIPhoneApp();
+  const [newScreen, setNewScreen] = useState(() => newScreenOn(Number(user?.app_build) || 0));
+  useEffect(() => {
+    let gone = false;
+    phoneBuild().then((n) => { if (!gone && n > 0) setNewScreen(newScreenOn(n)); });
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [note, setNote] = useState('');
   const audioRef = useRef(null);
   const buzzRef = useRef(null);
@@ -1001,7 +1063,7 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
 
   const btn = 'h-14 rounded-md font-bold text-lg text-white';
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col" style={{ background: '#1F1B2E', color: '#FFFFFF' }} role="dialog" aria-label="Preview of a full-screen alarm">
+    <div className="fixed inset-0 z-[200] flex flex-col" style={{ background: newScreen ? 'radial-gradient(circle at 28% 12%, #4A2F8C 0%, rgba(74,47,140,0) 46%), radial-gradient(circle at 92% 92%, #6E3358 0%, rgba(110,51,88,0) 44%), #17131F' : '#1F1B2E', color: '#FFFFFF' }} role="dialog" aria-label="Preview of a full-screen alarm">
       <div className="px-4 pt-3 text-center" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
         <p className="inline-block rounded-full px-3 py-1 text-xs font-semibold tracking-wide" style={{ background: '#8B5CF6' }}>
           PREVIEW
@@ -1014,6 +1076,35 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
       {/* Scrolls on a short screen instead of clipping the top (my-auto
           centres it when there is room). */}
       <div className="flex-1 min-h-0 overflow-y-auto px-8 flex flex-col">
+       {newScreen ? (
+       <div className="my-auto w-full py-3 flex flex-col items-center">
+        <p className="text-xs font-bold" style={{ color: '#C9C3DC', letterSpacing: '0.16em' }}>TIME FOR THIS</p>
+        <p className="mt-2 text-center text-3xl font-bold leading-tight">{PREVIEW_TITLE}</p>
+        <button
+          type="button"
+          onClick={() => mock('On a real alarm that marks the task done. Undo is there for a few seconds if it was a slip.')}
+          className="mt-8 rounded-full font-extrabold text-white flex items-center justify-center shrink-0"
+          style={{ width: 164, height: 164, fontSize: 28, background: '#8B5CF6', boxShadow: '0 0 0 11px rgba(139,92,246,0.22), 0 0 0 24px rgba(139,92,246,0.10)' }}
+        >
+          Done ✓
+        </button>
+        <p className="mt-9 text-xs" style={{ color: '#C9C3DC' }}>Snooze</p>
+        <div className="mt-1 flex w-full gap-2">
+          {['10 min', '30 min', '1 hour'].map((m) => (
+            <button key={m} type="button" onClick={() => mock(`On a real alarm that snoozes it for ${m}.`)} className="flex-1 h-11 text-sm font-medium" style={{ borderRadius: 16, background: 'rgba(255,255,255,0.14)', color: '#FFFFFF' }}>{m}</button>
+          ))}
+        </div>
+        <HoldLaterPreview
+          title={PREVIEW_TITLE}
+          onHeld={() => mock('Later means "I know, just not right now." Smart Reminders brings it back up later.')}
+          onTapped={() => setNote('Keep holding to put it off.')}
+        />
+        <p className="mt-2 text-center text-xs" style={{ color: '#C9C3DC' }}>Later brings it back at a better time</p>
+        <p className="mt-3 min-h-[1.25rem] text-center text-sm" style={{ color: '#C9C3DC' }}>
+          {note || (ringing ? 'Ringing…' : '')}
+        </p>
+       </div>
+       ) : (
        <div className="my-auto w-full py-4 flex flex-col items-center">
         <p className="text-lg" style={{ color: '#C9C3DC' }}>Time for this</p>
         <p className="mt-3 text-center text-3xl font-bold leading-tight">{PREVIEW_TITLE}</p>
@@ -1032,6 +1123,7 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
           {note || (ringing ? 'Ringing…' : '')}
         </p>
        </div>
+       )}
       </div>
 
       <div className="px-4 pb-4 space-y-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
