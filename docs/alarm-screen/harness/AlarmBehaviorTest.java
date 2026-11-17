@@ -94,6 +94,16 @@ public class AlarmBehaviorTest {
         return v != null && v.getVisibility() == View.VISIBLE;
     }
 
+    /**
+     * From here on the test moves the clock itself: each idleMainLooper(x)
+     * runs one frame x later. Left to itself, Robolectric runs a view's
+     * frame-by-frame work to its end in no time, which is not what a phone does.
+     */
+    private static void ownTheClock() {
+        org.robolectric.shadows.ShadowChoreographer.setPaused(true);
+        org.robolectric.shadows.ShadowChoreographer.setFrameDelay(java.time.Duration.ofMillis(16));
+    }
+
     private static void touch(View v, int action) {
         long t = SystemClock.uptimeMillis();
         v.dispatchTouchEvent(MotionEvent.obtain(t, t, action, 60f, 30f, 0));
@@ -126,6 +136,7 @@ public class AlarmBehaviorTest {
     @Test
     public void laterNeedsTheWholeHold() {
         AlarmActivity a = open(task("hold"), false);
+        ownTheClock();
         View hold = a.findViewById(R.id.alarm_later_hold);
         touch(hold, MotionEvent.ACTION_DOWN);
         ShadowLooper.idleMainLooper(450, TimeUnit.MILLISECONDS);
@@ -138,6 +149,7 @@ public class AlarmBehaviorTest {
     @Test
     public void aQuickTapOnLaterOnlySaysKeepHolding() {
         AlarmActivity a = open(task("tap"), false);
+        ownTheClock();
         View hold = a.findViewById(R.id.alarm_later_hold);
         touch(hold, MotionEvent.ACTION_DOWN);
         ShadowLooper.idleMainLooper(120, TimeUnit.MILLISECONDS);
@@ -153,6 +165,7 @@ public class AlarmBehaviorTest {
     @Test
     public void lettingGoEarlyIsNotLater() {
         AlarmActivity a = open(task("early"), false);
+        ownTheClock();
         View hold = a.findViewById(R.id.alarm_later_hold);
         touch(hold, MotionEvent.ACTION_DOWN);
         ShadowLooper.idleMainLooper(500, TimeUnit.MILLISECONDS);
