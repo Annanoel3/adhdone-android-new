@@ -500,7 +500,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       seedTaskSortFromProfile(user);
       try {
         const mode = user.tasks_view_mode;
-        if ((mode === 'sections' || mode === 'days') && localStorage.getItem('tasks_view_mode') === null) {
+        if ((mode === 'sections' || mode === 'days' || mode === 'tags') && localStorage.getItem('tasks_view_mode') === null) {
           localStorage.setItem('tasks_view_mode', mode);
           window.dispatchEvent(new CustomEvent('tasks-view-mode-seeded', { detail: { mode } }));
         }
