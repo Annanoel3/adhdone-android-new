@@ -27,7 +27,7 @@ import { REMINDER_BRIEF } from './reminderBrief.ts';
 const SWAPS: [string, string][] = [
   [
     `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once.`,
-    `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once. And when they put off one thing after another in a short stretch, that is about the moment, not the things: they are in the middle of something. Give them real room before anything else from you, and when you do come back, bring what matters most, not the next thing in line.`,
+    `it just hasn't been heard yet, and it comes back like anything put off, at a good moment and in different words, not at once. And when they put off one thing after another in a short stretch, that is about the moment, not the things: they are in the middle of something, and whatever it is rarely ends in the next half hour. Leave them alone for a good while, long enough to be a real break and not the same interruption again, and when you do come back, bring the one thing that matters most, not the next thing in line. What truly cannot wait still goes at its time.`,
   ],
   [
     `The same reason given look after look is a task being left out.`,
