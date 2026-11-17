@@ -437,6 +437,14 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       if (t.birthday_person && !t.is_own_birthday && !t.birthday_animal && !t.birthday_no_text) {
         alarm.openLabel = t.birthday_text_message ? 'Send a text' : 'Write a text';
       }
+      // A task that IS sending someone a text (Task.texts_someone): its page
+      // has the box to type it and the Send button, so the alarm's button to
+      // open it says so. The new alarm screen (build 49 on) only shows that
+      // button when it has words of its own. Same as textTaskOpenLabel in
+      // base44/shared/alarmScreen.ts.
+      if (!alarm.openLabel && t.texts_someone === true && !t.birthday_person && t.classification !== 'event') {
+        alarm.openLabel = String(t.text_message || '').trim() ? 'Send the text' : 'Write the text';
+      }
       // An event (an appointment, Bike Night): the phone (build 42 on) shows
       // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
       // Older builds ignore this.
