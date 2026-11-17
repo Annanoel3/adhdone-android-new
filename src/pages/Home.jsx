@@ -14,7 +14,7 @@ import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebra
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import { listActiveTasks, refreshAlarms } from "../components/utils/widgetBridge";
-import { snoozeTask, deleteTaskWithUndo, offerCompletionUndo } from "../components/utils/snoozeTask";
+import { snoozeTask, deleteTaskWithUndo, offerCompletionUndo, takeReminderDone, offerReminderDoneUndo } from "../components/utils/snoozeTask";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { trackFire } from "@/lib/appTrack";
 import BirthdayStrip from "../components/home/BirthdayStrip";
@@ -81,6 +81,10 @@ export default function Home() {
   useEffect(() => {
     if (location.state?.reload) {
       loadData();
+      // Arrived from Done on a reminder page or the phone's alarm: the same
+      // "Done … Undo" an in-app check-off gets, for a few seconds (snoozeTask.js).
+      const done = takeReminderDone();
+      if (done) offerReminderDoneUndo(done.task, done.saving, handleUncomplete);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, navigate, location.pathname]);

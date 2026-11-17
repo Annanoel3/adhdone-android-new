@@ -167,6 +167,60 @@ export function offerCompletionUndo(task, saving, onUndo) {
   });
 }
 
+// ── Done from a reminder or the phone's alarm: Undo on Home ─────────────────
+//
+// Done on the phone's alarm screen is one tap on a big round button (Android
+// build 49 on), so a stray thumb can finish a task that isn't done. Anna, Nov
+// 16 2026: "Undo button on alarms sound good." The task's reminder page
+// (TaskNotification) finishes it and lands on Home; Home then shows the same
+// "Done … Undo" toast an in-app check-off gets. Two differences: it only
+// starts counting once the app is actually in front of them (the app can open
+// behind the lock screen while the phone is still being unlocked), and it is
+// not the ad's pause (this Done never showed an ad, and 'task-done' is not
+// fired here). Undo waits for the bookkeeping that followed the Done, so a
+// repeating task's next copy is taken back with it (Home's handleUncomplete).
+let reminderDone = null;
+const REMINDER_UNDO_MS = 6000;
+
+// TaskNotification, right before it goes to Home.
+export function stashReminderDone(task, saving) {
+  reminderDone = task?.id ? { task, saving, at: Date.now() } : null;
+}
+
+// Home, when it arrives from there. Nothing after a minute: Home was not the next stop.
+export function takeReminderDone() {
+  const done = reminderDone;
+  reminderDone = null;
+  return done && Date.now() - done.at < 60 * 1000 ? done : null;
+}
+
+export function offerReminderDoneUndo(task, saving, onUndo) {
+  if (!task?.id) return;
+  let used = false;
+  const show = () => toast({
+    title: `Done: "${task.title || "task"}"`,
+    duration: REMINDER_UNDO_MS,
+    action: React.createElement(ToastAction, {
+      altText: "Undo complete",
+      onClick: () => {
+        if (used) return;
+        used = true;
+        Promise.resolve(saving).catch(() => {}).then(() => onUndo(task, "undo_toast_reminder"));
+      },
+    }, "Undo"),
+  });
+  if (typeof document === "undefined" || document.visibilityState === "visible") {
+    show();
+    return;
+  }
+  const whenSeen = () => {
+    if (document.visibilityState !== "visible") return;
+    document.removeEventListener("visibilitychange", whenSeen);
+    show();
+  };
+  document.addEventListener("visibilitychange", whenSeen);
+}
+
 // ── Events: cancelled, not done and not deleted ─────────────────────────────
 
 // Events only: "it isn't happening". Not a completion (it never counts as

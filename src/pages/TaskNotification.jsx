@@ -9,7 +9,7 @@ import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
-import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
+import { snoozeTask, recordReminderDismissed, stashReminderDone } from "../components/utils/snoozeTask";
 import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 import { formatTimeRange } from "../components/utils/timeRangeLabel";
 import PrepNoteBox from "../components/tasks/PrepNoteBox";
@@ -268,7 +268,7 @@ export default function TaskNotification() {
     // another, before the page moved on: 10–15 seconds on a phone connection
     // with the Done button spinning, which looked like the app had frozen. It
     // runs in the background now; Home reloads once the next copy exists.
-    (async () => {
+    const after = (async () => {
       // A repeating task finished from its own reminder screen used to end
       // here for good — only Home and the task list made the next occurrence.
       // Tried again on a passing failure, like the completion itself: this
@@ -300,6 +300,10 @@ export default function TaskNotification() {
       await updateTodaysSummary().catch(() => {});
     })();
 
+    // Home offers Undo for a few seconds (a stray tap on the alarm's big round
+    // Done; Anna, Nov 16 2026). It waits for the bookkeeping above, so a
+    // repeating task's next copy is taken back too (snoozeTask.js).
+    stashReminderDone(task, after);
     navigate(createPageUrl("Home"), {
       state: { reload: true, message: "Great job! Task completed! 🎉" }
     });
