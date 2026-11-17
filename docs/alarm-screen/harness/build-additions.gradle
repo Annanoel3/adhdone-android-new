@@ -1,0 +1,18 @@
+
+// ---- build copy only (docs/alarm-screen/harness): draws the alarm screen to pictures ----
+android {
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            all {
+                jvmArgs '-Xmx3g'
+                systemProperty 'shots.dir', '/tmp/ab/shots'
+                testLogging { events 'failed'; exceptionFormat 'full'; showStandardStreams true }
+            }
+        }
+    }
+}
+dependencies {
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'androidx.test:core:1.6.1'
+}
