@@ -3,6 +3,7 @@ import { ChevronRight, ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskCard from "./TaskCard";
 import { isBirthdayTask } from "../utils/birthdayHelpers";
+import { normalizeTag, tagKey } from "./LifeAreaPill";
 
 // The names say where each group ends (Nov 14 2026). "Upcoming" and "Later"
 // didn't: Upcoming is 7 to 29 days out, Later is 30 days out or more (see
@@ -168,6 +169,51 @@ export default function TaskSections({
       return { sections: daySections, grouped: map };
     }
 
+    // Tags view (Nov 17 2026; a person wrote in asking to tag tasks "then
+    // just see what is tagged under those labels", and Anna: "please build").
+    // One group per tag in use, A to Z, with "Home" and "home" as one tag
+    // (LifeAreaPill.tagKey); then the tasks with no tag; Back Burner and
+    // Birthdays stay their own groups, as in the other two views. A tag's
+    // group key starts with "tag_", so no tag can collide with "untagged".
+    if (viewMode === "tags") {
+      const map = { untagged: [], backburner: [], birthdays: [] };
+      const labels = {};
+      tasks.forEach((task) => {
+        if (task.silenced) {
+          map.backburner.push(task);
+          return;
+        }
+        if (isBirthdayTask(task)) {
+          map.birthdays.push(task);
+          return;
+        }
+        const key = tagKey(task.tag);
+        if (!key) {
+          map.untagged.push(task);
+          return;
+        }
+        const sectionKey = `tag_${key}`;
+        if (!map[sectionKey]) {
+          map[sectionKey] = [];
+          labels[sectionKey] = normalizeTag(task.tag);
+        }
+        map[sectionKey].push(task);
+      });
+      sortBirthdays(map.birthdays);
+      const tagSections = Object.keys(labels)
+        .sort((a, b) => labels[a].localeCompare(labels[b], undefined, { sensitivity: "base" }))
+        .map((key) => ({ key, label: labels[key] }));
+      return {
+        sections: [
+          ...tagSections,
+          { key: "untagged", label: "No tag" },
+          { key: "backburner", label: "🔥 Back Burner" },
+          { key: "birthdays", label: "🎂 Birthdays" },
+        ],
+        grouped: map,
+      };
+    }
+
     const map = {
       today: [],
       tomorrow: [],
@@ -267,6 +313,8 @@ export default function TaskSections({
         // Back Burner: hidden when empty, collapsed by default so it stays
         // present without taking over the screen.
         if (section.key === "backburner" && sectionTasks.length === 0) return null;
+        // Tags view: "No tag" only shows when something is untagged.
+        if (section.key === "untagged" && sectionTasks.length === 0) return null;
         // Empty day sections start collapsed too — an expanded empty day is just
         // noise. Tapping the header still expands it to reveal "Add task...".
         // Birthdays start collapsed as well (Anna, Oct 24 2026): a synced
