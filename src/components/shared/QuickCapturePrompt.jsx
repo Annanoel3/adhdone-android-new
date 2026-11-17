@@ -1009,8 +1009,8 @@ function HoldLaterPreview({ title, onHeld, onTapped }) {
 function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
   const [ringing, setRinging] = useState(true);
   // The alarm screen this phone will actually show: the one from build 49 on
-  // (a big round Done to tap, a Later bar that has to be held; Anna, Nov 16
-  // 2026), unless the phone runs an older build or the new screen was switched
+  // (a big round Done to tap and a Later bar that has to be held, nothing
+  // else; Anna, Nov 16 2026), unless the phone runs an older build or the new screen was switched
   // off for this account (User.alarm_screen, base44/shared/alarmScreen.ts).
   // Then the earlier screen is previewed, as before.
   const newScreenOn = (build) => build >= 49 && user?.alarm_screen !== 'classic' && !isIPhoneApp();
@@ -1088,12 +1088,9 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
         >
           Done ✓
         </button>
-        <p className="mt-9 text-xs" style={{ color: '#C9C3DC' }}>Snooze</p>
-        <div className="mt-1 flex w-full gap-2">
-          {['10 min', '30 min', '1 hour'].map((m) => (
-            <button key={m} type="button" onClick={() => mock(`On a real alarm that snoozes it for ${m}.`)} className="flex-1 h-11 text-sm font-medium" style={{ borderRadius: 16, background: 'rgba(255,255,255,0.14)', color: '#FFFFFF' }}>{m}</button>
-          ))}
-        </div>
+        {/* Two choices, Done and Later, and no Snooze, the same as the real
+            screen (Anna, Nov 16 2026: "Only keep done and later"). */}
+        <div className="h-8" aria-hidden="true" />
         <HoldLaterPreview
           title={PREVIEW_TITLE}
           onHeld={() => mock('Later means "I know, just not right now." Smart Reminders brings it back up later.')}
