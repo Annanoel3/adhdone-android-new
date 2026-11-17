@@ -74,6 +74,8 @@ public class AlarmActivity extends Activity {
     // to be held: activity_alarm_v2.xml). False = the screen every build before
     // it had. Decided once, in onCreate (AlarmLook).
     private boolean v2 = false;
+    /** The new screen has been told to keep clear of the phone's own bars (keepClearOfBarsV2). */
+    private boolean barsWatched = false;
     /** The new screen's round button: its side in pixels, and its colours. */
     private int roundPx = 0;
     private int roundFill = 0xFF8B5CF6;
@@ -564,6 +566,7 @@ public class AlarmActivity extends Activity {
     private void styleV2() {
         android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
         boolean dark = AlarmTheme.isDark(this);
+        keepClearOfBarsV2(dark);
         TextView big = findViewById(R.id.alarm_heading);
         int text = big.getCurrentTextColor();
         int accent = AlarmTheme.accent(this, getColor(R.color.alarm_dismiss));
@@ -717,6 +720,17 @@ public class AlarmActivity extends Activity {
         if (space <= 0 || width <= 0) {
             return false;
         }
+        // A short window (a phone lying on its side, a split screen, a very
+        // small phone): there was no room left for the title, and it was cut
+        // through its letters. The screen's own clock steps aside there (the
+        // phone shows the time itself) and the round button may be smaller,
+        // so the title and both buttons are whole.
+        boolean tight = frame.getHeight() < Math.round(440f * d);
+        View clock = findViewById(R.id.alarm_clock);
+        if (clock != null && (clock.getVisibility() == View.GONE) != tight) {
+            clock.setVisibility(tight ? View.GONE : View.VISIBLE);
+            return true;
+        }
         // Everything but the words and the round button takes what it takes.
         for (int i = 0; i < content.getChildCount(); i++) {
             View v = content.getChildAt(i);
@@ -729,10 +743,12 @@ public class AlarmActivity extends Activity {
         // An alarm with the app's own choices has no round button (arrangeV2).
         boolean noRound = done.getVisibility() != View.VISIBLE;
         int maxRound = noRound ? 0 : Math.round(Math.max(168f, Math.min(264f, dm.heightPixels / d * 0.33f)) * d);
-        int minRound = noRound ? 0 : Math.round(132f * d);
+        int minRound = noRound ? 0 : Math.round((tight ? 96f : 132f) * d);
         int comfort = Math.max(minRound, Math.round(maxRound * 0.76f));
         int pads = area.getPaddingTop() + area.getPaddingBottom() + words.getPaddingTop() + words.getPaddingBottom();
-        int gapBig = ((android.view.ViewGroup.MarginLayoutParams) big.getLayoutParams()).topMargin;
+        // The gap over the title belongs to the small line over it (10dp, as
+        // in the layout): it is only kept while that line shows (see the end).
+        int gapBig = Math.round(10f * d);
         int gapUnder = ((android.view.ViewGroup.MarginLayoutParams) under.getLayoutParams()).topMargin;
         CharSequence underText = under.getText();
         // Each block of text also takes the font's spare room above its first
@@ -873,6 +889,16 @@ public class AlarmActivity extends Activity {
             kicker.setVisibility(kickerShown);
             changed = true;
         }
+        // Without the small line, the title's gap over it goes too. It used to
+        // stay and was not counted, so on a tight screen the words were pushed
+        // 10dp past their room and their last line was cut along its bottom.
+        LinearLayout.LayoutParams bigAt = (LinearLayout.LayoutParams) big.getLayoutParams();
+        int over = k ? gapBig : 0;
+        if (bigAt.topMargin != over) {
+            bigAt.topMargin = over;
+            big.setLayoutParams(bigAt);
+            changed = true;
+        }
         return changed;
     }
 
@@ -993,8 +1019,14 @@ public class AlarmActivity extends Activity {
             int quiet = dark ? 0x24FFFFFF : 0x80FFFFFF;
             done.setVisibility(View.GONE);
             open.setVisibility(View.VISIBLE);
-            open.setBackground(rounded(quiet, 20f * d));
-            open.setTextColor(text);
+            // The way out is an outline only, so it does not read as one more
+            // answer under the app's choices ("Yes", "No", "Got it").
+            android.graphics.drawable.GradientDrawable outline = new android.graphics.drawable.GradientDrawable();
+            outline.setColor(android.graphics.Color.TRANSPARENT);
+            outline.setCornerRadius(20f * d);
+            outline.setStroke(Math.max(1, Math.round(1.5f * d)), (text & 0x00FFFFFF) | 0x59000000);
+            open.setBackground(outline);
+            open.setTextColor((text & 0x00FFFFFF) | 0xD9000000);
             LinearLayout choices = findViewById(R.id.alarm_snooze_row);
             choices.setOrientation(LinearLayout.VERTICAL);
             boolean first = true;
@@ -1364,6 +1396,59 @@ public class AlarmActivity extends Activity {
         stopOwnRinging();
         sendToService(AlarmService.ACTION_LATER, 0);
         finish();
+    }
+
+    /**
+     * Android 15 and up draw every app UNDER the status bar and the navigation
+     * bar (forced for an app that targets Android 15 or later, as this one
+     * does), and nothing here kept out of them: the screen's clock sat under
+     * the phone's own clock and the line under the Later bar under the
+     * navigation buttons (found Nov 16 2026 before build 49 went out, by
+     * drawing the screen with the bars on it). The background still fills the
+     * whole screen; the words and buttons keep clear of both bars and of a
+     * camera cut-out. On older Android the system keeps the app out of the
+     * bars itself and reports none, so nothing moves there.
+     *
+     * On a light theme the phone's own clock and icons are also asked for in
+     * dark, so they can be read on it (they are white otherwise). Only where
+     * the bars are see-through, Android 15 and up.
+     */
+    private void keepClearOfBarsV2(boolean dark) {
+        final View content = findViewById(R.id.alarm_content);
+        if (content == null || barsWatched) {
+            return;
+        }
+        barsWatched = true;
+        final float d = getResources().getDisplayMetrics().density;
+        final int left = content.getPaddingLeft();
+        final int top = content.getPaddingTop();
+        final int right = content.getPaddingRight();
+        final int bottom = content.getPaddingBottom();
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
+            androidx.core.graphics.Insets bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                    | androidx.core.view.WindowInsetsCompat.Type.displayCutout());
+            int l = left + bars.left;
+            int t = Math.max(top, bars.top + Math.round(10f * d));
+            int r = right + bars.right;
+            int b = Math.max(bottom, bars.bottom + Math.round(12f * d));
+            if (v.getPaddingLeft() != l || v.getPaddingTop() != t || v.getPaddingRight() != r || v.getPaddingBottom() != b) {
+                v.setPadding(l, t, r, b);
+                // The room for the words and the round button changed (fitV2).
+                fitPasses = 0;
+            }
+            return insets;
+        });
+        androidx.core.view.ViewCompat.requestApplyInsets(content);
+        if (Build.VERSION.SDK_INT >= 35 && !dark) {
+            try {
+                androidx.core.view.WindowInsetsControllerCompat bars = androidx.core.view.WindowCompat.getInsetsController(
+                        getWindow(), getWindow().getDecorView());
+                bars.setAppearanceLightStatusBars(true);
+                bars.setAppearanceLightNavigationBars(true);
+            } catch (Throwable t) {
+                Log.w(TAG, "AlarmActivity: the phone's own icons stay white on this light theme", t);
+            }
+        }
     }
 
     private static JSONArray parseActions(AlarmStore.Entry e) {
