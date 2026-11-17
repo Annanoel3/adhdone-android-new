@@ -361,6 +361,28 @@ new NotifySound.java survived, because a reset leaves new files alone. Every and
 is written here (edit_file / write_file on android/...), and checked on GitHub's main before
 anyone is told to build. The version code is set at build time, not here.
 
+Build 49 (Nov 16 2026, 11:35 PM CST) was built from a phone session linked to Anna's PC, not by
+the usual `Downloads\build-vNN-pull.bat`. That kind of session has no Windows command line: its
+shell on her PC is a walled-off Linux box that cannot reach Google's or Maven's download servers
+(so Gradle cannot run there), and it may only CLICK in Android Studio, a terminal or File
+Explorer, never type. Do not get round that by writing a script and double-clicking it. What
+worked: (1) copy the tracked `android/` files that differ from GitHub's main into the PC folder
+(14 files that night; compare with line endings ignored, the PC copy is CRLF) and check nothing
+was deleted on main; (2) set the version in `android/app/build.gradle` with the same replace the
+.bat does (43 -> 49, 1.3.20 -> 1.3.26); (3) in Android Studio, by clicks: open the `android`
+folder (untick the Microsoft Defender box on the trust prompt), Build -> Select Build Variant ->
+release, Build -> Generate App Bundles or APKs -> Generate Bundles (1 m 15 s); (4) copy
+`android/app/build/outputs/bundle/release/app-release.aab` to `builds/adhdone-vNN.aab`. The
+folder's git HEAD is NOT moved by this (it still names the older commit, with those files showing
+as changed); the next .bat build's reset puts that right. `npx cap update android` was skipped
+because the Capacitor plugins in package.json had not changed since build 48; if they have, this
+route is not enough. Check the bundle before handing it over: version code and name in its
+manifest, the same signing certificate as the last build (`keytool -printcert -jarfile`), the new
+classes present, permissions unchanged. UPLOADING TO PLAY IS STILL ANNA'S CLICK from such a
+session: the browser tool cannot attach a file over 10.4 MB and the bundle is about 16.7 MB. A
+draft release with its name and notes can be saved for her first (Play Console -> Production ->
+Create new release -> Save as draft), so her part is choosing the file.
+
 ## 7. HOW TO DIAGNOSE (the meta-rule)
 
 The recurring failure mode is theorizing before looking. The order is:
