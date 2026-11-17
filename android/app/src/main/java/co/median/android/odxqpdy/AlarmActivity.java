@@ -70,6 +70,32 @@ public class AlarmActivity extends Activity {
     // Whether the theme writes the Later button in capitals (read once, before
     // nameLater takes the capitals off so the task's name keeps its own case).
     private Boolean laterInCaps;
+    // The alarm screen from build 49 on (a big round Done, a Later bar that has
+    // to be held: activity_alarm_v2.xml). False = the screen every build before
+    // it had. Decided once, in onCreate (AlarmLook).
+    private boolean v2 = false;
+    /** The new screen's round button: its side in pixels, and its colours. */
+    private int roundPx = 0;
+    private int roundFill = 0xFF8B5CF6;
+    private int roundText = 0xFFFFFFFF;
+    /** Whether this alarm gets the small line over its title (a task's does), room allowing. */
+    private boolean kickerWanted = true;
+    /** How often fitV2 has run for the screen as it is now (it settles in two or three). */
+    private int fitPasses = 0;
+    private int fitHeight = -1;
+    /** Room was so short that the space around the words (and the glass card) was given to the words. */
+    private boolean wordsBare = false;
+    /** The line under the Later bar goes back to its own words after "keep holding". */
+    private final Runnable hintBack = new Runnable() {
+        @Override
+        public void run() {
+            TextView hint = findViewById(R.id.alarm_later_hint);
+            if (hint != null) {
+                hint.setText(R.string.alarm_later_hint);
+                hint.setAlpha(0.82f);
+            }
+        }
+    };
     private Vibrator ownVibrator;
     private final Handler handler = new Handler(Looper.getMainLooper());
     // Rang out on this screen with no choice: stop, count it as ignored (the
@@ -110,15 +136,30 @@ public class AlarmActivity extends Activity {
 
     /** The words on the screen, with any tasks ringing together with this one. */
     private void showWords(AlarmStore.Entry e) {
+        showWordsAndDone(e);
+        if (v2) {
+            arrangeV2(e);
+        }
+    }
+
+    private void showWordsAndDone(AlarmStore.Entry e) {
         String title = e != null && !e.title.isEmpty() ? e.title : getString(R.string.alarm_title_fallback);
         String heading = e != null && e.heading != null && !e.heading.isEmpty() ? e.heading : title;
         String body = AlarmService.withCompanions(e, e != null && e.body != null ? e.body : "");
         TextView headingView = findViewById(R.id.alarm_heading);
         TextView titleView = findViewById(R.id.alarm_task_title);
         headingView.setText(heading);
-        titleView.setText(body.isEmpty() ? title : body);
-        if (!body.isEmpty()) {
-            titleView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 22);
+        if (v2) {
+            // The new screen: the reminder's title large, its words under it
+            // (the task's own name when the app sent a title and no words).
+            String under = !body.isEmpty() ? body : (heading.equals(title) ? "" : title);
+            titleView.setText(under);
+            titleView.setVisibility(under.isEmpty() ? View.GONE : View.VISIBLE);
+        } else {
+            titleView.setText(body.isEmpty() ? title : body);
+            if (!body.isEmpty()) {
+                titleView.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 22);
+            }
         }
         nameLater(e);
         // Ringing together with another task: the Done spot splits in two, one
@@ -132,6 +173,10 @@ public class AlarmActivity extends Activity {
         }
         java.util.List<String> others = e.companionTaskIds();
         if (others.isEmpty()) {
+            return;
+        }
+        if (v2) {
+            companionsV2(e, done, others);
             return;
         }
         android.view.ViewGroup parent = (android.view.ViewGroup) done.getParent();
@@ -204,6 +249,14 @@ public class AlarmActivity extends Activity {
             if (name.isEmpty()) {
                 return;
             }
+            if (v2) {
+                // The new screen: the name goes on the bar people hold.
+                HoldLaterView hold = findViewById(R.id.alarm_later_hold);
+                if (hold != null) {
+                    hold.setWords(getString(R.string.alarm_hold_later), name);
+                }
+                return;
+            }
             if (laterInCaps == null) {
                 laterInCaps = later.getTransformationMethod() != null;
             }
@@ -243,6 +296,10 @@ public class AlarmActivity extends Activity {
      * here fails the words are simply shown as they always were.
      */
     private void varyLook() {
+        if (v2) {
+            varyLookV2();
+            return;
+        }
         final TextView heading = findViewById(R.id.alarm_heading);
         final TextView words = findViewById(R.id.alarm_task_title);
         if (heading == null || words == null) {
@@ -319,12 +376,43 @@ public class AlarmActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         showOverLockScreen();
-        setContentView(R.layout.activity_alarm);
 
         alarmId = getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID);
         AlarmStore.Entry e = alarmId != null ? AlarmStore.get(this, alarmId) : null;
         taskId = e != null ? e.taskId : "";
         screen = e != null && e.screen != null ? e.screen : "";
+        // The new screen (build 49 on), unless the server has switched it off
+        // for this phone (AlarmLook). If anything about it fails here, the
+        // screen every build before had is shown instead: an alarm never comes
+        // up blank or without its buttons.
+        v2 = AlarmLook.useNew(this);
+        if (v2) {
+            try {
+                setContentView(R.layout.activity_alarm_v2);
+                bind(e);
+            } catch (Throwable t) {
+                Log.w(TAG, "AlarmActivity: the new screen failed, showing the earlier one", t);
+                v2 = false;
+                openList = false;
+                laterInCaps = null;
+            }
+        }
+        if (!v2) {
+            setContentView(R.layout.activity_alarm);
+            bind(e);
+        }
+        showing = new WeakReference<>(this);
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::backStopsRing);
+        }
+        if (getIntent().getBooleanExtra(EXTRA_MARK_DONE, false) && canMarkDone(e, taskId)) {
+            markDone();
+        }
+    }
+
+    /** Fills whichever layout is up (the new screen or the earlier one) for this alarm. */
+    private void bind(AlarmStore.Entry e) {
         // The push notification's own title and body, when the web app sent
         // them: the alarm says what the notification would have said (plus any
         // other task ringing together with it).
@@ -415,29 +503,589 @@ public class AlarmActivity extends Activity {
 
         // Same colours as the app is currently themed with (see AlarmTheme).
         try {
-            AlarmTheme.apply(this, findViewById(R.id.alarm_root),
-                    findViewById(R.id.alarm_bg_image), findViewById(R.id.alarm_bg_scrim),
-                    findViewById(R.id.alarm_heading), titleView,
-                    findViewById(R.id.alarm_snooze_label),
-                    new Button[] { snooze10, snooze30, snooze60 }, dismiss);
-            // Done gets the same look as the big button.
-            done.setBackgroundTintList(dismiss.getBackgroundTintList());
-            done.setTextColor(dismiss.getCurrentTextColor());
-            later.setBackgroundTintList(dismiss.getBackgroundTintList());
-            later.setTextColor(dismiss.getCurrentTextColor());
+            if (v2) {
+                // The small line over the title takes the theme's quiet colour,
+                // the title its text colour, and the words under it follow.
+                TextView big = findViewById(R.id.alarm_heading);
+                AlarmTheme.apply(this, findViewById(R.id.alarm_root),
+                        findViewById(R.id.alarm_bg_image), findViewById(R.id.alarm_bg_scrim),
+                        findViewById(R.id.alarm_kicker), big,
+                        findViewById(R.id.alarm_snooze_label),
+                        new Button[] { snooze10, snooze30, snooze60 }, dismiss);
+                titleView.setTextColor(big.getCurrentTextColor());
+            } else {
+                AlarmTheme.apply(this, findViewById(R.id.alarm_root),
+                        findViewById(R.id.alarm_bg_image), findViewById(R.id.alarm_bg_scrim),
+                        findViewById(R.id.alarm_heading), titleView,
+                        findViewById(R.id.alarm_snooze_label),
+                        new Button[] { snooze10, snooze30, snooze60 }, dismiss);
+                // Done gets the same look as the big button.
+                done.setBackgroundTintList(dismiss.getBackgroundTintList());
+                done.setTextColor(dismiss.getCurrentTextColor());
+                later.setBackgroundTintList(dismiss.getBackgroundTintList());
+                later.setTextColor(dismiss.getCurrentTextColor());
+            }
         } catch (Exception ex) {
             Log.w(TAG, "AlarmActivity: theme not applied", ex);
         }
-        showing = new WeakReference<>(this);
+        if (v2) {
+            styleV2();
+        }
         showWords(e);
         varyLook();
-        if (Build.VERSION.SDK_INT >= 33) {
-            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
-                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::backStopsRing);
+    }
+
+    // ── The alarm screen from build 49 on ───────────────────────────────────
+    //
+    // Anna, Nov 16 2026: "I keep pressing later without even reading the alarm.
+    // Pure adhd.", then, of the designs she was sent, "I like the big done, but
+    // also the later is maybe too small" and "Your design is good too". One big
+    // round Done to tap; a wide Later bar that has to be held, with the task's
+    // name on it; the earlier screen's choices are all still here (Snooze as a
+    // small row). Everything below only runs on the new layout.
+
+    /**
+     * The new screen's own pieces in the theme's colours: the round button,
+     * the Later bar, the clock and the line under the bar. On a dark look the
+     * round button is the theme's accent; on a light one it is the text colour
+     * with white on it. A plain dark background gets two soft glows.
+     */
+    private void styleV2() {
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        boolean dark = AlarmTheme.isDark(this);
+        TextView big = findViewById(R.id.alarm_heading);
+        int text = big.getCurrentTextColor();
+        int accent = AlarmTheme.accent(this, getColor(R.color.alarm_dismiss));
+        roundFill = dark ? accent : text;
+        roundText = dark ? AlarmTheme.onAccent(this, android.graphics.Color.WHITE) : android.graphics.Color.WHITE;
+        // A third of the screen's height, within sensible limits: big on a
+        // tall phone, and still leaving room for the words on a short one.
+        float sideDp = Math.max(168f, Math.min(264f, dm.heightPixels / dm.density * 0.33f));
+        roundPx = Math.round(sideDp * dm.density);
+        Button done = findViewById(R.id.alarm_done);
+        styleRound(done, roundPx);
+        fitRound(done, roundPx, false);
+        HoldLaterView hold = findViewById(R.id.alarm_later_hold);
+        hold.setColors(dark ? 0x21FFFFFF : 0xEBFFF6EE, dark ? 0x57FFFFFF : 0x242B2730,
+                dark ? 0x8CE879AA : 0xFFF4A9B8, text);
+        hold.setWords(getString(R.string.alarm_hold_later), "");
+        hold.setListener(new HoldLaterView.Listener() {
+            @Override
+            public void onHeld() {
+                later();
+            }
+
+            @Override
+            public void onTapped() {
+                sayKeepHolding();
+            }
+        });
+        ((TextView) findViewById(R.id.alarm_later_hint)).setTextColor(text);
+        ((TextView) findViewById(R.id.alarm_clock)).setTextColor(text);
+        // Snooze is three quiet rounded chips, and the third button a rounded
+        // bar in the theme's accent: neither competes with the round button.
+        for (int id : new int[] { R.id.alarm_snooze_10, R.id.alarm_snooze_30, R.id.alarm_snooze_60 }) {
+            Button chip = findViewById(id);
+            chip.setBackgroundTintList(null);
+            chip.setBackground(rounded(dark ? 0x24FFFFFF : 0x80FFFFFF, 16f * dm.density));
+            chip.setTextColor(text);
+            chip.setStateListAnimator(null);
+            chip.setElevation(0f);
         }
-        if (getIntent().getBooleanExtra(EXTRA_MARK_DONE, false) && canMarkDone(e, taskId)) {
-            markDone();
+        Button third = findViewById(R.id.alarm_dismiss);
+        third.setBackgroundTintList(null);
+        third.setBackground(rounded(accent, 20f * dm.density));
+        third.setStateListAnimator(null);
+        third.setElevation(0f);
+        // A very large system font is held back on the words (as it always was
+        // on the Later button), so they still share the screen with the buttons.
+        TextView under = findViewById(R.id.alarm_task_title);
+        under.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, 17f * dm.density * fontCap());
+        ((TextView) findViewById(R.id.alarm_kicker)).setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                13f * dm.density * fontCap());
+        // Sizes are settled right before the first frame is drawn, and again
+        // whenever the screen's height or what the alarm offers changes.
+        final View content = findViewById(R.id.alarm_content);
+        content.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                int h = ((View) content.getParent()).getHeight();
+                if (h != fitHeight) {
+                    fitHeight = h;
+                    fitPasses = 0;
+                }
+                if (fitPasses >= 5) {
+                    return true;
+                }
+                fitPasses++;
+                try {
+                    if (fitV2()) {
+                        return false;
+                    }
+                } catch (Exception ex) {
+                    Log.w(TAG, "AlarmActivity: the new screen was not fitted", ex);
+                    fitPasses = 5;
+                }
+                return true;
+            }
+        });
+        View glow = findViewById(R.id.alarm_glow);
+        if (glow != null && AlarmTheme.plainDark(this)) {
+            float reach = (float) Math.hypot(dm.widthPixels, dm.heightPixels) * 0.5f;
+            int top = android.graphics.Color.rgb(android.graphics.Color.red(accent) * 55 / 100,
+                    android.graphics.Color.green(accent) * 55 / 100, android.graphics.Color.blue(accent) * 55 / 100);
+            android.graphics.drawable.GradientDrawable a = new android.graphics.drawable.GradientDrawable();
+            a.setGradientType(android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT);
+            a.setGradientRadius(reach);
+            a.setGradientCenter(0.28f, 0.12f);
+            a.setColors(new int[] { (top & 0x00FFFFFF) | 0xE6000000, top & 0x00FFFFFF });
+            android.graphics.drawable.GradientDrawable b = new android.graphics.drawable.GradientDrawable();
+            b.setGradientType(android.graphics.drawable.GradientDrawable.RADIAL_GRADIENT);
+            b.setGradientRadius(reach * 0.9f);
+            b.setGradientCenter(0.92f, 0.92f);
+            b.setColors(new int[] { 0xD96E3358, 0x006E3358 });
+            glow.setBackground(new android.graphics.drawable.LayerDrawable(
+                    new android.graphics.drawable.Drawable[] { a, b }));
+            glow.setVisibility(View.VISIBLE);
         }
+    }
+
+    /** A rounded bar in one colour, with the usual press ripple. */
+    private static android.graphics.drawable.Drawable rounded(int color, float radius) {
+        android.graphics.drawable.GradientDrawable face = new android.graphics.drawable.GradientDrawable();
+        face.setCornerRadius(radius);
+        face.setColor(color);
+        android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+        mask.setCornerRadius(radius);
+        mask.setColor(android.graphics.Color.WHITE);
+        return new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF), face, mask);
+    }
+
+    /** The system's font size, held to one and a half times: what the new screen's words follow. */
+    private float fontCap() {
+        return Math.max(0.85f, Math.min(getResources().getConfiguration().fontScale, 1.5f));
+    }
+
+    private static int linesOf(CharSequence t, android.text.TextPaint paint, int width) {
+        if (t == null || t.length() == 0 || width <= 0) {
+            return 0;
+        }
+        return android.text.StaticLayout.Builder.obtain(t, 0, t.length(), paint, width).build().getLineCount();
+    }
+
+    /**
+     * Fits the new screen to this phone. Every button stays on the screen; the
+     * round button is as big as the room allows (a third of the screen's
+     * height at most); the words take the rest and are cut to the lines that
+     * fit, the small line over the title going first when room is short.
+     * Long words make the round button a little smaller before they are cut.
+     * Returns true when it changed a size: the frame is then laid out again.
+     */
+    private boolean fitV2() {
+        LinearLayout content = findViewById(R.id.alarm_content);
+        View area = findViewById(R.id.alarm_words_area);
+        View words = findViewById(R.id.alarm_words);
+        LinearLayout row = findViewById(R.id.alarm_done_row);
+        TextView kicker = findViewById(R.id.alarm_kicker);
+        TextView big = findViewById(R.id.alarm_heading);
+        TextView under = findViewById(R.id.alarm_task_title);
+        Button done = findViewById(R.id.alarm_done);
+        View frame = (View) content.getParent();
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        float d = dm.density;
+        int width = words.getWidth() - words.getPaddingLeft() - words.getPaddingRight();
+        int space = frame.getHeight() - content.getPaddingTop() - content.getPaddingBottom();
+        if (space <= 0 || width <= 0) {
+            return false;
+        }
+        // Everything but the words and the round button takes what it takes.
+        for (int i = 0; i < content.getChildCount(); i++) {
+            View v = content.getChildAt(i);
+            if (v == area || v == row || v.getVisibility() == View.GONE) {
+                continue;
+            }
+            android.view.ViewGroup.MarginLayoutParams lp = (android.view.ViewGroup.MarginLayoutParams) v.getLayoutParams();
+            space -= v.getHeight() + lp.topMargin + lp.bottomMargin;
+        }
+        int maxRound = Math.round(Math.max(168f, Math.min(264f, dm.heightPixels / d * 0.33f)) * d);
+        int minRound = Math.round(132f * d);
+        int comfort = Math.max(minRound, Math.round(maxRound * 0.76f));
+        int pads = area.getPaddingTop() + area.getPaddingBottom() + words.getPaddingTop() + words.getPaddingBottom();
+        int gapBig = ((android.view.ViewGroup.MarginLayoutParams) big.getLayoutParams()).topMargin;
+        int gapUnder = ((android.view.ViewGroup.MarginLayoutParams) under.getLayoutParams()).topMargin;
+        CharSequence underText = under.getText();
+        int kickerH = kicker.getLineHeight() + gapBig;
+        int underLH = under.getLineHeight();
+        int underN = linesOf(underText, under.getPaint(), width);
+        // The title at its own size, then a little smaller if it would be cut.
+        float[] sizes = { 30f * d * fontCap(), 25f * d * fontCap() };
+        float size = sizes[0];
+        int t = 1;
+        int u = 0;
+        boolean k = false;
+        int round = minRound;
+        int wordsH = 0;
+        for (int i = 0; i < sizes.length; i++) {
+            android.text.TextPaint paint = new android.text.TextPaint(big.getPaint());
+            paint.setTextSize(sizes[i]);
+            int bigLH = paint.getFontMetricsInt(null);
+            int bigN = Math.max(1, linesOf(big.getText(), paint, width));
+            int want = pads + (kickerWanted ? kickerH : 0) + Math.min(bigN, 3) * bigLH
+                    + (underN > 0 ? gapUnder + Math.min(underN, 4) * underLH : 0);
+            int h = Math.max(pads + 2 * bigLH, Math.min(want, space - comfort));
+            int r = Math.max(minRound, Math.min(maxRound, space - h));
+            h = Math.max(space - r, Math.round(40f * d));
+            int room = h - pads;
+            boolean kk = kickerWanted;
+            int tt = Math.min(bigN, 4);
+            int uu = Math.min(underN, 6);
+            while ((kk ? kickerH : 0) + tt * bigLH + (uu > 0 ? gapUnder + uu * underLH : 0) > room) {
+                if (uu > 3) {
+                    uu--;
+                } else if (tt > 2) {
+                    tt--;
+                } else if (uu > 2) {
+                    uu--;
+                } else if (kk) {
+                    kk = false;
+                } else if (uu > 0) {
+                    uu--;
+                } else if (tt > 1) {
+                    tt--;
+                } else {
+                    break;
+                }
+            }
+            size = sizes[i];
+            t = tt;
+            u = uu;
+            k = kk;
+            round = r;
+            wordsH = h;
+            if (tt >= Math.min(bigN, 4) && (underN == 0 || uu >= 1)) {
+                break;
+            }
+            if (i == sizes.length - 1 && !wordsBare && (tt < Math.min(bigN, 2) || (underN > 0 && uu == 0)
+                    || tt * bigLH > room)) {
+                // Not even two lines of title and a line of words (a small
+                // phone with every button showing): the space around the
+                // words, and the glass card if this alarm drew it, go to the
+                // words themselves. Fitted again on the next pass.
+                wordsBare = true;
+                int sliver = Math.round(3f * d);
+                area.setPadding(0, sliver, 0, sliver);
+                words.setBackground(null);
+                words.setPadding(0, 0, 0, 0);
+                return true;
+            }
+        }
+        boolean changed = false;
+        // Two tasks ringing together share the row: one round button each.
+        View second = row.findViewWithTag("done-second");
+        boolean shared = second instanceof Button && second.getVisibility() == View.VISIBLE;
+        int side = round;
+        if (shared) {
+            int gap = Math.round(14f * d);
+            side = Math.max(Math.round(112f * d), Math.min(Math.round(round * 0.86f), (content.getWidth()
+                    - content.getPaddingLeft() - content.getPaddingRight() - gap) / 2));
+            wordsH += round - side;
+        }
+        if (done.getLayoutParams().width != side) {
+            roundPx = round;
+            styleRound(done, side);
+            fitRound(done, side, shared);
+            if (shared) {
+                styleRound((Button) second, side);
+                fitRound((Button) second, side, true);
+            }
+            changed = true;
+        }
+        LinearLayout.LayoutParams alp = (LinearLayout.LayoutParams) area.getLayoutParams();
+        if (alp.height != wordsH || alp.weight != 0f) {
+            alp.height = wordsH;
+            alp.weight = 0f;
+            area.setLayoutParams(alp);
+            changed = true;
+        }
+        if (Math.abs(big.getTextSize() - size) > 0.5f) {
+            big.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, size);
+            changed = true;
+        }
+        if (big.getMaxLines() != t) {
+            big.setMaxLines(t);
+            changed = true;
+        }
+        if (u > 0 && under.getMaxLines() != u) {
+            under.setMaxLines(u);
+            changed = true;
+        }
+        int underShown = u > 0 ? View.VISIBLE : View.GONE;
+        if (under.getVisibility() != underShown) {
+            under.setVisibility(underShown);
+            changed = true;
+        }
+        int kickerShown = k ? View.VISIBLE : View.GONE;
+        if (kicker.getVisibility() != kickerShown) {
+            kicker.setVisibility(kickerShown);
+            changed = true;
+        }
+        return changed;
+    }
+
+    /** A round button: a solid circle with two soft rings around it, all in one colour. */
+    private void styleRound(Button b, int sidePx) {
+        android.view.ViewGroup.LayoutParams lp = b.getLayoutParams();
+        lp.width = sidePx;
+        lp.height = sidePx;
+        b.setLayoutParams(lp);
+        int rgb = roundFill & 0x00FFFFFF;
+        android.graphics.drawable.GradientDrawable outer = new android.graphics.drawable.GradientDrawable();
+        outer.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        outer.setColor(rgb | 0x1A000000);
+        android.graphics.drawable.GradientDrawable mid = new android.graphics.drawable.GradientDrawable();
+        mid.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        mid.setColor(rgb | 0x38000000);
+        android.graphics.drawable.GradientDrawable inner = new android.graphics.drawable.GradientDrawable();
+        inner.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        inner.setColor(rgb | 0xFF000000);
+        android.graphics.drawable.LayerDrawable face = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[] { outer, mid, inner });
+        int midIn = Math.round(sidePx * 0.058f);
+        int innerIn = Math.round(sidePx * 0.109f);
+        face.setLayerInset(1, midIn, midIn, midIn, midIn);
+        face.setLayerInset(2, innerIn, innerIn, innerIn, innerIn);
+        android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
+        mask.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        mask.setColor(android.graphics.Color.WHITE);
+        b.setBackgroundTintList(null);
+        b.setBackground(new android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF), face, mask));
+        b.setTextColor(roundText);
+        b.setAllCaps(false);
+        b.setStateListAnimator(null);
+        b.setElevation(0f);
+        b.setMinWidth(0);
+        b.setMinHeight(0);
+        b.setMinimumWidth(0);
+        b.setMinimumHeight(0);
+        int pad = Math.round(sidePx * 0.17f);
+        b.setPadding(pad, pad, pad, pad);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+    }
+
+    /**
+     * The round button's words sized to its circle (never to the system font:
+     * the circle doesn't grow with it). A task's name on a shared alarm's two
+     * buttons is smaller and may take three lines.
+     */
+    private void fitRound(Button b, int sidePx, boolean taskName) {
+        CharSequence t = b.getText();
+        int n = t == null ? 0 : t.length();
+        float part = taskName ? 0.098f : n <= 7 ? 0.150f : n <= 13 ? 0.112f : 0.092f;
+        b.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, sidePx * part);
+        b.setMaxLines(taskName ? 3 : 2);
+        b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+    }
+
+    /**
+     * Which button is the round one, and whether the third one shows. Runs
+     * after the shared code has decided what this alarm offers, and again when
+     * another task joins a ringing alarm.
+     */
+    private void arrangeV2(AlarmStore.Entry e) {
+        Button done = findViewById(R.id.alarm_done);
+        Button open = findViewById(R.id.alarm_dismiss);
+        View hold = findViewById(R.id.alarm_later_hold);
+        View hint = findViewById(R.id.alarm_later_hint);
+        View kicker = findViewById(R.id.alarm_kicker);
+        LinearLayout row = findViewById(R.id.alarm_done_row);
+        View second = row != null ? row.findViewWithTag("done-second") : null;
+        boolean shared = second != null && second.getVisibility() == View.VISIBLE;
+        boolean task = canMarkDone(e, taskId);
+        if (e != null && e.event) {
+            // An event: "Got it" is the round button. A second thing to do
+            // ("Record notes", "Add prep notes") is the button under it.
+            boolean more = e.openLabel != null && !e.openLabel.isEmpty() && taskId != null && !taskId.isEmpty();
+            done.setText(R.string.alarm_action_dismiss_plain);
+            done.setOnClickListener(v -> dismiss());
+            done.setVisibility(View.VISIBLE);
+            fitRound(done, roundPx, false);
+            if (more) {
+                open.setText(e.openLabel);
+                open.setOnClickListener(v -> openEventPage());
+            }
+            open.setVisibility(more ? View.VISIBLE : View.GONE);
+        } else if (!task || openList) {
+            // No Done on this alarm (a timer's end, a moment with no task, the
+            // app's own choices, three tasks at once): its one way out takes
+            // the round button, with the words the earlier screen gave it.
+            done.setText(open.getText());
+            done.setOnClickListener(v -> dismiss());
+            done.setVisibility(View.VISIBLE);
+            fitRound(done, roundPx, false);
+            open.setVisibility(View.GONE);
+        } else {
+            // A task: Done is the round button. The third button only shows
+            // when the app gave it its own words, which it does when the task
+            // has something to do in the app (a text to send, say). The eased
+            // plan's alarm stays Done and Later only.
+            boolean needsApp = e != null && !e.eased && e.openLabel != null && !e.openLabel.isEmpty();
+            open.setVisibility(needsApp ? View.VISIBLE : View.GONE);
+            if (!shared) {
+                fitRound(done, roundPx, false);
+            }
+        }
+        if (parseActions(e) != null) {
+            // The app's own choices for this moment (a sprint's "Keep going" /
+            // "I'm done") sit where Snooze does: full-size here, not chips.
+            float d = getResources().getDisplayMetrics().density;
+            for (int id : new int[] { R.id.alarm_snooze_10, R.id.alarm_snooze_30, R.id.alarm_snooze_60 }) {
+                Button choice = findViewById(id);
+                android.view.ViewGroup.LayoutParams lp = choice.getLayoutParams();
+                lp.height = Math.round(56f * d);
+                choice.setLayoutParams(lp);
+                choice.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16f);
+                choice.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            }
+        }
+        // Later is offered exactly where the earlier screen offers it.
+        hold.setVisibility(task ? View.VISIBLE : View.GONE);
+        hint.setVisibility(task ? View.VISIBLE : View.GONE);
+        kickerWanted = task;
+        kicker.setVisibility(task ? View.VISIBLE : View.GONE);
+        // What is offered may have changed: the sizes are settled again (fitV2).
+        fitPasses = 0;
+        View content = findViewById(R.id.alarm_content);
+        if (content != null) {
+            content.requestLayout();
+        }
+    }
+
+    /**
+     * Ringing together with other tasks, on the new screen. One other task:
+     * two round buttons side by side, one per task, each finishing only its
+     * own (Anna, Oct 10 2026: being reminded together doesn't mean finishing
+     * together). Two or more others: no row of small circles; "Open the app"
+     * takes the round button and goes to their task list.
+     */
+    private void companionsV2(AlarmStore.Entry e, Button done, java.util.List<String> others) {
+        LinearLayout row = findViewById(R.id.alarm_done_row);
+        Button open = findViewById(R.id.alarm_dismiss);
+        View old = row != null ? row.findViewWithTag("done-second") : null;
+        if (others.size() >= 2 || row == null) {
+            if (old != null) {
+                old.setVisibility(View.GONE);
+            }
+            done.setVisibility(View.GONE);
+            if (open != null) {
+                open.setText("Open the app");
+            }
+            openList = true;
+            return;
+        }
+        final String otherTask = others.get(0);
+        String otherTitle = e.companionTitles().isEmpty() ? "" : e.companionTitles().get(0);
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int gap = Math.round(14 * dm.density);
+        int room = dm.widthPixels - Math.round(44 * dm.density) - gap;
+        int each = Math.max(Math.round(112 * dm.density), Math.min(Math.round(roundPx * 0.86f), room / 2));
+        done.setText("✓ " + shortTitle(e.title));
+        styleRound(done, each);
+        fitRound(done, each, true);
+        Button b = old instanceof Button ? (Button) old : null;
+        if (b == null) {
+            b = new Button(this);
+            b.setTag("done-second");
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(each, each);
+            lp.setMarginStart(gap);
+            row.addView(b, lp);
+        }
+        b.setOnClickListener(v -> markDoneFor(otherTask));
+        b.setText("✓ " + shortTitle(otherTitle));
+        styleRound(b, each);
+        fitRound(b, each, true);
+        b.setVisibility(View.VISIBLE);
+    }
+
+    /** A quick tap on the Later bar: the line under it says what to do, for a moment. */
+    private void sayKeepHolding() {
+        TextView hint = findViewById(R.id.alarm_later_hint);
+        if (hint == null) {
+            return;
+        }
+        hint.setText(R.string.alarm_hold_more);
+        hint.setAlpha(1f);
+        handler.removeCallbacks(hintBack);
+        handler.postDelayed(hintBack, 2200L);
+    }
+
+    /**
+     * The new screen's four looks for the words, taken in turn like the earlier
+     * screen's (see varyLook for why a screen that always looks the same stops
+     * being read): centred, from the left edge, on a glass card, and in a
+     * serif face. Only the words change; the buttons never move.
+     */
+    private void varyLookV2() {
+        final View words = findViewById(R.id.alarm_words);
+        final TextView kicker = findViewById(R.id.alarm_kicker);
+        final TextView big = findViewById(R.id.alarm_heading);
+        final TextView under = findViewById(R.id.alarm_task_title);
+        if (words == null || kicker == null || big == null || under == null) {
+            return;
+        }
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("adhdone_alarm_look", MODE_PRIVATE);
+            int look = Math.abs(p.getInt("next", 0)) % 4;
+            p.edit().putInt("next", (look + 1) % 4).apply();
+            float d = getResources().getDisplayMetrics().density;
+            float from = 28f * d;
+            if (look == 1 || look == 2) {
+                kicker.setGravity(android.view.Gravity.START);
+                big.setGravity(android.view.Gravity.START);
+                under.setGravity(android.view.Gravity.START);
+            }
+            if (look == 1) {
+                words.setTranslationX(-from);
+            } else if (look == 2) {
+                boolean dark = AlarmTheme.isDark(this);
+                android.graphics.drawable.GradientDrawable card = new android.graphics.drawable.GradientDrawable();
+                card.setCornerRadius(26f * d);
+                card.setColor(dark ? 0x17FFFFFF : 0x66FFFFFF);
+                card.setStroke(Math.max(1, Math.round(d)), dark ? 0x29FFFFFF : 0x1A000000);
+                words.setBackground(card);
+                int side = Math.round(22f * d);
+                int ends = Math.round(24f * d);
+                words.setPadding(side, ends, side, ends);
+                words.setScaleX(0.96f);
+                words.setScaleY(0.96f);
+            } else if (look == 3) {
+                big.setTypeface(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD);
+                words.setTranslationY(-from);
+            } else {
+                words.setTranslationY(from);
+            }
+            words.setAlpha(0f);
+            words.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(320L).start();
+        } catch (Exception ex) {
+            Log.w(TAG, "AlarmActivity: look not varied", ex);
+        }
+        // Whatever happened above, the words are fully on screen within a second.
+        words.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    words.animate().cancel();
+                    words.setAlpha(1f);
+                    words.setTranslationX(0f);
+                    words.setTranslationY(0f);
+                    words.setScaleX(1f);
+                    words.setScaleY(1f);
+                } catch (Exception ignored) {
+                }
+            }
+        }, 900L);
     }
 
     @Override
@@ -469,6 +1117,7 @@ public class AlarmActivity extends Activity {
             tellServiceLeft("closed");
         }
         stopOwnRinging();
+        handler.removeCallbacks(hintBack);
         if (showing.get() == this) {
             showing = new WeakReference<>(null);
         }

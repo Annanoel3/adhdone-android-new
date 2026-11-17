@@ -96,6 +96,8 @@ public class ChoiceSyncWorker extends Worker {
             }
             Base44Api.Result r = Base44Api.phoneReport(ctx, body, READ_TIMEOUT_MS);
             if (r.isSuccess()) {
+                // The answer also says which alarm screen this phone shows (AlarmLook).
+                AlarmLook.adopt(ctx, r);
                 if (ChoiceReports.LATER.equals(choice) && r.body != null) {
                     long serverUntil = LaterBreak.parseIso(r.body.optString("later_until", ""));
                     if (serverUntil > 0L) {

@@ -15,4 +15,8 @@
     <string name="alarm_action_stop">Stop</string>
     <!-- Marks the task done from the alarm itself (the app opens to finish it). -->
     <string name="alarm_action_done">Done ✓</string>
+    <!-- The alarm screen from build 49 on: Later has to be held (HoldLaterView). -->
+    <string name="alarm_hold_later">Hold for Later</string>
+    <string name="alarm_later_hint">Later brings it back at a better time</string>
+    <string name="alarm_hold_more">Keep holding to put it off</string>
 </resources>

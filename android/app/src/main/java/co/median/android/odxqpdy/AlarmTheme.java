@@ -314,6 +314,40 @@ final class AlarmTheme {
         }
     }
 
+    /**
+     * Whether the saved look is a dark one, judged the way the web app judges
+     * it when it picks the text colour (the first background colour). Artwork
+     * is always shown dark, behind its scrim. Nothing saved yet: the built-in
+     * look, which is dark.
+     */
+    static boolean isDark(Context c) {
+        if (imageReady(c)) {
+            return true;
+        }
+        String csv = prefs(c).getString(KEY_COLORS, "");
+        Integer first = csv.isEmpty() ? null : parse(csv.split(",")[0]);
+        if (first == null) {
+            return true;
+        }
+        double lum = (0.2126 * Color.red(first) + 0.7152 * Color.green(first) + 0.0722 * Color.blue(first)) / 255.0;
+        return lum < 0.4;
+    }
+
+    /** One flat dark colour and no artwork: the only background the new screen adds its two glows to. */
+    static boolean plainDark(Context c) {
+        return !imageReady(c) && !prefs(c).getString(KEY_COLORS, "").contains(",") && isDark(c);
+    }
+
+    static int accent(Context c, int fallback) {
+        Integer a = parse(prefs(c).getString(KEY_ACCENT, ""));
+        return a != null ? a : fallback;
+    }
+
+    static int onAccent(Context c, int fallback) {
+        Integer a = parse(prefs(c).getString(KEY_ON_ACCENT, ""));
+        return a != null ? a : fallback;
+    }
+
     private static GradientDrawable.Orientation orientation(int cssDegrees) {
         int a = ((cssDegrees % 360) + 360) % 360;
         int step = (int) Math.round(a / 45.0) % 8;

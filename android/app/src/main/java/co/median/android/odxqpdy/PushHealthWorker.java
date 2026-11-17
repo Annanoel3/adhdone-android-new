@@ -174,7 +174,8 @@ public class PushHealthWorker extends Worker {
             payload.put("subscription_id", subscriptionId);
             payload.put("build", BuildConfig.VERSION_CODE);
             if (error != null) payload.put("error", error.length() > 200 ? error.substring(0, 200) : error);
-            Base44Api.phoneReport(context, payload, REPORT_TIMEOUT_MS);
+            // The answer also says which alarm screen this phone shows (AlarmLook).
+            AlarmLook.adopt(context, Base44Api.phoneReport(context, payload, REPORT_TIMEOUT_MS));
         } catch (Exception e) {
             Log.w(TAG, "PushHealthWorker: report failed: " + e.getMessage());
         }
