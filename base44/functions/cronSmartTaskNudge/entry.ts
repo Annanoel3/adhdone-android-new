@@ -1,3 +1,4 @@
+// Nov 16 2026 (late): a nudge that rings as an alarm about a task that IS sending someone a text carries the words for the alarm's button that opens it ("Send the text" / "Write the text", shared/alarmScreen.ts). The phone's new alarm screen (build 49: a big round Done, a Later bar that has to be held; Anna: "Your design is good too") only shows that button when the alarm has words for it, and a text task's Send button lives on its page. Nothing about what Smart Reminders plans or sends changes; no plan is redone.
 // Nov 16 2026 (7:38 PM): brief r50 is LIVE, pacing (shared/reminderBrief.ts, Anna's doc updated to match). On r49's first evening the planner sent her one alarm every 30 minutes (5:29, 5:59, 6:29 PM), each put off with Later inside a minute. Anna: "users should not get too much or too little. So you should be figuring it out since you already have my direction". Three additions to the brief, no code change here: one thing after another put off in a short stretch is about the moment, so leave them alone for a good while and come back with the one thing that matters most; when several things wait at once, don't hand each one a turn; a time the planner gave is a time to look again, not a booking. Tried first as the candidate on owner replays of her Monday (after two Laters: 66 quiet minutes, then one thing; r49 came back in 40; a morning with nothing put off still got a reminder at once). The candidate file is back to its one line.
 // Nov 16 2026 (late): re-saved so the bundled shared/reminderBriefCandidate.ts (the r50 candidate: room after one thing after another is put off) is picked up for owner replays (third wording). Nothing live changes.
 // Nov 16 2026 (night): PLANNER V2 is LIVE with brief r49 (the switch PLANNER_V2_LIVE below; it was tried first on owner replays with the candidate brief, and with the switch off the planner is shown exactly what it was shown before, checked character for character on two real moments). Five things Anna approved after the planner passed the same tasks look after look with the same excuse: every answer of the day is shown with its seconds (not just the newest per task); reminders they set themselves are listed apart from Smart Reminders' own; every task held back gets a time it comes back (back_in_minutes) and the planner is shown what it said at its earlier looks; the one-a-day cap on a task put off on 3 days becomes a fact on its line; and "they saw it" is no longer said of a Later, Home or Back. See PLANNER V2 below.
@@ -76,6 +77,7 @@ import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBri
 import { REMINDER_BRIEF_CANDIDATE } from '../../shared/reminderBriefCandidate.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
+import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { countUsage } from '../../shared/aiCost.ts';
 
 // countUsage only counts tokens per feature (shared/aiCost.ts, Nov 6 2026);
@@ -1662,7 +1664,8 @@ Deno.serve(async (req) => {
           console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: one a day, today's already went out`);
           break;
         }
-        const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge', !!(easedNow && ringsOutLoud));
+        const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge', !!(easedNow && ringsOutLoud),
+          entry.type === 'roundup' ? '' : textTaskOpenLabel(taskById.get(entry.task_id)));
         if (outcome === UNSUBSCRIBED) {
           // Nothing can reach this phone: this nudge is done with (not tried
           // again every run), and the account rests until they're back
@@ -3744,7 +3747,8 @@ async function sendNudgeNotification(
   taskId: string,
   ringAsAlarm: boolean = false,
   kind: string = 'smart_nudge',
-  eased: boolean = false
+  eased: boolean = false,
+  openLabel: string = ''
 ): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -3785,6 +3789,9 @@ async function sendNudgeNotification(
     // The eased plan's one alarm a day: only Done and Later on the alarm
     // screen (build 43 on; older builds show their usual buttons).
     if (eased) payload.data.eased = true;
+    // The words for the alarm's button that opens the task, when the task has
+    // something to do in the app (a text to send: shared/alarmScreen.ts).
+    if (openLabel) payload.data.openLabel = openLabel;
   }
 
   try {
