@@ -141,6 +141,23 @@ public class AlarmShotTest {
         if (area != null && words != null && words.getHeight() > area.getHeight() - area.getPaddingTop() - area.getPaddingBottom()) {
             line.append(" | WORDS CUT BY THEIR BOX (").append(words.getHeight()).append(" in ").append(area.getHeight()).append(")");
         }
+        // A line of text given less height than it needs is cut along its bottom.
+        for (int id : new int[] { R.id.alarm_kicker, R.id.alarm_heading, R.id.alarm_task_title }) {
+            View v = classic ? null : a.findViewById(id);
+            if (!(v instanceof android.widget.TextView) || v.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            android.widget.TextView tv = (android.widget.TextView) v;
+            if (tv.getLayout() == null || tv.getLineCount() == 0) {
+                continue;
+            }
+            int last = Math.min(tv.getLineCount(), Math.max(1, tv.getMaxLines())) - 1;
+            int needs = tv.getLayout().getLineBottom(last) + tv.getPaddingTop() + tv.getPaddingBottom();
+            if (needs > tv.getHeight()) {
+                line.append(" | TEXT CUT: ").append(a.getResources().getResourceEntryName(id))
+                        .append(" needs ").append(needs).append(" has ").append(tv.getHeight());
+            }
+        }
         if (barTop > 0 || barBottom > 0) {
             int[] at = new int[2];
             for (int id : new int[] { R.id.alarm_clock, R.id.alarm_done, R.id.alarm_later_hold, R.id.alarm_later_hint, R.id.alarm_dismiss }) {
