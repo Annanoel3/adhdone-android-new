@@ -345,6 +345,11 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     if (task.birthday_person && !task.is_own_birthday && !task.birthday_animal && !task.birthday_no_text) {
       alarm.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
     }
+    // A task that IS sending someone a text: its page has the Send button, so
+    // the alarm's button to open it says so (shared/alarmScreen.ts; the new
+    // alarm screen, build 49 on, only shows that button when it has words).
+    const textLabel = textTaskOpenLabel(task);
+    if (textLabel && !alarm.openLabel) alarm.openLabel = textLabel;
     // An event (an appointment, Bike Night): the phone (build 42 on) shows
     // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
     // Older builds ignore this. Same as alarmSetFor in widgetBridge.js.
