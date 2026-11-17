@@ -117,6 +117,11 @@ public class AlarmShotTest {
                 line.append(" OFF SCREEN");
             }
         }
+        View area = a.findViewById(R.id.alarm_words_area);
+        View words = a.findViewById(R.id.alarm_words);
+        if (area != null && words != null && words.getHeight() > area.getHeight() - area.getPaddingTop() - area.getPaddingBottom()) {
+            line.append(" | WORDS CUT BY THEIR BOX (").append(words.getHeight()).append(" in ").append(area.getHeight()).append(")");
+        }
         System.out.println(line);
         Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         root.draw(new Canvas(b));
