@@ -501,6 +501,16 @@ public class AlarmActivity extends Activity {
             }
         }
 
+        if (v2 && actions == null) {
+            // The new screen gives a task two choices, Done and Later, and no
+            // Snooze (Anna, Nov 16 2026: "Only keep done and later. Like the
+            // first freaking design i approved."). The three slots stay in the
+            // layout for the app's own choices just above (a sprint's).
+            snooze10.setVisibility(android.view.View.GONE);
+            snooze30.setVisibility(android.view.View.GONE);
+            snooze60.setVisibility(android.view.View.GONE);
+            findViewById(R.id.alarm_snooze_label).setVisibility(android.view.View.GONE);
+        }
         // Same colours as the app is currently themed with (see AlarmTheme).
         try {
             if (v2) {
@@ -541,8 +551,9 @@ public class AlarmActivity extends Activity {
     // Pure adhd.", then, of the designs she was sent, "I like the big done, but
     // also the later is maybe too small" and "Your design is good too". One big
     // round Done to tap; a wide Later bar that has to be held, with the task's
-    // name on it; the earlier screen's choices are all still here (Snooze as a
-    // small row). Everything below only runs on the new layout.
+    // name on it. Two choices and no Snooze: "Only keep done and later. Like
+    // the first freaking design i approved." Everything below only runs on the
+    // new layout.
 
     /**
      * The new screen's own pieces in the theme's colours: the round button,
@@ -582,8 +593,10 @@ public class AlarmActivity extends Activity {
         });
         ((TextView) findViewById(R.id.alarm_later_hint)).setTextColor(text);
         ((TextView) findViewById(R.id.alarm_clock)).setTextColor(text);
-        // Snooze is three quiet rounded chips, and the third button a rounded
-        // bar in the theme's accent: neither competes with the round button.
+        // The three slots over the Later bar (only ever the app's own choices
+        // for a moment like a sprint: Snooze is not offered on this screen) are
+        // quiet rounded chips, and the third button a rounded bar in the
+        // theme's accent: neither competes with the round button.
         for (int id : new int[] { R.id.alarm_snooze_10, R.id.alarm_snooze_30, R.id.alarm_snooze_60 }) {
             Button chip = findViewById(id);
             chip.setBackgroundTintList(null);
@@ -726,6 +739,7 @@ public class AlarmActivity extends Activity {
         boolean k = false;
         int round = minRound;
         int wordsH = 0;
+        int wanted = 0;
         for (int i = 0; i < sizes.length; i++) {
             android.text.TextPaint paint = new android.text.TextPaint(big.getPaint());
             paint.setTextSize(sizes[i]);
@@ -763,6 +777,7 @@ public class AlarmActivity extends Activity {
             k = kk;
             round = r;
             wordsH = h;
+            wanted = want;
             if (tt >= Math.min(bigN, 4) && (underN == 0 || uu >= 1)) {
                 break;
             }
@@ -790,6 +805,22 @@ public class AlarmActivity extends Activity {
             side = Math.max(Math.round(112f * d), Math.min(Math.round(round * 0.86f), (content.getWidth()
                     - content.getPaddingLeft() - content.getPaddingRight() - gap) / 2));
             wordsH += round - side;
+        }
+        // With Later under it, the round button sits near the middle of the
+        // screen with air between it and the Later bar (as in the picture Anna
+        // approved), not pressed against the bar: half of whatever room the
+        // words don't need goes under it.
+        View holdBar = findViewById(R.id.alarm_later_hold);
+        int air = 0;
+        if (holdBar != null && holdBar.getVisibility() == View.VISIBLE) {
+            air = Math.max(0, Math.min((wordsH - wanted) / 2, Math.round(side * 0.32f)));
+        }
+        wordsH -= air;
+        LinearLayout.LayoutParams rowAt = (LinearLayout.LayoutParams) row.getLayoutParams();
+        if (rowAt.bottomMargin != air) {
+            rowAt.bottomMargin = air;
+            row.setLayoutParams(rowAt);
+            changed = true;
         }
         if (done.getLayoutParams().width != side) {
             roundPx = round;

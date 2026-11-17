@@ -429,7 +429,13 @@ public class AlarmService extends Service {
         // Re-posting it (a second alarm came due while this rang) must not
         // re-alert or re-open anything.
         b.setOnlyAlertOnce(true);
-        if (!e.noSnooze && !e.event && !e.eased) {
+        // The alarm screen from build 49 on gives a task two choices, Done and
+        // Later, and no Snooze (Anna, Nov 16 2026: "Only keep done and later.
+        // Like the first freaking design i approved."). Its banner says the
+        // same. With the new screen switched off (AlarmLook), the banner is
+        // the earlier one too.
+        boolean twoChoices = AlarmLook.useNew(ctx) && AlarmActivity.canMarkDone(e, e.taskId);
+        if (!e.noSnooze && !e.event && !e.eased && !twoChoices) {
             b.addAction(0, ctx.getString(R.string.alarm_action_snooze_10), snooze);
         }
         // Ringing together with other tasks: Done is picked on the alarm screen,
@@ -445,7 +451,7 @@ public class AlarmService extends Service {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             b.addAction(0, ctx.getString(R.string.alarm_action_done), donePi);
         }
-        if (e.eased && AlarmActivity.canMarkDone(e, e.taskId)) {
+        if ((e.eased || twoChoices) && AlarmActivity.canMarkDone(e, e.taskId)) {
             // The eased plan's alarm: Done and Later only, on the banner as on its
             // screen (Anna, Oct 22 2026). Later stops the ring the way Stop does.
             b.addAction(0, ctx.getString(R.string.alarm_action_later),

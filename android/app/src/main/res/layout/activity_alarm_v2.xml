@@ -3,8 +3,9 @@
      but also the later is maybe too small", then, of the picture she was sent,
      "Your design is good too"). One big round Done to tap; a wide Later bar
      that has to be HELD, with the task's name on it (HoldLaterView); the
-     reminder's title large with its words under it. Snooze stays, as a small
-     row. The third button only shows when the task has something to do in the
+     reminder's title large with its words under it. No Snooze here ("Only keep
+     done and later"): the three small slots are only for the app's own
+     choices at a moment like a sprint. The third button only shows when the task has something to do in the
      app (a text to send, notes to record). The earlier screen is still
      activity_alarm.xml: AlarmActivity falls back to it if this one fails, and
      the server can switch this one off (AlarmLook).
