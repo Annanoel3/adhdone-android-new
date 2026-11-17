@@ -382,6 +382,16 @@ classes present, permissions unchanged. UPLOADING TO PLAY IS STILL ANNA'S CLICK 
 session: the browser tool cannot attach a file over 10.4 MB and the bundle is about 16.7 MB. A
 draft release with its name and notes can be saved for her first (Play Console -> Production ->
 Create new release -> Save as draft), so her part is choosing the file.
+Nov 16 2026, how that went: Anna could not find the `builds` folder on her PC ("there is no builds
+folder anywhere on my desktop that I can find") and took the bundle from the chat instead. So the
+bundle is ALWAYS attached in the chat, and if a copy is left on the PC it goes in her Downloads
+folder with the full path said once (`builds` is Documents\GitHub\adhdone-android-new\builds).
+She uploaded it outside the saved draft, so it was not in the draft: it was in the app's library.
+Finishing from there, all seen working that night: open the draft -> Add from library -> tick the
+new version -> Add to release -> Next -> Save -> Go to overview -> Submit 1 change for review ->
+Send changes for review. The only warning was the usual one about debug symbols for native code.
+Rollout was left at Play's 100% and managed publishing was off, so it goes live when Google
+approves. `NEWEST_BUILD` in `QuickCapturePrompt.jsx` is bumped only when Anna says it is approved.
 
 ## 7. HOW TO DIAGNOSE (the meta-rule)
 
