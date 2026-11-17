@@ -170,8 +170,15 @@ public class AlarmShotTest {
 
     private void tile(String name, String qualifiers, float fontScale, int look, String theme,
                       AlarmStore.Entry e, float holdAt, boolean classic) throws Exception {
-        tiles.add(shot(name, qualifiers, fontScale, look, theme, e, holdAt, classic));
+        Bitmap b = shot(name, qualifiers, fontScale, look, theme, e, holdAt, classic);
+        tiles.add(b);
         names.add(name);
+        // Each picture on its own too, full size (tiles/NN.jpg), for a close look.
+        File each = new File(dir(), "tiles");
+        each.mkdirs();
+        try (FileOutputStream out = new FileOutputStream(new File(each, name.substring(0, 2) + ".jpg"))) {
+            b.compress(Bitmap.CompressFormat.JPEG, 88, out);
+        }
     }
 
     @Test
