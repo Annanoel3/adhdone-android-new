@@ -680,6 +680,11 @@ public class AlarmActivity extends Activity {
         return Math.max(0.85f, Math.min(getResources().getConfiguration().fontScale, 1.5f));
     }
 
+    private static int spare(android.text.TextPaint p) {
+        android.graphics.Paint.FontMetricsInt m = p.getFontMetricsInt();
+        return Math.max(0, m.ascent - m.top) + Math.max(0, m.bottom - m.descent);
+    }
+
     private static int linesOf(CharSequence t, android.text.TextPaint paint, int width) {
         if (t == null || t.length() == 0 || width <= 0) {
             return 0;
@@ -728,8 +733,11 @@ public class AlarmActivity extends Activity {
         int gapBig = ((android.view.ViewGroup.MarginLayoutParams) big.getLayoutParams()).topMargin;
         int gapUnder = ((android.view.ViewGroup.MarginLayoutParams) under.getLayoutParams()).topMargin;
         CharSequence underText = under.getText();
-        int kickerH = kicker.getLineHeight() + gapBig;
+        // Each block of text also takes the font's spare room above its first
+        // line and below its last (spare), or its last line gets cut.
+        int kickerH = kicker.getLineHeight() + gapBig + spare(kicker.getPaint());
         int underLH = under.getLineHeight();
+        int underSpare = spare(under.getPaint());
         int underN = linesOf(underText, under.getPaint(), width);
         // The title at its own size, then a little smaller if it would be cut.
         float[] sizes = { 30f * d * fontCap(), 25f * d * fontCap() };
@@ -744,17 +752,18 @@ public class AlarmActivity extends Activity {
             android.text.TextPaint paint = new android.text.TextPaint(big.getPaint());
             paint.setTextSize(sizes[i]);
             int bigLH = paint.getFontMetricsInt(null);
+            int bigSpare = spare(paint);
             int bigN = Math.max(1, linesOf(big.getText(), paint, width));
-            int want = pads + (kickerWanted ? kickerH : 0) + Math.min(bigN, 3) * bigLH
-                    + (underN > 0 ? gapUnder + Math.min(underN, 4) * underLH : 0);
-            int h = Math.max(pads + 2 * bigLH, Math.min(want, space - comfort));
+            int want = pads + (kickerWanted ? kickerH : 0) + Math.min(bigN, 3) * bigLH + bigSpare
+                    + (underN > 0 ? gapUnder + underSpare + Math.min(underN, 4) * underLH : 0);
+            int h = Math.max(pads + 2 * bigLH + bigSpare, Math.min(want, space - comfort));
             int r = Math.max(minRound, Math.min(maxRound, space - h));
             h = Math.max(space - r, Math.round(40f * d));
             int room = h - pads;
             boolean kk = kickerWanted;
             int tt = Math.min(bigN, 4);
             int uu = Math.min(underN, 6);
-            while ((kk ? kickerH : 0) + tt * bigLH + (uu > 0 ? gapUnder + uu * underLH : 0) > room) {
+            while ((kk ? kickerH : 0) + tt * bigLH + bigSpare + (uu > 0 ? gapUnder + underSpare + uu * underLH : 0) > room) {
                 if (uu > 3) {
                     uu--;
                 } else if (tt > 2) {
@@ -778,12 +787,12 @@ public class AlarmActivity extends Activity {
             round = r;
             wordsH = h;
             // What the lines that will actually show take, with the space around them.
-            wanted = pads + (kk ? kickerH : 0) + tt * bigLH + (uu > 0 ? gapUnder + uu * underLH : 0);
+            wanted = pads + (kk ? kickerH : 0) + tt * bigLH + bigSpare + (uu > 0 ? gapUnder + underSpare + uu * underLH : 0);
             if (tt >= Math.min(bigN, 4) && (underN == 0 || uu >= 1)) {
                 break;
             }
             if (i == sizes.length - 1 && !wordsBare && (tt < Math.min(bigN, 2) || (underN > 0 && uu == 0)
-                    || tt * bigLH > room)) {
+                    || tt * bigLH + bigSpare > room)) {
                 // Not even two lines of title and a line of words (a small
                 // phone with every button showing): the space around the
                 // words, and the glass card if this alarm drew it, go to the
