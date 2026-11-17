@@ -161,6 +161,13 @@ public class AlarmShotTest {
         tile("08 timer's end", PHONE, 1f, 0, "", timer, 0f, false);
         tile("09 earlier screen (off switch)", PHONE, 1f, 0, "", task("Water the plants", words, "Water the plants"), 0f, true);
         tile("10 small phone, a text task", SMALL, 1f, 2, "", text, 0f, false);
+        AlarmStore.Entry sprint = task("Time's up: Fold the laundry", "25 minutes are up. What now?", "Fold the laundry");
+        sprint.noSnooze = true;
+        sprint.actionsJson = "[{\"label\":\"Keep going\",\"path\":\"/Home?sprint=keep\"},{\"label\":\"I finished the task\",\"path\":\"/Home?sprint=finish\"},{\"label\":\"Stop working\",\"path\":\"/Home?sprint=stop\"}]";
+        tile("11 task timer's end", PHONE, 1f, 0, "", sprint, 0f, false);
+        AlarmStore.Entry three = task("Three things for now", "", "Water the plants");
+        three.companionsJson = "[{\"taskId\":\"t2\",\"title\":\"Feed the cat\"},{\"taskId\":\"t3\",\"title\":\"Take out the trash\"}]";
+        tile("12 three tasks", PHONE, 1f, 0, "", three, 0f, false);
 
         int tw = 360, pad = 16, cols = 5;
         int rows = (tiles.size() + cols - 1) / cols;
