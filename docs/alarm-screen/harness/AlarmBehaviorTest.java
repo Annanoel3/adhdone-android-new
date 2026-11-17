@@ -277,6 +277,89 @@ public class AlarmBehaviorTest {
     }
 
     @Test
+    public void thePhonesOwnBarsAreKeptClearOf() {
+        AlarmActivity a = open(task("bars"), false);
+        View content = a.findViewById(R.id.alarm_content);
+        float d = a.getResources().getDisplayMetrics().density;
+        // An older phone reports no bars (the system keeps the app out of them): nothing moves.
+        assertEquals(Math.round(26 * d), content.getPaddingTop());
+        assertEquals(Math.round(20 * d), content.getPaddingBottom());
+        // Android 15 and up: a 40dp status bar and a 48dp three-button bar, drawn over the app.
+        android.view.WindowInsets bars = new android.view.WindowInsets.Builder()
+                .setInsets(android.view.WindowInsets.Type.systemBars(),
+                        android.graphics.Insets.of(0, Math.round(40 * d), 0, Math.round(48 * d)))
+                .build();
+        a.findViewById(android.R.id.content).dispatchApplyWindowInsets(bars);
+        ShadowLooper.idleMainLooper(2, TimeUnit.SECONDS);
+        int h = a.getWindow().getDecorView().getHeight();
+        int[] at = new int[2];
+        for (int id : new int[] { R.id.alarm_clock, R.id.alarm_done, R.id.alarm_later_hold, R.id.alarm_later_hint }) {
+            View v = a.findViewById(id);
+            assertTrue(shown(a, id));
+            v.getLocationInWindow(at);
+            assertTrue("under the status bar", at[1] >= Math.round(40 * d));
+            assertTrue("under the navigation bar", at[1] + v.getHeight() <= h - Math.round(48 * d));
+        }
+    }
+
+    @Test
+    @Config(sdk = 35)
+    public void onALightThemeThePhonesOwnIconsGoDark() {
+        AlarmTheme.set(ctx, java.util.Arrays.asList("#fcd3a6", "#fbbfa8", "#f7a9b4"), 180, "#111827", "#4b5563", "#8b5cf6", "#ffffff", "");
+        AlarmActivity a = open(task("light bars"), false);
+        assertTrue("the new screen did not come up", shown(a, R.id.alarm_later_hold));
+        int look = a.getWindow().getDecorView().getWindowInsetsController().getSystemBarsAppearance();
+        assertTrue((look & android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS) != 0);
+    }
+
+    @Test
+    @Config(sdk = 35)
+    public void onADarkThemeTheyStayWhite() {
+        AlarmActivity a = open(task("dark bars"), false);
+        assertTrue("the new screen did not come up", shown(a, R.id.alarm_later_hold));
+        int look = a.getWindow().getDecorView().getWindowInsetsController().getSystemBarsAppearance();
+        assertEquals(0, look & android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+    }
+
+    @Test
+    public void onItsSideTheTitleAndBothButtonsAreWhole() {
+        RuntimeEnvironment.setQualifiers("w760dp-h360dp-land-xhdpi");
+        AlarmActivity a = open(task("side"), false);
+        assertFalse("the screen's own clock steps aside in a short window", shown(a, R.id.alarm_clock));
+        android.widget.TextView big = a.findViewById(R.id.alarm_heading);
+        assertTrue("the title is cut", big.getLayout().getLineBottom(0) <= big.getHeight());
+        int h = a.getWindow().getDecorView().getHeight();
+        int[] at = new int[2];
+        for (int id : new int[] { R.id.alarm_done, R.id.alarm_later_hold }) {
+            View v = a.findViewById(id);
+            assertTrue(shown(a, id));
+            v.getLocationInWindow(at);
+            assertTrue(at[1] >= 0 && at[1] + v.getHeight() <= h);
+        }
+    }
+
+    @Test
+    public void aSmallPhoneWithBigTextCutsNoLine() {
+        RuntimeEnvironment.setQualifiers("w320dp-h568dp-xhdpi");
+        RuntimeEnvironment.setFontScale(1.3f);
+        try {
+            AlarmStore.Entry e = task("small");
+            e.body = "Now's a good time. Two minutes and it's off your list.";
+            AlarmActivity a = open(e, false);
+            for (int id : new int[] { R.id.alarm_heading, R.id.alarm_task_title }) {
+                android.widget.TextView tv = a.findViewById(id);
+                if (tv.getVisibility() != View.VISIBLE || tv.getLineCount() == 0) {
+                    continue;
+                }
+                int last = Math.min(tv.getLineCount(), Math.max(1, tv.getMaxLines())) - 1;
+                assertTrue("a line of text is cut along its bottom", tv.getLayout().getLineBottom(last) <= tv.getHeight());
+            }
+        } finally {
+            RuntimeEnvironment.setFontScale(1f);
+        }
+    }
+
+    @Test
     public void threeTasksAtOnceOpenTheList() {
         AlarmStore.Entry e = task("three");
         e.companionsJson = "[{\"taskId\":\"t2\",\"title\":\"Feed the cat\"},{\"taskId\":\"t3\",\"title\":\"Take out the trash\"}]";
