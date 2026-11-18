@@ -108,7 +108,7 @@ function AboutYouCard({ user, theme, onSaved }) {
             onBlur={() => { if (dirty && !saving) save(); }}
             rows={3}
             maxLength={500}
-            placeholder='Like "I play violin at weddings" or "I&apos;m a nurse on night shifts."'
+            placeholder='Like "I work from home" or "I&apos;m a nurse on night shifts."'
             className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
           />
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
