@@ -1,3 +1,4 @@
+// Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`.
 // Re-saved Nov 16 2026 (late, again) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
 // Nov 16 2026 (late): when a phone stops taking notifications (owner check 11), a second alert gives the facts of that person's last days: how long and how much they used the app, their last time in it screen by screen, the first push that bounced afterwards and what had reached them in the 24 hours before (both from OneSignal's own list). Anna: "We really need to figure out the reasons people leave. We cant keep making bad guesses." See departureFacts. No AI call.
 // Nov 16 2026 (night): owner check 8 also tells Anna about a high-priority or urgent task with no date (or already late) that got nothing today or yesterday, with Smart Reminders' own latest reason for holding it ("⚠️ ADHDone: high priority, nothing in two days"). Anna, with the planner changes of that day: the goal is "for it to not leave things out that should have happened"; this is the free daily read of that. No AI call. See check 8b.
@@ -254,6 +255,15 @@ Deno.serve(async (req) => {
           };
         }),
         twins: twins.map(({ task, twin }: any) => ({ id: task.id, title: task.title, owner: task.created_by, twin: twin.id })),
+        // Repeating events whose reminders sit on another day than the event
+        // (A REPEATING EVENT WHOSE REMINDERS STAYED BEHIND below).
+        plans: eventPlanMoves(active, users, nowMs).map(({ task, tz, fromKey, toKey, days }: any) => {
+          const { moved, cancel } = eventPlanMove(task, tz, days, nowMs);
+          return {
+            id: task.id, title: task.title, owner: task.created_by, tz, from: fromKey, to: toKey, days,
+            reminders: moved.reminder_schedule.map((e: any) => `${e.send_at} ${e.label || ''}`.trim()), cancel: cancel.length,
+          };
+        }),
       });
     }
 
@@ -1252,6 +1262,48 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── A REPEATING EVENT WHOSE REMINDERS STAYED BEHIND: on to the event's day ──
+  // Anna, Nov 18 2026: "Make sure no one is missing things they should be
+  // notifications for." The calendar sync moves a repeating event from a
+  // phone's calendar on to its next date by itself (syncGoogleCalendar,
+  // patchExistingTaskDates: the phone sends the series' next start) and leaves
+  // its reminders where they were. When that lands before the pass above has
+  // moved the event on (the same evening, say), the pass then finds a date
+  // that is still ahead and does nothing: a weekly appointment that happened
+  // Nov 17 was put on Dec 8 by the phone's sync that evening, its four
+  // reminders stayed on Nov 17, and Dec 8 had none. The same when the calendar
+  // skips a week the pass above had already planned (a holiday week): the
+  // reminders would ring on the skipped day and not on the real one.
+  //
+  // So a repeating event with its date ahead whose reminders are written for
+  // another day (eventPlanDayKey) has them moved to the same times on the
+  // event's day, the way the pass above moves them: planned, for the promotion
+  // pass below to book in this same run, and the other day's pushes still on
+  // the books cancelled. Only the reminders change. A plan with none stays
+  // empty, and one whose day can't be read is left alone.
+  let eventPlansMoved = 0;
+  for (const { task, owner, tz, fromKey, toKey, days } of eventPlanMoves(allTasks, userMap, now.getTime())) {
+    try {
+      // Read again right before the change, like the pass above.
+      const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+      if (!fresh || fresh.status !== 'active' || fresh.silenced || trackerMs(fresh.updated_date) !== trackerMs(task.updated_date)) {
+        console.log(`🩹 [REFILL] "${task.title}" (${task.created_by}) changed during this run; its reminders are looked at again next run`);
+        continue;
+      }
+      const { moved, cancel } = eventPlanMove(fresh, tz, days, Date.now());
+      // None of them is still ahead on the event's day: left as it is.
+      if (moved.reminder_schedule.length === 0) continue;
+      await base44.asServiceRole.entities.Task.update(task.id, moved);
+      if (cancel.length) await cancelJustBooked(base44, cancel);
+      Object.assign(task, moved); // so the promotion pass below books them this run
+      await pushPhoneAlarms({ ...fresh, ...moved }, owner, { before: fresh, changedAt: Date.now(), source: 'cronRefillReminders' });
+      eventPlansMoved++;
+      console.log(`🩹 [REFILL] "${task.title}" (${task.created_by}): its reminders were still on ${fromKey}, moved to ${toKey} with the event (${moved.reminder_schedule.length} to book, ${cancel.length} cancelled)`);
+    } catch (e) {
+      console.error(`[REFILL] Could not move the reminders of "${task.title}" (${task.id}) to the event's day:`, e);
+    }
+  }
+
   // ── Event tasks (📅) — promote planned reminders within OneSignal's window ──
   // Events with classification='event' store a deterministic reminder schedule
   // (night before + 1 hour before) but OneSignal rejects scheduling more than
@@ -1800,7 +1852,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventPlansMoved, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
@@ -3569,6 +3621,99 @@ function repeatMove(fresh: any, owner: any, timeZone: string, roll: { days: numb
     for (const id of fresh.onesignal_notification_ids || []) if (isBookedId(id)) cancel.push(String(id));
   }
   return { moved, cancel: [...new Set(cancel)] };
+}
+
+// ── A repeating event whose reminders are on another day than the event ─────
+// See A REPEATING EVENT WHOSE REMINDERS STAYED BEHIND in the handler.
+// Changed in the last couple of minutes: the app may be in the middle of
+// saving the event's new date and then its new reminders. Looked at next run.
+const EVENT_PLAN_SETTLE_MS = 2 * 60 * 1000;
+const PLAN_AT_START = new Set(['at the time', 'right now', 'at scheduled time']);
+const PLAN_DAY_OF = new Set(['morning of', 'day of']);
+
+// The day an event's reminders were written for, on their clock, read from the
+// one reminder that is tied to the event itself. A timed event: the reminder
+// at its start ("at the time" rings a minute before the start, older ones on
+// the minute), and only while it still rings at the event's own clock time. An
+// all-day event: its morning-of reminder. Null when the plan has no such
+// reminder, or two that disagree: nothing is known then and the plan is left
+// alone (a plan the person rebuilt their own way, a series whose clock time
+// changed too).
+function eventPlanDayKey(task: any, timeZone: string): string | null {
+  const plan = Array.isArray(task?.reminder_schedule) ? task.reminder_schedule : [];
+  const startMs = trackerMs(task?.event_time);
+  const timed = Number.isFinite(startMs) && !task.day_only_task;
+  const startMin = timed ? localMinutesOfDay(new Date(startMs), timeZone) : -1;
+  let key: string | null = null;
+  for (const e of plan) {
+    const ms = trackerMs(e?.send_at);
+    if (!Number.isFinite(ms)) continue;
+    const label = String(e?.label || '').split('·')[0].trim().toLowerCase();
+    let k: string | null = null;
+    if (timed && PLAN_AT_START.has(label)) {
+      for (const lead of [60 * 1000, 0]) {
+        const at = new Date(ms + lead);
+        if (localMinutesOfDay(at, timeZone) === startMin) { k = localDateKey(at, timeZone); break; }
+      }
+    } else if (!timed && PLAN_DAY_OF.has(label)) {
+      k = localDateKey(new Date(ms), timeZone);
+    }
+    if (!k) continue;
+    if (key && key !== k) return null;
+    key = k;
+  }
+  return key;
+}
+
+// Every active repeating event with its date ahead whose reminders are written
+// for another day than the event's (eventPlanDayKey), and how many days apart.
+function eventPlanMoves(tasks: any[], userMap: Record<string, any>, nowMs: number): any[] {
+  const out: any[] = [];
+  for (const task of tasks) {
+    if (!task || task.status !== 'active' || task.silenced || task.parent_task_id) continue;
+    if (task.classification !== 'event' || task.reminder_interval !== 'once') continue;
+    if (!task.recurrence_pattern || task.recurrence_pattern === 'none') continue;
+    if (task.birthday_person || task.is_own_birthday || task.focus_mode_original_interval) continue;
+    // No reminders: nothing to move, and a plan the person emptied stays empty.
+    if (!Array.isArray(task.reminder_schedule) || task.reminder_schedule.length === 0) continue;
+    const owner = userMap[task.created_by] || userMap[task.notification_recipient_email];
+    if (!owner || owner.focus_mode_task_id === task.id) continue;
+    // Its day is here or over: the repeat pass moves it on, reminders and all.
+    const whenMs = trackerMs(task.event_time || task.next_reminder || task.due_date);
+    if (!Number.isFinite(whenMs) || whenMs <= nowMs) continue;
+    if (isBeingScheduledElsewhere(task, nowMs)) continue;
+    const changedMs = trackerMs(task.updated_date);
+    if (Number.isFinite(changedMs) && nowMs - changedMs < EVENT_PLAN_SETTLE_MS) continue;
+    const tz = userTimeZone(owner);
+    const toKey = repeatDayKey(task, tz);
+    const fromKey = eventPlanDayKey(task, tz);
+    if (!toKey || !fromKey || toKey === fromKey) continue;
+    const days = Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS);
+    out.push({ task, owner, tz, fromKey, toKey, days });
+  }
+  return out;
+}
+
+// The change that puts an event's reminders on the event's day: each one the
+// same number of days on, at the same time on their clock, not booked yet (the
+// promotion pass books them); ones already past there are dropped. And the old
+// day's pushes still on the books, to cancel. The same move repeatMove makes
+// for the reminders; nothing else on the event changes.
+function eventPlanMove(fresh: any, timeZone: string, days: number, nowMs: number): { moved: any; cancel: string[] } {
+  const old = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+  const schedule: any[] = [];
+  old.forEach((e: any, i: number) => {
+    if (!e || !e.send_at) return;
+    const at = repeatShift(e.send_at, days, timeZone);
+    const atMs = at ? Date.parse(at) : NaN;
+    if (!Number.isFinite(atMs) || atMs <= nowMs) return;
+    const { book_error, scheduled, ...rest } = e;
+    schedule.push({ ...rest, send_at: at, notification_id: `planned_${fresh.id}_m${i}_${atMs}` });
+  });
+  const cancel: string[] = old
+    .filter((e: any) => isBookedId(e?.notification_id) && Date.parse(e?.send_at) > nowMs)
+    .map((e: any) => String(e.notification_id));
+  return { moved: { reminder_schedule: schedule, onesignal_notification_ids: [] }, cancel: [...new Set(cancel)] };
 }
 
 // ── A task's own time ─────────────────────────────────────────────────────────
