@@ -1,4 +1,4 @@
-// Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`.
+// Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`. The same for a birthday: one already on next year's date with only last year's reminders (the same sync, the evening of the day, ahead of the yearly rollover) is planned again exactly as the rollover plans it (birthday pass, 1b).
 // Re-saved Nov 16 2026 (late, again) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
 // Nov 16 2026 (late): when a phone stops taking notifications (owner check 11), a second alert gives the facts of that person's last days: how long and how much they used the app, their last time in it screen by screen, the first push that bounced afterwards and what had reached them in the 24 hours before (both from OneSignal's own list). Anna: "We really need to figure out the reasons people leave. We cant keep making bad guesses." See departureFacts. No AI call.
 // Nov 16 2026 (night): owner check 8 also tells Anna about a high-priority or urgent task with no date (or already late) that got nothing today or yesterday, with Smart Reminders' own latest reason for holding it ("⚠️ ADHDone: high priority, nothing in two days"). Anna, with the planner changes of that day: the goal is "for it to not leave things out that should have happened"; this is the free daily read of that. No AI call. See check 8b.
@@ -960,6 +960,28 @@ Deno.serve(async (req) => {
       resetBirthdayText = true;
       birthdayRolledOver++;
       console.log(`🎂 [REFILL] Rolled over "${task.title}" → ${nextDate.toLocaleDateString()}`);
+    } else if (birthdayDate.getTime() > now.getTime() && schedule.length > 0 && schedule.every((e: any) => {
+      const at = new Date(e?.send_at).getTime();
+      return Number.isFinite(at) && at < birthdayDate.getTime() - 60 * DAY_MS;
+    })) {
+      // 1b. Already on next year's date with last year's reminders. The
+      // calendar sync moves a birthday from a phone's calendar on by itself
+      // (syncGoogleCalendar, patchExistingTaskDates), usually the evening of
+      // the day, before the rollover above gets to it, and leaves the
+      // reminders alone. Then nothing here applied: the date is ahead, and the
+      // plan isn't empty. Found Nov 18 2026 (a birthday of Nov 5, moved to
+      // 2027 that night, still carrying only its "1 day before" of Nov 4),
+      // along with the same thing on a repeating event (A REPEATING EVENT
+      // WHOSE REMINDERS STAYED BEHIND, below). Every reminder it has is from
+      // more than two months before the day, so none is this birthday's (the
+      // earliest of those is a week before): set up again as the rollover does.
+      if (ids.length) await cancelOneSignalIds(ids);
+      schedule = buildBirthdaySchedule(task, nextReminderIso, ownerName);
+      ids = [];
+      dirty = true;
+      resetBirthdayText = true;
+      birthdayRolledOver++;
+      console.log(`🎂 [REFILL] "${task.title}" was already on its next date with last year's reminders: planned again for ${birthdayDate.toLocaleDateString()}`);
     } else if (schedule.length === 0 && ids.length === 0) {
       // 2. Legacy/orphaned birthday with no plan at all — rebuild it. Only
       // saved when there is something to save: a birthday whose only entry
