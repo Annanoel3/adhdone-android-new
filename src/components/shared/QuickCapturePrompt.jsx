@@ -1884,8 +1884,13 @@ const NOTES_BUILD_ON_PLAY = true;
 // update, a restart and every 12 hours (PushHealthWorker). Anna, Nov 6 2026:
 // "Please create the update popup" (46 and 47 had none), so every phone
 // below 48 gets this card again.
+// Build 49 (1.3.26: the new alarm screen, a big Done and a Later bar to hold)
+// went out on Google Play Nov 17 2026, full release; Play updated Anna's own
+// phone to it on Nov 18. Anna, Nov 18 2026: "do we have an update popup for
+// those not on 49?" The card was still set to 48, so a phone on 48 got
+// nothing. Now every phone below 49 gets it.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 48;
+const NEWEST_BUILD = 49;
 // Account ids that never get this card (see the check in AppUpdatePrompt).
 const UPDATE_CARD_NEVER = new Set(['6aee4d3935b1c7e3c2cadb90']);
 const hasQuietHoursBuild = () =>
