@@ -355,27 +355,51 @@ final class TaskActions {
      * was taken away while the alarm rang, see AlarmService).
      */
     static void postRecord(Context c, AlarmStore.Entry e) {
+        postRecord(c, e, false);
+    }
+
+    /**
+     * The same copy. With `shown` it comes up as a banner at the top instead
+     * of going in quietly: no sound and no vibration (it goes on the alarm's
+     * own channel, which is silent because the alarm's sound comes from its
+     * service), just the reminder and its buttons where they are seen. For an
+     * alarm closed with Home, which is often a slip (AlarmService.leftRinging).
+     * Never while ADHDone is silenced.
+     */
+    static void postRecord(Context c, AlarmStore.Entry e, boolean shown) {
         if (e == null || e.taskId == null || e.taskId.isEmpty()) {
             return;
         }
         try {
             ensureChannel(c);
+            boolean banner = shown && !ReminderPause.isPaused(c);
+            if (banner) {
+                try {
+                    AlarmService.ensureChannel(c);
+                } catch (Exception ex) {
+                    banner = false;
+                }
+            }
             int id = ("record:" + e.taskId).hashCode();
             String title = e.heading != null && !e.heading.isEmpty() ? e.heading : (e.title.isEmpty() ? "ADHDone" : e.title);
             String body = AlarmService.withCompanions(e, e.body != null ? e.body : "");
             PendingIntent open = PendingIntent.getActivity(c, requestCode("open", id),
                     openTask(c, "/TaskNotification?taskId=" + Uri.encode(e.taskId), id),
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-            NotificationCompat.Builder b = new NotificationCompat.Builder(c, CHANNEL_ID)
+            NotificationCompat.Builder b = new NotificationCompat.Builder(c, banner ? AlarmService.CHANNEL_ID : CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_stat_adhdone)
                     .setContentTitle(title)
                     .setContentText(body)
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                     .setCategory(NotificationCompat.CATEGORY_REMINDER)
-                    .setSilent(true)
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
                     .setAutoCancel(true)
                     .setContentIntent(open);
+            if (banner) {
+                // Never setSilent here: Android does not show a silent one as a banner.
+                b.setPriority(NotificationCompat.PRIORITY_HIGH);
+            } else {
+                b.setSilent(true).setPriority(NotificationCompat.PRIORITY_LOW);
+            }
             // A nudge (rang from a push) gets Done and Later; a booked reminder Done and Snooze.
             int buttons = e.id.startsWith(PushFilter.PUSH_ALARM_PREFIX) ? BUTTONS_DONE_AND_LATER : BUTTONS_DONE_AND_SNOOZE;
             addButtons(c, b, buttons, e.taskId, id, title, body);

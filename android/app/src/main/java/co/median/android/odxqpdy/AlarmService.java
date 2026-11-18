@@ -738,8 +738,8 @@ public class AlarmService extends Service {
                 e.done = true;
                 AlarmStore.put(this, e);
                 report(e, ChoiceReports.CLOSED, 0, 0L, by);
-                // Back in the tray, quietly, so it can still be found there (its
-                // copy was taken away while it rang), the same as ringing out.
+                // Back in the tray so it can still be found there (its copy was
+                // taken away while it rang). After Home it shows itself, see below.
                 if (!e.taskId.isEmpty() && !isTimer(e)) {
                     // A quiet copy of this reminder that reached the tray after
                     // the ring started (the push can land a moment after the
@@ -748,7 +748,16 @@ public class AlarmService extends Service {
                     // reminder, "Clean the litter box" 9:09 and 9:10 PM).
                     PushFilter.cancelMutedPush(this, e.taskId);
                     PushFilter.cancelMutedPush(this, e.id);
-                    TaskActions.postRecord(this, e);
+                    // Home is often a slip: they were doing something else on the
+                    // phone when the alarm took over the screen (Anna, Nov 18 2026:
+                    // "I keep on having issues with alarms popping up and
+                    // accidentally clicking out of it since I am doing something
+                    // on my phone"; her 11:30 AM alarm that day was closed with
+                    // Home five seconds after it rang). So this copy shows itself:
+                    // a banner at the top, no sound, with its buttons, for a second
+                    // chance to answer. Back is pressed twice on purpose, so that
+                    // copy goes in quietly as before.
+                    TaskActions.postRecord(this, e, showsItselfAfter(by));
                 }
             }
             AlarmScheduler.cancel(this, id);
@@ -757,6 +766,11 @@ public class AlarmService extends Service {
             Log.d(TAG, "AlarmService: closed with " + by + " " + id);
         }
         finishRinging(id);
+    }
+
+    /** The alarm screen was left this way with no answer: does its copy in the tray show itself as a banner? */
+    static boolean showsItselfAfter(String by) {
+        return !"back".equals(by);
     }
 
     /** "Done" on the alarm: over for good, and not counted as a dismissal. */

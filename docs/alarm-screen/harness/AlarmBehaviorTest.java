@@ -415,4 +415,148 @@ public class AlarmBehaviorTest {
         assertTrue(shown(a, R.id.alarm_done) && shown(a, R.id.alarm_later_hold));
         assertFalse(shown(a, R.id.alarm_dismiss) || shown(a, R.id.alarm_snooze_10));
     }
+
+    // ---- slips: the alarm takes over a phone someone is in the middle of using (Nov 18 2026) ----
+
+    /** The alarm screen the instant it comes up: nobody has had time to look yet. */
+    private AlarmActivity openJustNow(AlarmStore.Entry e) {
+        AlarmStore.put(ctx, e);
+        Intent i = new Intent(ctx, AlarmActivity.class).putExtra(AlarmScheduler.EXTRA_ALARM_ID, e.id);
+        AlarmActivity a = Robolectric.buildActivity(AlarmActivity.class, i).setup().get();
+        ShadowLooper.idleMainLooper(100, TimeUnit.MILLISECONDS);
+        return a;
+    }
+
+    private Notification trayCopy(String taskId) {
+        android.app.NotificationManager nm = (android.app.NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        return shadowOf(nm).getNotification(("record:" + taskId).hashCode());
+    }
+
+    private static List<String> buttonsOn(Notification n) {
+        List<String> out = new ArrayList<>();
+        if (n != null && n.actions != null) {
+            for (Notification.Action act : n.actions) {
+                out.add(String.valueOf(act.title));
+            }
+        }
+        return out;
+    }
+
+    @Test
+    public void aTapTheInstantItTakesOverAPhoneInUseDoesNotCount() {
+        AlarmActivity a = openJustNow(task("slip"));
+        a.findViewById(R.id.alarm_done).performClick();
+        assertFalse("a tap the instant the alarm took over finished the task", a.isFinishing());
+        assertTrue(sentToService(a).isEmpty());
+        assertNull(shadowOf(a).getNextStartedActivity());
+        ShadowLooper.idleMainLooper(800, TimeUnit.MILLISECONDS);
+        a.findViewById(R.id.alarm_done).performClick();
+        assertTrue("Done still did nothing a moment later", a.isFinishing());
+        assertTrue(sentToService(a).contains(AlarmService.ACTION_DONE));
+    }
+
+    @Test
+    public void onAPhoneThatWasAsleepTheFirstTapCounts() {
+        shadowOf((android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE)).setIsInteractive(false);
+        AlarmActivity a = openJustNow(task("asleep"));
+        a.findViewById(R.id.alarm_done).performClick();
+        assertTrue(a.isFinishing());
+        assertTrue(sentToService(a).contains(AlarmService.ACTION_DONE));
+    }
+
+    @Test
+    public void onALockedPhoneTheFirstTapCounts() {
+        shadowOf((android.app.KeyguardManager) ctx.getSystemService(Context.KEYGUARD_SERVICE)).setKeyguardLocked(true);
+        AlarmActivity a = openJustNow(task("locked"));
+        a.findViewById(R.id.alarm_done).performClick();
+        assertTrue(a.isFinishing());
+        assertTrue(sentToService(a).contains(AlarmService.ACTION_DONE));
+    }
+
+    @Test
+    public void theHoldForLaterDoesNotWait() {
+        AlarmActivity a = openJustNow(task("holdnow"));
+        ownTheClock();
+        touch(a.findViewById(R.id.alarm_later_hold), MotionEvent.ACTION_DOWN);
+        ShadowLooper.idleMainLooper(900, TimeUnit.MILLISECONDS);
+        assertTrue("a full hold begun at once was not Later", a.isFinishing());
+        assertTrue(sentToService(a).contains(AlarmService.ACTION_LATER));
+    }
+
+    @Test
+    public void doneOnTheBannerDoesNotWaitEither() {
+        AlarmStore.Entry e = task("bannernow");
+        AlarmStore.put(ctx, e);
+        Intent i = new Intent(ctx, AlarmActivity.class).putExtra(AlarmScheduler.EXTRA_ALARM_ID, e.id)
+                .putExtra(AlarmActivity.EXTRA_MARK_DONE, true);
+        AlarmActivity a = Robolectric.buildActivity(AlarmActivity.class, i).setup().get();
+        assertTrue(sentToService(a).contains(AlarmService.ACTION_DONE));
+    }
+
+    @Test
+    public void everyOtherButtonWaitsTheSameMoment() {
+        AlarmStore.Entry ev = task("gotit");
+        ev.event = true;
+        AlarmActivity a = openJustNow(ev);
+        a.findViewById(R.id.alarm_done).performClick();
+        assertFalse("Got it counted the instant the alarm took over", a.isFinishing());
+        ShadowLooper.idleMainLooper(800, TimeUnit.MILLISECONDS);
+        a.findViewById(R.id.alarm_done).performClick();
+        assertTrue(a.isFinishing());
+        // the earlier screen too
+        ctx.getSharedPreferences("adhdone_alarm_screen", 0).edit().putString("screen", "classic").commit();
+        AlarmActivity old = openJustNow(task("classicslip"));
+        old.findViewById(R.id.alarm_dismiss).performClick();
+        assertFalse("Stop on the earlier screen counted the instant it took over", old.isFinishing());
+        ShadowLooper.idleMainLooper(800, TimeUnit.MILLISECONDS);
+        old.findViewById(R.id.alarm_dismiss).performClick();
+        assertTrue(old.isFinishing());
+    }
+
+    @Test
+    public void closedWithHomeItsReminderShowsItself() {
+        assertTrue(AlarmService.showsItselfAfter("home"));
+        assertTrue(AlarmService.showsItselfAfter("closed"));
+        assertFalse("two Backs are on purpose", AlarmService.showsItselfAfter("back"));
+        AlarmStore.Entry e = task("homecopy");
+        TaskActions.postRecord(ctx, e, true);
+        Notification n = trayCopy("t1");
+        assertNotNull("no copy of the reminder after Home", n);
+        assertEquals("not on the channel that shows as a banner", AlarmService.CHANNEL_ID, n.getChannelId());
+        assertFalse("marked silent, which Android never shows as a banner",
+                n.getGroupAlertBehavior() == Notification.GROUP_ALERT_SUMMARY);
+        assertEquals(Arrays.asList("Done", "Snooze 10 min"), buttonsOn(n));
+        assertEquals("Water the plants", String.valueOf(n.extras.getCharSequence(Notification.EXTRA_TITLE)));
+        android.app.NotificationManager nm = (android.app.NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        android.app.NotificationChannel ch = nm.getNotificationChannel(AlarmService.CHANNEL_ID);
+        assertNotNull(ch);
+        assertEquals(android.app.NotificationManager.IMPORTANCE_HIGH, ch.getImportance());
+        assertNull("the banner would make a sound", ch.getSound());
+        assertFalse("the banner would vibrate", ch.shouldVibrate());
+    }
+
+    @Test
+    public void rungOutOrClosedWithBackItsReminderStillGoesInQuietly() {
+        AlarmStore.Entry e = task("quietcopy");
+        TaskActions.postRecord(ctx, e);
+        Notification n = trayCopy("t1");
+        assertNotNull(n);
+        assertFalse(AlarmService.CHANNEL_ID.equals(n.getChannelId()));
+        assertEquals(Notification.GROUP_ALERT_SUMMARY, n.getGroupAlertBehavior());
+        TaskActions.postRecord(ctx, e, AlarmService.showsItselfAfter("back"));
+        assertEquals(Notification.GROUP_ALERT_SUMMARY, trayCopy("t1").getGroupAlertBehavior());
+    }
+
+    @Test
+    public void whileRemindersArePausedNothingShowsItself() {
+        ReminderPause.silence(ctx, 1, false);
+        try {
+            TaskActions.postRecord(ctx, task("pausedcopy"), true);
+            Notification n = trayCopy("t1");
+            assertNotNull(n);
+            assertEquals(Notification.GROUP_ALERT_SUMMARY, n.getGroupAlertBehavior());
+        } finally {
+            ReminderPause.unsilence(ctx);
+        }
+    }
 }

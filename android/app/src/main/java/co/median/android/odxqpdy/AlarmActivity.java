@@ -55,6 +55,18 @@ public class AlarmActivity extends Activity {
     private long firstBackAt = 0L;
     /** A second Back within this long closes the alarm. */
     private static final long BACK_AGAIN_MS = 3_000L;
+    /**
+     * Taps don't count until this moment (elapsedRealtime; 0 = no wait). Set
+     * when the screen opens over a phone that was in use: whatever they were
+     * about to tap in the app underneath lands here instead, and a tap on the
+     * round Done would finish the task (Anna, Nov 18 2026: "I keep on having
+     * issues with alarms popping up and accidentally clicking out of it since
+     * I am doing something on my phone"). The Later bar needs no wait: it has
+     * to be held, which a stray tap can't do. Done on the banner is a tap they
+     * meant, and doesn't wait either.
+     */
+    private long tapsCountFrom = 0L;
+    private static final long TAP_WAIT_MS = 800L;
 
     private String alarmId;
     private String taskId;
@@ -221,7 +233,7 @@ public class AlarmActivity extends Activity {
         LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         half.setMarginStart(Math.round(12 * getResources().getDisplayMetrics().density));
         b.setLayoutParams(half);
-        b.setOnClickListener(v -> markDoneFor(otherTask));
+        b.setOnClickListener(tap(() -> markDoneFor(otherTask)));
         row.addView(done);
         row.addView(b);
         parent.addView(row, at);
@@ -377,6 +389,8 @@ public class AlarmActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Read first, before this screen changes the lock screen or the display.
+        tapsCountFrom = phoneInUse() ? SystemClock.elapsedRealtime() + TAP_WAIT_MS : 0L;
         showOverLockScreen();
 
         alarmId = getIntent().getStringExtra(AlarmScheduler.EXTRA_ALARM_ID);
@@ -426,18 +440,18 @@ public class AlarmActivity extends Activity {
         Button dismiss = findViewById(R.id.alarm_dismiss);
         Button done = findViewById(R.id.alarm_done);
         Button later = findViewById(R.id.alarm_later);
-        snooze10.setOnClickListener(v -> snooze(10));
-        snooze30.setOnClickListener(v -> snooze(30));
-        snooze60.setOnClickListener(v -> snooze(60));
-        dismiss.setOnClickListener(v -> dismiss());
+        snooze10.setOnClickListener(tap(() -> snooze(10)));
+        snooze30.setOnClickListener(tap(() -> snooze(30)));
+        snooze60.setOnClickListener(tap(() -> snooze(60)));
+        dismiss.setOnClickListener(tap(() -> dismiss()));
         // "Done": people finish the thing and forget to tick it off, then ignore
         // every reminder about it for the rest of the day. Only for a real task
         // (not a timer's end or a pushed moment with no task).
         if (canMarkDone(e, taskId)) {
-            done.setOnClickListener(v -> markDone());
+            done.setOnClickListener(tap(() -> markDone()));
             // "Later": stop without picking a time; the task goes back to its
             // normal reminders (smart nudges decide when, for what they handle).
-            later.setOnClickListener(v -> later());
+            later.setOnClickListener(tap(() -> later()));
         } else {
             done.setVisibility(android.view.View.GONE);
             later.setVisibility(android.view.View.GONE);
@@ -461,7 +475,7 @@ public class AlarmActivity extends Activity {
             // event's page, where recording starts. Done's slot is used for it.
             if (e.openLabel != null && !e.openLabel.isEmpty() && !taskId.isEmpty()) {
                 done.setText(e.openLabel);
-                done.setOnClickListener(v -> openEventPage());
+                done.setOnClickListener(tap(() -> openEventPage()));
                 done.setVisibility(android.view.View.VISIBLE);
             }
         }
@@ -499,7 +513,7 @@ public class AlarmActivity extends Activity {
                 }
                 slots[i].setVisibility(android.view.View.VISIBLE);
                 slots[i].setText(label);
-                slots[i].setOnClickListener(v -> dismissTo(path));
+                slots[i].setOnClickListener(tap(() -> dismissTo(path)));
             }
         }
 
@@ -978,12 +992,12 @@ public class AlarmActivity extends Activity {
             // ("Record notes", "Add prep notes") is the button under it.
             boolean more = e.openLabel != null && !e.openLabel.isEmpty() && taskId != null && !taskId.isEmpty();
             done.setText(R.string.alarm_action_dismiss_plain);
-            done.setOnClickListener(v -> dismiss());
+            done.setOnClickListener(tap(() -> dismiss()));
             done.setVisibility(View.VISIBLE);
             fitRound(done, roundPx, false);
             if (more) {
                 open.setText(e.openLabel);
-                open.setOnClickListener(v -> openEventPage());
+                open.setOnClickListener(tap(() -> openEventPage()));
             }
             open.setVisibility(more ? View.VISIBLE : View.GONE);
         } else if (!task || openList) {
@@ -991,7 +1005,7 @@ public class AlarmActivity extends Activity {
             // app's own choices, three tasks at once): its one way out takes
             // the round button, with the words the earlier screen gave it.
             done.setText(open.getText());
-            done.setOnClickListener(v -> dismiss());
+            done.setOnClickListener(tap(() -> dismiss()));
             done.setVisibility(View.VISIBLE);
             fitRound(done, roundPx, false);
             open.setVisibility(View.GONE);
@@ -1108,7 +1122,7 @@ public class AlarmActivity extends Activity {
             lp.setMarginStart(gap);
             row.addView(b, lp);
         }
-        b.setOnClickListener(v -> markDoneFor(otherTask));
+        b.setOnClickListener(tap(() -> markDoneFor(otherTask)));
         b.setText("✓ " + shortTitle(otherTitle));
         styleRound(b, each);
         fitRound(b, each, true);
@@ -1349,6 +1363,28 @@ public class AlarmActivity extends Activity {
                     | WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD);
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    /** Unlocked with the screen on: someone is most likely touching it right now. */
+    private boolean phoneInUse() {
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+            KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            return pm != null && pm.isInteractive() && (km == null || !km.isKeyguardLocked());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /** A button's tap. Not counted in the screen's first moments over a phone in use (tapsCountFrom). */
+    private View.OnClickListener tap(final Runnable what) {
+        return v -> {
+            if (SystemClock.elapsedRealtime() < tapsCountFrom) {
+                Log.d(TAG, "AlarmActivity: a tap in the first moments over a phone in use, not counted");
+                return;
+            }
+            what.run();
+        };
     }
 
     private void sendToService(String action, int minutes) {
