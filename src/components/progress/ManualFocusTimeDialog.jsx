@@ -84,8 +84,7 @@ export default function ManualFocusTimeDialog({ open, onOpenChange, tasks, userE
             <Plus className="w-5 h-5 text-green-500" /> Add Focus Time
           </DialogTitle>
           <DialogDescription>
-            Log time you spent on a task — even if you didn't use Focus Mode or the session didn't
-            save.
+            Add time you spent on a task, even if you didn't run the Timer or Focus Mode.
           </DialogDescription>
         </DialogHeader>
 

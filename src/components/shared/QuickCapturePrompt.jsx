@@ -162,7 +162,7 @@ export default function QuickCapturePrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-green-600" />
-            {offerPin ? 'We need to ask for a couple of permissions' : 'We need to ask for one permission'}
+            {offerPin ? 'ADHDone needs a couple of permissions' : 'ADHDone needs one permission'}
           </DialogTitle>
           <DialogDescription>
             {offerPin
@@ -194,7 +194,7 @@ export default function QuickCapturePrompt() {
               <div className="flex items-start gap-2">
                 <Zap className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium">Second, pin a quick-capture shortcut</p>
+                  <p className="text-sm font-medium">Second, pin a shortcut for adding tasks</p>
                   <p className="text-xs text-gray-600">
                     A shortcut in your notification tray. Thought hits, you tap it, it's
                     saved — no opening the app, no losing it.
@@ -525,7 +525,7 @@ export function AlertStyleInfo({ dark = false }) {
         <AlarmClock className="w-4 h-4 mt-0.5 flex-shrink-0" />
         <div>
           <p className="font-medium">Full-screen alarm</p>
-          <p className={`text-xs ${sub}`}>Rings out loud and takes over the screen, even locked, until you answer it.</p>
+          <p className={`text-xs ${sub}`}>Takes over the screen, even when locked, and rings for a minute.</p>
         </div>
       </div>
       <p className={`text-xs ${sub}`}>Same reminder times either way — only how they reach you changes.</p>
@@ -931,7 +931,7 @@ if (typeof window !== 'undefined') {
       markFirstUseSeen(FIRST_WIN_KEY);
       saveFirstWinDemo({
         title: 'This is what a reminder looks like 👋',
-        body: `"${title}" is on your list. When it's time, we'll nudge you just like this.`,
+        body: `"${title}" is on your list. When it's time, we'll remind you just like this.`,
         at: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
       });
       window.dispatchEvent(new Event(FIRST_WIN_PLANNED_EVENT));
@@ -1069,7 +1069,7 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
           PREVIEW
         </p>
         <p className="mt-2 text-sm" style={{ color: '#C9C3DC' }}>
-          This is how a reminder rings as a full-screen alarm: over your lock screen, at alarm volume, even on silent or Do Not Disturb.
+          This is a full-screen alarm: over your lock screen, at alarm volume.{alarmQuietChoiceSupported() ? ' Next you choose when it stays quiet.' : ''}
         </p>
       </div>
 
@@ -1331,7 +1331,7 @@ export function AlertStylePrompt({ user, theme }) {
           <Button onClick={soundDone} disabled={quietPending} className="w-full">Done</Button>
 
           <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
-            You can change it anytime in Settings.
+            You can change this any time in Settings.
           </p>
         </DialogContent>
       </Dialog>
@@ -1347,7 +1347,7 @@ export function AlertStylePrompt({ user, theme }) {
               <AlarmClock className="w-5 h-5" /> New: full-screen reminders
             </DialogTitle>
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              A reminder can now ring like an alarm clock, full screen and out loud, until you answer it. Same reminders, same times. Harder to miss.
+              A reminder can now ring like an alarm clock: full screen, with sound, for a minute. Same reminders, same times. Harder to miss.
             </DialogDescription>
           </DialogHeader>
 
@@ -1357,7 +1357,7 @@ export function AlertStylePrompt({ user, theme }) {
           </p>
 
           <p className={`text-sm ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
-            Tap Try it out to see one first. Say yes and your tasks switch over; after the first real one rings, we'll ask if you want to keep it.
+            Tap Try it out to see one first. Say yes and your tasks switch over; after the first real one rings, ADHDone asks if you want to keep it.
           </p>
 
           <div className="flex flex-col gap-2 pt-1">
@@ -1370,7 +1370,7 @@ export function AlertStylePrompt({ user, theme }) {
           </div>
 
           <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
-            You can change this anytime in Settings, and every task has its own switch too.
+            You can change this any time in Settings, and every task has its own switch too.
           </p>
         </DialogContent>
       </Dialog>
@@ -1397,13 +1397,13 @@ export function AlertStylePrompt({ user, theme }) {
           <button type="button" className={card} onClick={() => preview(false)} disabled={busy}>
             <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
             <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Rings out loud and takes over the screen, even locked, until you answer it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}. Tap to see one first.
+              Takes over the screen, even when locked, and rings for a minute, even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}. Tap to see one first.
             </p>
           </button>
         </div>
 
         <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
-          You can change this anytime in Settings, and every task has its own switch too.
+          You can change this any time in Settings, and every task has its own switch too.
         </p>
       </DialogContent>
     </Dialog>
@@ -1512,7 +1512,7 @@ export function AlarmKeepPrompt({ user, theme }) {
         </div>
 
         <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
-          Either way, you can change this anytime in Settings.
+          Either way, you can change this any time in Settings.
         </p>
       </DialogContent>
     </Dialog>
@@ -1739,7 +1739,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
             {mode === 'applied' ? (
               <>
-                Going by what you told us, we moved your quiet hours to {hhmmLabel(was.start)} to{' '}
+                Going by what you said, your quiet hours moved to {hhmmLabel(was.start)} to{' '}
                 {hhmmLabel(was.end)}, so reminders and alarms stay silent while you're most likely
                 asleep. If you sleep at other times, change them here.
               </>
@@ -1755,7 +1755,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
                   <>Right now your quiet hours are off, so reminders and alarms can come at any hour.</>
                 )}{' '}
                 If you sleep at other times, set your quiet hours to match.
-                {fit?.start && fit?.end ? ' We filled in times that might suit you better, so change them if they’re off.' : ''}
+                {fit?.start && fit?.end ? ' The times filled in might suit you better, so change them if they’re off.' : ''}
               </>
             ) : (
               <>
@@ -1793,7 +1793,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 
         {error && <p className="text-xs text-red-500">{error}</p>}
         <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-          You can change these any time in Settings.
+          You can change this any time in Settings.
         </p>
         <div className="flex gap-2 pt-1">
           <Button variant="outline" onClick={() => finish(false)} disabled={saving} className="flex-1">
@@ -2003,7 +2003,7 @@ export function PushPauseNotice({ user, theme }) {
           <DialogDescription className={`space-y-2 text-left ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
             <span className="block">
               ADHDone noticed your notifications may have paused for a little while. That was a
-              temporary bug on our end, not anything you did, and it's been fixed for everyone in
+              temporary bug in ADHDone, not anything you did, and it's been fixed for everyone in
               the newest version.
             </span>
             <span className="block">
@@ -2227,7 +2227,7 @@ export function AppUpdatePrompt({ user, theme }) {
               When should alarms stay quiet?
             </p>
             <p className={`text-xs mt-1 ${sub}`}>
-              Quiet means they buzz and light up the screen with no sound. This starts working once you update. You can change it any time in Settings.
+              Quiet means they buzz and light up the screen with no sound. This starts working once you update. You can change this any time in Settings.
             </p>
             <QuietWhenButtons value={quietWhen} onPick={pickQuietWhen} disabled={saving} />
           </div>
@@ -2239,7 +2239,7 @@ export function AppUpdatePrompt({ user, theme }) {
               Should alarms stay quiet when your phone is on silent, vibrate or Do Not Disturb?
             </p>
             <p className={`text-xs mt-1 ${sub}`}>
-              This starts working once you update. You can change it any time in Settings.
+              This starts working once you update. You can change this any time in Settings.
             </p>
             <div className="flex gap-2 mt-2">
               <Button
@@ -2479,7 +2479,7 @@ export function WakeOfferPrompt({ user, theme }) {
       }
     } else {
       setOn(false);
-      setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
+      setNote('The "Usage access" switch is still off. Switch it on for ADHDone, then try again.');
     }
   };
 
@@ -2493,7 +2493,7 @@ export function WakeOfferPrompt({ user, theme }) {
       try {
         const st = await AB().wakeWatchStatus();
         if (st?.hasAccess) await turnOn();
-        else setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
+        else setNote('The "Usage access" switch is still off. Switch it on for ADHDone, then try again.');
       } catch (e) {
         setNote("Couldn't turn it on. You can try again in Settings.");
       } finally {

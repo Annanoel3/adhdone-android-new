@@ -221,7 +221,7 @@ export default function FocusTimer() {
                   <DialogHeader>
                     <DialogTitle>What's a Pomodoro Timer?</DialogTitle>
                     <DialogDescription className="space-y-3 pt-2">
-                      <p>The Pomodoro Technique is a time management method that uses a timer to break work into focused intervals.</p>
+                      <p>Work in short rounds with breaks in between.</p>
                       <div className={`p-4 rounded-lg ${theme === 'minimalist' ? 'bg-green-50' : theme === 'dark' ? 'bg-green-900/20' : 'bg-gradient-to-br from-purple-50 to-orange-50'}`}>
                         <p className="font-semibold mb-2">How it works:</p>
                         <ul className="space-y-1 text-sm">
@@ -231,7 +231,7 @@ export default function FocusTimer() {
                           <li>🏖️ Take a longer 15-minute break</li>
                         </ul>
                       </div>
-                      <p className="text-sm">This technique helps ADHD brains by creating clear work boundaries and regular breaks to prevent burnout!</p>
+                      <p className="text-sm">A clear end point makes starting easier.</p>
                     </DialogDescription>
                   </DialogHeader>
                 </DialogContent>

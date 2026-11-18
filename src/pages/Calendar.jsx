@@ -142,8 +142,8 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
       }
     } catch (err) {
       setError(err?.code === 'calendar_permission'
-        ? 'Calendar access was turned off. Allow it again to sync.'
-        : `Sync failed: ${err?.message || err}`);
+        ? 'Calendar access was turned off. Allow it again to bring your calendars in.'
+        : `Couldn't bring your calendars in: ${err?.message || err}`);
     } finally {
       syncingRef.current = false;
       setBusy(false);
@@ -208,7 +208,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
             <Button variant="outline" size="sm" onClick={() => sync(chosenIds)} disabled={busy}
               className={isDark ? 'border-gray-600 text-gray-200' : ''}>
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              <span className="ml-1">{busy ? 'Syncing…' : 'Sync now'}</span>
+              <span className="ml-1">{busy ? 'Bringing in…' : 'Bring in now'}</span>
             </Button>
           )}
         </div>
@@ -239,7 +239,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
               <span className="min-w-0">
                 <span className="block text-sm font-medium truncate">{summary}</span>
                 <span className={`block text-xs ${textSecondary}`}>
-                  {chosenNames.length === 0 ? `${calendars.length} on this phone` : `${chosenNames.length} of ${calendars.length} syncing`}
+                  {chosenNames.length === 0 ? `${calendars.length} on this phone` : `${chosenNames.length} of ${calendars.length} brought in`}
                 </span>
               </span>
               <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${listOpen ? 'rotate-180' : ''}`} />
@@ -285,15 +285,15 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
             <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" />
             <span>
               {result.in_progress
-                ? 'A sync is already running.'
+                ? 'Already bringing them in.'
                 : !(result.created || result.updated || result.cancelled_removed)
                   ? 'Up to date — nothing new.'
-                  : `Imported ${result.created ?? 0}, updated ${result.updated ?? 0}${result.cancelled_removed ? `, removed ${result.cancelled_removed}` : ''}.`}
+                  : `Brought in ${result.created ?? 0}, updated ${result.updated ?? 0}${result.cancelled_removed ? `, removed ${result.cancelled_removed}` : ''}.`}
             </span>
           </div>
         )}
         {lastSynced && !result && (
-          <p className={`text-xs ${textSecondary}`}>Last synced {new Date(lastSynced).toLocaleString()}</p>
+          <p className={`text-xs ${textSecondary}`}>Last brought in {new Date(lastSynced).toLocaleString()}</p>
         )}
       </CardContent>
     </Card>
@@ -448,7 +448,7 @@ export default function Calendar() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8">
-        <p className={textSecondary}>Please log in to use Calendar sync.</p>
+        <p className={textSecondary}>Log in to bring in your calendars.</p>
         <Button onClick={() => base44.auth.redirectToLogin()}>Log in</Button>
       </div>
     );
@@ -542,7 +542,7 @@ export default function Calendar() {
         <FirstUseDialog
           open={switchNoteShown}
           theme={theme}
-          title="New calendar integration now in use!"
+          title="Calendars now come straight from your phone"
           body="ADHDone now reads calendars straight from your phone, no Google sign-in needed. Tick the ones you want under Phone calendars (your Google calendar is there too). Events already brought in stay put."
           onConfirm={() => { markFirstUseSeen(CALENDAR_SWITCH_KEY); setSwitchNote(false); }}
         />

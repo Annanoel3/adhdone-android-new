@@ -33,7 +33,7 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
         theme === 'dark' ? 'bg-green-900/30 text-green-200' : 'bg-green-50 text-green-800'
       }`}>
         <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
-        <p className="text-sm">Sent to customer support — replies are usually quick, so keep an eye on your email.</p>
+        <p className="text-sm">Sent to Anna, the developer. If there's a reply, it comes to your email.</p>
       </div>
     );
   }
@@ -46,10 +46,10 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
         <Mail className={`w-4 h-4 mt-0.5 flex-shrink-0 ${theme === 'dark' ? 'text-blue-300' : 'text-blue-600'}`} />
         <div>
           <p className={`text-sm font-medium ${theme === 'dark' ? 'text-blue-100' : 'text-blue-900'}`}>
-            Would you like to send this to customer support?
+            Send this to Anna, the developer?
           </p>
           <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-blue-200' : 'text-blue-700'}`}>
-            Your message, this conversation, and your name and email go to the developer by email. Nothing is sent until you tap Send.
+            Your message, this conversation, and your name and email go to her by email. Nothing is sent until you tap Send.
           </p>
         </div>
       </div>
@@ -58,7 +58,7 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
       )}
       <div className="flex gap-2">
         <Button size="sm" onClick={handleSend} disabled={status === 'sending'} className="bg-blue-600 hover:bg-blue-700 text-white">
-          {status === 'sending' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Sending…</> : 'Send to support'}
+          {status === 'sending' ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Sending…</> : 'Send to Anna'}
         </Button>
         <Button size="sm" variant="outline" onClick={onDismiss} disabled={status === 'sending'}>
           No thanks
@@ -92,7 +92,7 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
 // Tapping outside or pressing Escape does nothing, so a stray tap can never count
 // as an answer. Once answered it never shows again, and the ways-to-add popup is
 // marked seen so first-run education never lands on top of this.
-// ── "What can we do better?" ─────────────────────────────────────────────────
+// ── "What could ADHDone do better?" (was "What can we do better?" until Nov 18 2026) ─────────────────────────────────────────────────
 //
 // A one-time ask for feedback, sent to chosen accounts by an admin through
 // broadcastAnnouncement (ask: 'feedback'). That stamps feedback_ask.asked_at on
@@ -156,7 +156,7 @@ export function FeedbackAskPrompt({ user }) {
     try {
       await base44.functions.invoke('sendSupportRequest', {
         message,
-        transcript: 'Sent from the "What can we do better?" popup (the one-time feedback ask).',
+        transcript: 'Sent from the "What could ADHDone do better?" popup (the one-time feedback ask).',
       });
       await record({ answer: 'yes', sent_text: message, email: 'sent' });
     } catch (e) {
@@ -197,7 +197,7 @@ export function FeedbackAskPrompt({ user }) {
               <h2 className="text-xl font-bold text-foreground">Got it, thank you</h2>
             </div>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              This goes straight to the developer. If there's a reply, it'll come to your email.
+              This goes straight to Anna, the developer. If there's a reply, it comes to your email.
             </p>
             <Button onClick={() => setOpen(false)} className="w-full">
               Close
@@ -205,9 +205,9 @@ export function FeedbackAskPrompt({ user }) {
           </div>
         ) : (
           <div className="space-y-4 pt-2">
-            <h2 className="text-xl font-bold text-foreground">What can we do better?</h2>
+            <h2 className="text-xl font-bold text-foreground">What could ADHDone do better?</h2>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Tell us what's missing, confusing, or annoying. Most feedback becomes a real change
+              Tell Anna, the developer, what's missing, confusing, or annoying. Most feedback becomes a real change
               in the app within days.
             </p>
             <Textarea
@@ -316,8 +316,8 @@ export function FeedbackPrompt({ user }) {
         message,
         transcript:
           (pending?.task_id
-            ? 'Sent from the "I think this was a feature request" popup. What they originally captured: "'
-            : 'Sent from the "send this to the developer?" popup, right after they added it in the app. What they originally captured: "') +
+            ? 'Sent from the "This looks like a feature request" popup. What they originally captured: "'
+            : 'Sent from the "send this to Anna, the developer?" popup, right after they added it in the app. What they originally captured: "') +
           String(pending?.text || '').slice(0, 1000) + '"',
       });
       await record({ answer: 'yes', sent_text: message, email: 'sent' });
@@ -361,7 +361,7 @@ export function FeedbackPrompt({ user }) {
               <h2 className="text-xl font-bold text-foreground">Got it</h2>
             </div>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              The developer will see this. If there's a reply, it'll come to your email.
+              Anna, the developer, will see this. If there's a reply, it comes to your email.
             </p>
             <Button onClick={() => setOpen(false)} className="w-full">
               Close
@@ -371,18 +371,18 @@ export function FeedbackPrompt({ user }) {
           <div className="space-y-4 pt-2">
             {pending?.task_id ? (
               <>
-                <h2 className="text-xl font-bold text-foreground">I think this was a feature request</h2>
+                <h2 className="text-xl font-bold text-foreground">This looks like a feature request</h2>
                 <p className="text-[15px] leading-relaxed text-muted-foreground">
                   This became a task, but it sounds like something you'd like ADHDone to do. Send it to
-                  the developer? You can change the wording first.
+                  Anna, the developer? You can change the wording first.
                 </p>
               </>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-foreground">Want to send this to the developer?</h2>
+                <h2 className="text-xl font-bold text-foreground">Want to send this to Anna, the developer?</h2>
                 <p className="text-[15px] leading-relaxed text-muted-foreground">
                   This sounds like it's about ADHDone itself. It's saved in your Parking Lot. Send it
-                  to the developer too? You can change the wording first.
+                  to Anna too? You can change the wording first.
                 </p>
               </>
             )}

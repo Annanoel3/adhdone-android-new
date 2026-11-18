@@ -67,7 +67,7 @@ export const PAGE_TOURS = {
   Birthdays: [
     {
       title: "Birthdays 🎂",
-      body: "Never miss a birthday text again — get a nudge on the day and a draft you can send in one tap.",
+      body: "Never miss a birthday text again — get a reminder on the day and a draft you can send in one tap.",
     },
   ],
 };

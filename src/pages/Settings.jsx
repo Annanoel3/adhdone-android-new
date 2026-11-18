@@ -86,7 +86,7 @@ function AboutYouCard({ user, theme, onSaved }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="about-you-name" className={dark ? 'text-gray-300' : ''}>What we call you</Label>
+          <Label htmlFor="about-you-name" className={dark ? 'text-gray-300' : ''}>What ADHDone calls you</Label>
           <Input
             id="about-you-name"
             value={name}
@@ -112,7 +112,7 @@ function AboutYouCard({ user, theme, onSaved }) {
             className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
           />
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-            ADHDone reads this whenever it sorts a task, nudges you or writes your notes. The more real, the better it fits.
+            ADHDone reads this whenever it sorts a task, reminds you or writes your notes. The more real, the better it fits.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -135,7 +135,7 @@ export default function Settings() {
   const SECTIONS = {
     personalization: {
       title: 'Personalization',
-      blurb: 'What ADHDone knows about you. It reads this every time it sorts a task, breaks one down, nudges you, or writes your notes.',
+      blurb: 'What ADHDone knows about you. It reads this every time it sorts a task, breaks one down, reminds you, or writes your notes.',
     },
     reminders: { title: 'Reminders', blurb: 'When and how ADHDone gets your attention.' },
     // Places moved here from the Tools menu Nov 2 2026 (Anna: "we can move
@@ -201,7 +201,7 @@ export default function Settings() {
       } catch (e) { /* the wake-up popup asks again later */ }
     } else {
       setWakeWatch((s) => ({ ...s, enabled: false }));
-      toast({ title: 'Usage access is still off', description: 'Switch it on for ADHDone, then try again.', duration: 3500 });
+      toast({ title: 'The "Usage access" switch is still off', description: 'Switch it on for ADHDone, then try again.', duration: 3500 });
     }
   };
 
@@ -220,7 +220,7 @@ export default function Settings() {
           if (st?.hasAccess) {
             await turnWakeWatchOn();
           } else {
-            toast({ title: 'Usage access is still off', description: 'The wake-up setting stays off until it\'s on for ADHDone.', duration: 3500 });
+            toast({ title: 'The "Usage access" switch is still off', description: 'The wake-up setting stays off until it\'s on for ADHDone.', duration: 3500 });
           }
         }
       } catch (e) {
@@ -621,7 +621,7 @@ export default function Settings() {
                   Enable Quiet Hours
                 </p>
                 <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Silence reminders during set hours (in your timezone)
+                  No reminders during the hours you set.
                 </p>
               </div>
               <Switch
@@ -702,7 +702,7 @@ export default function Settings() {
                 Work hours or shifts?
               </p>
               <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                Add them in Places and nudges can stay quiet while you work. Anything set for a specific time still comes through.
+                Add them in Places and reminders can stay quiet while you work. Anything set for a specific time still comes through.
               </p>
               <button
                 type="button"

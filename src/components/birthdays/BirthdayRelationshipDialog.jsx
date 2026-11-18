@@ -33,7 +33,7 @@ export default function BirthdayRelationshipDialog({ isOpen, personName, onConfi
             <Heart className="w-5 h-5 text-pink-600" /> Who is {personName} to you?
           </DialogTitle>
           <DialogDescription>
-            This helps us write a message that actually sounds right.
+            This helps ADHDone write a message that actually sounds right.
           </DialogDescription>
         </DialogHeader>
 

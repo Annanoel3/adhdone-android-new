@@ -336,7 +336,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
       // same time if that is still ahead.
       const demo = {
         title: 'This is what a reminder looks like 👋',
-        body: `"${value}" is on your list. When it's time, we'll nudge you just like this.`,
+        body: `"${value}" is on your list. When it's time, we'll remind you just like this.`,
         at: new Date(Date.now() + FIRST_WIN_MINUTES * 60 * 1000).toISOString(),
       };
       try { localStorage.setItem(FIRST_WIN_DEMO_KEY, JSON.stringify(demo)); } catch (e) {}
@@ -549,7 +549,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
           {showWorkOffer && (
             <div className="rounded-xl border p-3 space-y-2">
-              <p className="text-sm">Add your work hours and nudges can stay quiet while you're working.</p>
+              <p className="text-sm">Add your work hours and reminders can stay quiet while you work.</p>
               <Button variant="outline" onClick={openWorkHours} className="w-full">Add my work hours</Button>
             </div>
           )}

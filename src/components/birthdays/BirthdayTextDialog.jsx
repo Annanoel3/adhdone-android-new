@@ -181,7 +181,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
               <Cake className="w-5 h-5 text-pink-600" /> Birthday Text for {personName}
             </DialogTitle>
             <DialogDescription>
-              We drafted a birthday text for you. Edit it, adjust with AI, or send as-is on the big day.
+              ADHDone drafted a birthday text for you. Edit it, adjust with AI, or send as-is on the big day.
             </DialogDescription>
           </DialogHeader>
 
@@ -207,7 +207,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
                       if (pickedPhone) setPhone(pickedPhone);
                     }}
                   />
-                  <p className="text-xs text-gray-500">Fills in the recipient line when you send.</p>
+                  <p className="text-xs text-gray-500">Fills in who it's to when you send.</p>
                 </div>
 
                 <div className="space-y-2">

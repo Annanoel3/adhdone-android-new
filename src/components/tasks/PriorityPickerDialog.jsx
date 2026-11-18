@@ -21,7 +21,7 @@ export default function PriorityPickerDialog({ isOpen, onClose, onSelect }) {
           <DialogTitle>How important is this task?</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-4">
-          <p className="text-sm text-gray-600">Pick a priority — the app's smart reminders will handle the rest:</p>
+          <p className="text-sm text-gray-600">Pick a priority. Smart Reminders handles the rest.</p>
           <div className="grid grid-cols-1 gap-2">
             {OPTIONS.map((opt) => (
               <Button

@@ -54,7 +54,7 @@ const SCRIPT = [
     // Anna, Nov 15 2026 (the cards' wording, as few words as get the point
     // across): "what can we call you" for "First things first: what should
     // we call you?".
-    text: () => "What can we call you? You can change it in Settings anytime.",
+    text: () => "What can we call you? You can change this any time in Settings.",
     input: 'name',
     // The one question that used to have no way past it. Nov 11 2026 a new
     // account left 14 seconds in, right as this question finished appearing

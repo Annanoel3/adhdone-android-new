@@ -135,7 +135,7 @@ export default function TaskBatchEntry({ tasks, setTasks, theme, handleDeleteTas
                   Speak Your Tasks
                 </h3>
                 <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                  Tap the mic and let it flow - say them one at a time or all at once
+                  Tap the mic and say your tasks, one at a time or all at once.
                 </p>
               </div>
               <VoiceTaskInput

@@ -56,7 +56,7 @@ export default function SmartDueDatePill({ task, theme, onSave }) {
             onChange={(e) => { if (e.target.value) { save(e.target.value); setOpen(false); } }}
             className={`w-full border rounded px-3 py-2 ${isDark ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
           />
-          <p className="text-xs text-gray-500">Smart reminders keep deciding when to nudge you — this is just the day it needs to be done by.</p>
+          <p className="text-xs text-gray-500">This is the day it needs to be done by. Smart Reminders still picks when to remind you.</p>
           {due && (
             <button
               onClick={() => { save(null); setOpen(false); }}

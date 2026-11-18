@@ -122,7 +122,7 @@ export default function HomeZipPrompt({ user, theme }) {
               Got it. Do you commute to a job?
             </DialogTitle>
             <DialogDescription className={theme === 'dark' ? 'text-gray-400' : ''}>
-              Add your work address and start time, and I'll watch the traffic and tell you when
+              Add your work address and start time, and ADHDone watches the traffic and tells you when
               to head out. Changing schedules are fine; enter them a week at a time.
             </DialogDescription>
           </DialogHeader>
@@ -146,7 +146,7 @@ export default function HomeZipPrompt({ user, theme }) {
             Where's home base?
           </DialogTitle>
           <DialogDescription className={theme === 'dark' ? 'text-gray-400' : ''}>
-            Drop a circle over your general area and I can tell you when to leave for things,
+            Drop a circle over your general area and ADHDone can tell you when to leave for things,
             with real traffic, and group nearby errands into one trip. No exact address, no
             tracking.
           </DialogDescription>

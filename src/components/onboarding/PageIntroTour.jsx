@@ -387,7 +387,7 @@ function AddPathsIntro({ onDone }) {
           <div className="flex-1 flex flex-col justify-center">
             <h3 className="text-2xl font-bold text-foreground">Adding tasks is easy!</h3>
             <p className="mt-3 text-base text-muted-foreground leading-relaxed">
-              Add them in the app or add them without even opening the app!
+              Add tasks in the app, or from outside it without opening it.
             </p>
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
               You can watch these again anytime in the App Guide, in the menu.

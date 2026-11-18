@@ -118,7 +118,7 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
             <div className="text-center py-12">
               <StickyNote className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p className="text-gray-500 mb-4">
-                No notes yet. Add one to start elaborating!
+                No notes yet. Add one to say more about this idea.
               </p>
               <Button onClick={() => createNoteMutation.mutate()} disabled={adding}>
                 <Plus className="w-4 h-4 mr-2" />

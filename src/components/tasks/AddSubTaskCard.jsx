@@ -139,9 +139,9 @@ export default function AddSubTaskCard({
               <Plus className="w-4 h-4" />
             </Button>
           </form>
-          <p className="text-xs text-gray-500">💡 Tip: Separate multiple steps with commas</p>
+          <p className="text-xs text-gray-500">To add several steps at once, put commas between them.</p>
           {onAIBreakdown && (
-            <p className="text-xs text-gray-500">✨ Feeling overwhelmed? Tap AI to break this task into steps.</p>
+            <p className="text-xs text-gray-500">Too big to start? Tap AI and it breaks this into steps.</p>
           )}
         </div>
       ) : (

@@ -25,7 +25,7 @@ export default function PhotoTaskInput({ theme, onCaptureText }) {
       const res = await base44.functions.invoke('readImageCapture', { file_url: upload.file_url });
       const text = res?.data?.text;
       if (!text) {
-        setError("I couldn't find an event or task in that photo. Try one that shows the date and time.");
+        setError("No event or task found in that photo. Try one that shows the date and time.");
         return;
       }
       onCaptureText(text);
@@ -56,7 +56,7 @@ export default function PhotoTaskInput({ theme, onCaptureText }) {
           {isReading ? 'Reading it...' : 'Got a flyer or screenshot?'}
         </h2>
         <p className={`text-base ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-          Pick a photo and I'll pull out the date, time, and address for you
+          Pick a photo and ADHDone pulls out the date, time, and address for you
         </p>
       </div>
 

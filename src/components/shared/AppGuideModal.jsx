@@ -86,7 +86,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {
           icon: AlarmClock,
           title: "Alarm or notification?",
-          description: "A notification sits in your tray until you look. An alarm rings full screen, even on silent, until you deal with it. You picked one during setup; each task also has its own switch on its card.",
+          description: "A notification sits in your tray until you look. An alarm takes over the screen and rings for a minute. You picked one during setup; each task also has its own switch on its card.",
           link: { label: "Change the default in Settings", to: "/settings?section=reminders#alarms" },
         },
         // What Later means, in Anna's words (Nov 16 2026): "Later just means, I
@@ -172,14 +172,14 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Target,
       title: "Focus Mode",
-      description: "Pick one task. ADHDone reminds you of it every hour until it's done and keeps your other nudges quiet. Events, due dates and birthdays still come through."
+      description: "Pick one task. ADHDone reminds you of it every hour until it's done and keeps your other reminders quiet. Events, due dates and birthdays still come through."
     },
       ],
     },
     {
       icon: CalendarDays,
       title: "Calendar",
-      description: "Sync any calendar on your phone to add its tasks and events here."
+      description: "Bring in any calendar on your phone to add its tasks and events here."
     },
     {
       icon: Cake,
@@ -248,7 +248,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: MapPin,
       title: "Places",
-      description: "Your home area, work address and work hours, so \"leave now\" comes with a real drive time and nudges can stay quiet while you work.",
+      description: "Your home area, work address and work hours, so \"leave now\" comes with a real drive time and reminders can stay quiet while you work.",
       link: { label: "Open Places in Settings", to: "/settings?section=places" },
     },
       ],

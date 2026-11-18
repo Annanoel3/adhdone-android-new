@@ -564,7 +564,7 @@ export default function FocusModePrompt({ user, theme }) {
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
                 </DialogTitle>
                 <DialogDescription>
-                  Pick one task. It gets an hourly check-in until it's done and your other nudges go
+                  Pick one task. It gets an hourly check-in until it's done and your other reminders go
                   quiet. Events, due dates and birthdays still come through.
                 </DialogDescription>
               </DialogHeader>
@@ -603,7 +603,7 @@ export default function FocusModePrompt({ user, theme }) {
                 )}
               </div>
               <Button variant="ghost" onClick={() => setOpen(false)} className="w-full">
-                No thanks, I'll manage everything at once
+                No thanks
               </Button>
             </>
           )}
@@ -627,7 +627,7 @@ export default function FocusModePrompt({ user, theme }) {
             <DialogTitle>What is Focus Mode?</DialogTitle>
             <DialogDescription>
               For getting one task done. Pick it and it gets an hourly "how's it going?" while
-              your other nudges go quiet. Events, due dates and birthdays still come through.
+              your other reminders go quiet. Events, due dates and birthdays still come through.
               Exit any time.
             </DialogDescription>
           </DialogHeader>
@@ -669,7 +669,7 @@ export default function FocusModePrompt({ user, theme }) {
               Continue my focus session
             </Button>
             <Button variant="outline" onClick={() => answerMorning("stop")} disabled={quietBusy} className="w-full">
-              Let it go for now
+              End Focus Mode
             </Button>
           </div>
         </DialogContent>

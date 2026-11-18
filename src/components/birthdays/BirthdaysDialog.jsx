@@ -33,8 +33,8 @@ function formatWhen(iso) {
 }
 
 const REMINDER_ROWS = [
-  { key: "week_before", label: "1 week before", hint: "A nudge to prep a gift or message" },
-  { key: "day_before", label: "1 day before", hint: "A heads-up the day prior" },
+  { key: "week_before", label: "1 week before", hint: "A reminder to prep a gift or message" },
+  { key: "day_before", label: "1 day before", hint: "A heads-up the day before" },
   { key: "day_of", label: "Day of", hint: "So you don't miss it" },
 ];
 
@@ -142,7 +142,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
-              <p className="text-xs text-gray-500">Year doesn't matter — we'll remind you every year.</p>
+              <p className="text-xs text-gray-500">Year doesn't matter. You're reminded every year.</p>
             </div>
 
             <div className="space-y-2 rounded-xl border border-gray-200 p-3">

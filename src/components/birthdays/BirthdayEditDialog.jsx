@@ -204,7 +204,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             <Cake className="w-5 h-5 text-pink-600" /> Edit Birthday
           </DialogTitle>
           <DialogDescription>
-            Update the details and we'll keep the yearly reminders going.
+            Update the details and the yearly reminders keep going.
           </DialogDescription>
         </DialogHeader>
 
@@ -217,7 +217,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
           <div className="space-y-1.5">
             <Label>Birthday date</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            <p className="text-xs text-gray-500">Year doesn't matter — we'll remind you every year.</p>
+            <p className="text-xs text-gray-500">Year doesn't matter. You're reminded every year.</p>
           </div>
 
           <div className="space-y-1.5">
@@ -235,7 +235,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
                 if (pickedPhone) setPhone(pickedPhone);
               }}
             />
-            <p className="text-xs text-gray-500">Pre-fills the recipient when sending a birthday text.</p>
+            <p className="text-xs text-gray-500">Fills in who it's to when you send a birthday text.</p>
           </div>
 
           <div className="space-y-2">
@@ -321,7 +321,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{birthday.birthday_text_message}</p>
               </div>
             ) : (
-              <p className="text-xs text-gray-500">No message drafted yet — we'll write one for you.</p>
+              <p className="text-xs text-gray-500">No message drafted yet. ADHDone writes one for you.</p>
             )}
             <Button variant="outline" onClick={() => setShowTextDialog(true)} className="w-full">
               <Sparkles className="w-4 h-4 mr-2" />

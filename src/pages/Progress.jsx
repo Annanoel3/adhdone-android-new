@@ -566,7 +566,7 @@ export default function Progress() {
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
               <p className="text-gray-700">
-                Schedule your most important tasks during your <strong>{insights.bestTime.toLowerCase()}</strong> hours when you're most productive.
+                You get the most done in the <strong>{insights.bestTime.toLowerCase()}</strong>. Put the important things there.
               </p>
             </div>
             {(insights.stillPushed || []).some(t => t.pushes >= 2) && (
@@ -581,16 +581,18 @@ export default function Progress() {
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
                 <p className="text-gray-700">
-                  Consider breaking down tasks into smaller steps to boost your completion rate.
+                  Smaller steps are easier to finish. Try breaking one task down.
                 </p>
               </div>
             )}
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
-              <p className="text-gray-700">
-                Keep building that streak! Consistency is more important than perfection.
-              </p>
-            </div>
+            {insights.currentStreak >= 2 && (
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
+                <p className="text-gray-700">
+                  You're on a streak. Keep it going.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

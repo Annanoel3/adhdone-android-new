@@ -163,7 +163,7 @@ export default function ProfileSettings() {
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="How should we call you?"
+              placeholder="What should ADHDone call you?"
               maxLength={50}
             />
             <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>

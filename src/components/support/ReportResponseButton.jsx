@@ -49,7 +49,7 @@ export default function ReportResponseButton({ aiMessage, userMessage, theme }) 
           <DialogHeader>
             <DialogTitle>Report this response?</DialogTitle>
             <DialogDescription>
-              This sends the developer this reply and your one message right before it, so it can be fixed. Nothing else from your chat is sent.
+              This sends Anna, the developer, this reply and your one message right before it, so it can be fixed. Nothing else from your chat is sent.
             </DialogDescription>
           </DialogHeader>
           <Textarea

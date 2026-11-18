@@ -253,7 +253,7 @@ Return JSON with this structure:
             <div className="text-center py-12">
               <Loader2 className="w-12 h-12 animate-spin text-purple-600 mx-auto mb-4" />
               <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                Analyzing your task and creating ADHD-friendly steps...
+                Breaking it into steps…
               </p>
             </div>
           ) : suggestions.length > 0 ? (

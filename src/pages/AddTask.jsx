@@ -323,7 +323,7 @@ export default function AddTask() {
                       Type your tasks
                     </h2>
                     <p className={`text-base ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Enter each task and press Enter to add - AI will organize it with smart reminders
+                      Type a task and press Enter. ADHDone sorts it and sets up its reminders.
                     </p>
                   </div>
                   <form onSubmit={handleTextSubmit} className="w-full max-w-xl mx-auto">

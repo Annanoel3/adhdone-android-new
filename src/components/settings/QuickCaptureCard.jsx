@@ -744,7 +744,7 @@ export function AlarmCard({ user, theme, compact = false, onMore }) {
               <div className="pr-4">
                 <p className={`text-sm font-medium ${textMain}`}>New tasks ring as an alarm</p>
                 <p className={`text-xs ${textSub}`}>
-                  On: full screen and loud, even on silent. Off: a regular notification. Same reminder times either way.
+                  On: full screen with sound. Off: a regular notification. The times are the same either way.
                 </p>
               </div>
               <Switch checked={on} onCheckedChange={handleToggle} disabled={busy} />

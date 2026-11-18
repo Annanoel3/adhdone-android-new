@@ -875,11 +875,11 @@ Return JSON:
         title: "Due date saved ✓",
         description: becomesDeadline
           ? (dayOnly
-            ? `Due by ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll keep nudging you until then.`
-            : `Due by ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} — we'll keep nudging you until then.`)
+            ? `Due by ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — you'll be reminded until then.`
+            : `Due by ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} — you'll be reminded until then.`)
           : dayOnly
-            ? `Due ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll nudge you the night before and that day.`
-            : `We'll remind you an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
+            ? `Due ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — you'll be reminded the night before and that day.`
+            : `You'll be reminded an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
       });
 
       lastTimeSaveRef.current = (async () => {
@@ -1638,7 +1638,7 @@ Return JSON:
     };
     // Optimistic update — user sees the change instantly
     onUpdate({ ...task, ...updates });
-    toast({ title: "Smart Reminders on ✓", description: "AI will decide when to nudge you about this task." });
+    toast({ title: "Smart Reminders on ✓", description: "Smart Reminders picks when to remind you about this." });
     // Cancel old reminders + save in the background
     (async () => {
       try {
@@ -1671,7 +1671,7 @@ Return JSON:
     onUpdate({ ...task, ...updates });
     const eventDate = task.event_time || task.next_reminder;
     if (!eventDate) {
-      toast({ title: 'Event saved', description: 'Set the event date & time to generate reminders.' });
+      toast({ title: 'Event saved', description: 'Set the date and time and its reminders get booked.' });
     }
     // Cancel old reminders + save + schedule in the background
     (async () => {
@@ -2482,7 +2482,7 @@ Return JSON:
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                         <p className="text-xs text-gray-500">
-                          {isEvent ? 'The date this event takes place.' : 'Reminders continue until this date, then switch to overdue reminders.'}
+                          {isEvent ? 'The date this event takes place.' : "You're reminded up to this date. After that, reminders treat it as overdue."}
                         </p>
                       </div>
                     </PopoverContent>
@@ -2538,7 +2538,7 @@ Return JSON:
                           onChange={(e) => { if (e.target.value) handleStartDateChange(e.target.value); }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
-                        <p className="text-xs text-gray-500">When you'll start working on this before it's due.</p>
+                        <p className="text-xs text-gray-500">The day you start on it. It shows on your list every day from then until it's due.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -2821,7 +2821,7 @@ Return JSON:
                   All steps done! 🎉
                 </h3>
                 <p className={theme === 'dark' ? 'text-gray-400 mb-4' : 'text-gray-600 mb-4'}>
-                  You're ready to mark this main task as done.
+                  Every step is checked. You can check off the whole task.
                 </p>
               </div>
             )}

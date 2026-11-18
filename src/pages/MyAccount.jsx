@@ -203,7 +203,7 @@ ${detailedFeedback}
                   <span className="font-medium">Privacy Policy</span>
                 </div>
                 <span className="text-xs text-left text-gray-500">
-                  How we protect your data
+                  How your data is protected
                 </span>
               </Button>
 
@@ -217,7 +217,7 @@ ${detailedFeedback}
                   <span className="font-medium">Terms & Conditions</span>
                 </div>
                 <span className="text-xs text-left text-gray-500">
-                  Our terms of service
+                  The terms of service
                 </span>
               </Button>
 
@@ -263,10 +263,10 @@ ${detailedFeedback}
           <CardHeader>
             <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
               <Heart className="w-5 h-5" />
-              We Value Your Feedback
+              Your Feedback Matters
             </CardTitle>
             <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Whether you're staying or going, we'd love to hear from you. Your feedback helps us build a better app for everyone with ADHD.
+              Whether you're staying or going, Anna, the developer, would love to hear from you. Your feedback makes ADHDone better for everyone with ADHD.
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -285,7 +285,7 @@ ${detailedFeedback}
                   Thank you!
                 </h3>
                 <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                  Your feedback means the world to us. We read every single message.
+                  Your feedback means a lot. Anna, the developer, reads every single message.
                 </p>
               </div>
             ) : (
@@ -326,7 +326,7 @@ ${detailedFeedback}
 
                 <div className="space-y-2">
                   <Label className={theme === 'dark' ? 'text-gray-200' : ''}>
-                    How can we improve? {feedbackType === 'cancellation' && '(We genuinely want to make this better)'}
+                    How can ADHDone improve? {feedbackType === 'cancellation' && '(Anna really does want to make this better)'}
                   </Label>
                   <Textarea
                     value={detailedFeedback}

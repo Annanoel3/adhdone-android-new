@@ -60,7 +60,7 @@ export default function AuthCallback() {
               Completing sign-in...
             </h2>
             <p className="text-gray-600">
-              Just a moment while we set up your session
+              Just a moment while your session is set up
             </p>
           </>
         )}

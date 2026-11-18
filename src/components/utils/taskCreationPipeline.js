@@ -277,8 +277,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
           say({
             title: birthday.own ? '🎂 Added your birthday!' : `🎂 Added ${birthday.person}'s birthday!`,
             description: birthday.own
-              ? "We'll wish you a happy birthday on the day, every year."
-              : "We'll remind you 1 week before, the day before, and the day of — every year.",
+              ? "ADHDone wishes you a happy birthday on the day, every year."
+              : "You're reminded 1 week before, the day before, and the day of, every year.",
             duration: 4000,
           });
           return { status: 'done', kind: 'birthday' };

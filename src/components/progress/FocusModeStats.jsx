@@ -64,8 +64,7 @@ export default function FocusModeStats({ logs, tasks, userEmail, theme, cardClas
       <CardContent>
         {totalSessions === 0 ? (
           <p className={subTextClass}>
-            No completed Focus Mode sessions yet. Use Focus Mode on a task to start collecting how
-            long things actually take you.
+            Nothing timed yet. Time a task with the Timer or Focus Mode and it shows here.
           </p>
         ) : (
           <>

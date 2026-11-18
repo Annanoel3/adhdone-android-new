@@ -207,7 +207,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
                     : 'bg-blue-100 border border-blue-200'
               }`}>
                 <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                  We'll automatically include your user info and browser details to help understand the context.
+                  Your user info and browser details are included automatically, to help understand the context.
                 </p>
               </div>
 

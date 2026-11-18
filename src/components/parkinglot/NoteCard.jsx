@@ -54,7 +54,7 @@ export default function NoteCard({ note, theme, onUpdate, onDelete, onDraft }) {
         onChange={(v) => { setContent(v); onDraft?.(note.id, "content", v); }}
         onBlur={() => onUpdate(note.id, "content", content)}
         modules={quillModules}
-        placeholder="Elaborate on your idea... (select text to format it)"
+        placeholder="Say more about your idea… (select text to format it)"
         className={`rich-text-editor -mx-3 min-h-[80px] ${theme === 'dark' ? 'text-gray-100' : ''}`}
       />
     </div>

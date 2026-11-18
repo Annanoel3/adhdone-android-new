@@ -67,7 +67,7 @@ export default function PrepOffer({ task, theme, onRefreshTasks }) {
         }`}
       >
         <ClipboardList className="w-3 h-3" />
-        Anything to prep for this? I'll put it in every reminder
+        Anything to prep for this? It goes in every reminder
       </button>
       <button
         type="button"

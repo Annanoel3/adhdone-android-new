@@ -530,7 +530,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                 }`} />
               </div>
               <p className={`${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'} font-semibold`}>
-                Nothing due today yet, why don't we make a task?
+                Nothing due today. Want to add something?
               </p>
             </div>
           ) : activeTasks.map((task) => (

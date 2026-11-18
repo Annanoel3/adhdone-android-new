@@ -950,14 +950,14 @@ export default function NotesPage() {
       const r = await buyPack(me, pack);
       if (r.cancelled) return;
       if (r.pending) {
-        toast({ title: "Your payment is pending", description: "The time shows up here as soon as Google Play finishes it." });
+        toast({ title: "Your payment is pending", description: "Your minutes show up here as soon as Google Play finishes the purchase." });
         closeBuy();
         return;
       }
       await refreshUser();
       toast(r.added
         ? { title: `Added ${packLabel(pack).replace(" of recording", "")} of recording time` }
-        : { title: "Payment received", description: "Your time will show up here in a moment." });
+        : { title: "Payment received", description: "Your minutes will show up here in a moment." });
       closeBuy();
       // A recording that stopped at the limit can be finished now.
       resumeUnfinished();
@@ -973,22 +973,22 @@ export default function NotesPage() {
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
         <div className="space-y-4 pt-2">
           <h2 className="text-xl font-bold text-foreground">
-            {capOpen ? "You've used this month's free recording time" : "Get more recording time"}
+            {capOpen ? "You've used this month's free recording minutes" : "Get more recording minutes"}
           </h2>
           <p className="text-[15px] leading-relaxed text-muted-foreground">
             {capOpen
               // No "a paid version is coming" on the iPhone app (Nov 7 2026):
               // App Review asks to see any paid features, and there are none
               // there yet, so it doesn't mention any.
-              ? `You get ${FREE_MINUTES} free minutes a month, and they come back on ${nextMonthStart()}.${canBuy ? " Need more before then? You can buy extra time." : isIPhoneApp() ? "" : " A paid version with more recording time is coming."}`
-              : `You get ${FREE_MINUTES} free minutes a month. Extra time you buy is used after those, and it never expires.`}
+              ? `You get ${FREE_MINUTES} free minutes a month, and they come back on ${nextMonthStart()}.${canBuy ? " Need more before then? You can buy extra minutes." : isIPhoneApp() ? "" : " A paid version with more recording minutes is coming."}`
+              : `You get ${FREE_MINUTES} free minutes a month. Extra minutes you buy are used after those, and they never expire.`}
           </p>
           {canBuy && (
             <div className="space-y-2">
               {packs === null ? (
                 <div className="flex justify-center py-3"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
               ) : packs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Buying more time isn't available right now. Please try again later.</p>
+                <p className="text-sm text-muted-foreground">Buying more minutes isn't available right now. Please try again later.</p>
               ) : packs.map((p) => (
                 <Button key={p.id} onClick={() => buy(p)} disabled={!!buying} variant="outline" className="w-full h-12 justify-between text-base">
                   <span>{packLabel(p)}</span>
@@ -1046,7 +1046,7 @@ export default function NotesPage() {
               .slice()
               .sort((a, b) => Math.abs(startOf(a) - at) - Math.abs(startOf(b) - at))
               .slice(0, 40);
-            if (list.length === 0) return <p className="text-sm text-muted-foreground">No events found from the last two months on.</p>;
+            if (list.length === 0) return <p className="text-sm text-muted-foreground">No events from the last two months or coming up.</p>;
             return list.map((t) => (
               <button
                 key={t.id}
@@ -1252,12 +1252,12 @@ export default function NotesPage() {
           {open.status === "over_limit" && (
             <div className={card}>
               <p className={soft}>
-                This recording went past your recording time, so the notes only cover the first part. The rest
+                This recording went past your recording minutes, so the notes only cover the first part. The rest
                 is saved on your phone and can be finished once your minutes come back on {nextMonthStart()}
-                {canBuy ? ", or as soon as you get more time." : "."}
+                {canBuy ? ", or as soon as you get more minutes." : "."}
               </p>
               {canBuy && (
-                <Button onClick={() => setBuyOpen(true)} variant="outline" className="w-full mt-3">Get more time</Button>
+                <Button onClick={() => setBuyOpen(true)} variant="outline" className="w-full mt-3">Get more minutes</Button>
               )}
             </div>
           )}

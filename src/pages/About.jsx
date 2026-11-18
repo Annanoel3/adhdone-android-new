@@ -24,7 +24,7 @@ const SPICY_FEATURES = [
     icon: Brain,
     title: 'Reminders that actually think',
     description:
-      "An AI reads each task and decides how often to nudge you, how urgent it is, and how much energy it'll take. A 10-minute errand doesn't get the same treatment as 'renew your license.' Quiet hours keep it silent when you're done for the day, and the first nudge of the day is one friendly digest instead of a pile-up of notifications that freezes you in place.",
+      "An AI reads each task and decides how often to remind you, how urgent it is, and how much energy it'll take. A 10-minute errand doesn't get the same treatment as 'renew your license.' Quiet hours keep it silent when you're done for the day, and the first reminder of the day is one friendly digest instead of a pile-up of notifications that freezes you in place.",
   },
   {
     icon: Target,

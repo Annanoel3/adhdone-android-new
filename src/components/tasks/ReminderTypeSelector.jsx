@@ -224,14 +224,14 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
               <Brain className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Smart Reminders</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>The app decides when and how often to nudge you. Best for tasks with no set time.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Smart Reminders picks when and how often to remind you. Best when there's no set time.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <Timer className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Interval Reminders</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A fixed schedule (every 10 minutes, every hour…). Only when you want the same nudge over and over.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>The same reminder on a fixed schedule, like every hour. Only for when you want it over and over.</p>
               </div>
             </div>
             <div className="flex gap-2">

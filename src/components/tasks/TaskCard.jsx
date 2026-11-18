@@ -1549,7 +1549,7 @@ export default function TaskCard({
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>Pick an exact date</button></PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1621,7 +1621,7 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Reminders continue until this date, then switch to overdue reminders.
+                          You're reminded up to this date. After that, reminders treat it as overdue.
                         </p>
                       </div>
                     </PopoverContent>
@@ -1656,7 +1656,7 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Marks this task as "in progress." It shows on each day from the start date through the due date.
+                          The day you start on it. It shows on your list every day from then until it's due.
                         </p>
                         <button
                           onClick={() => handleStartDateChange(null)}
@@ -1691,7 +1691,7 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                          Marks when you started working on this task. It will appear in Today's Tasks from this date through the due date.
+                          The day you start on it. It shows on your list every day from then until it's due.
                         </p>
                       </div>
                     </PopoverContent>
@@ -1767,7 +1767,7 @@ export default function TaskCard({
                             className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                           />
                           <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Set this and the card shows a block of time — "10:00 AM – 6:00 PM".
+                            Add an end time and the card shows the whole stretch, like 10:00 AM – 6:00 PM.
                           </p>
                         </div>
                       )}
@@ -1790,7 +1790,7 @@ export default function TaskCard({
                             </button>
                           )}
                           <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                            Event shows on each day from the event date through this date.
+                            It shows on every day from its start through this date.
                           </p>
                         </div>
                       )}
@@ -1830,7 +1830,7 @@ export default function TaskCard({
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
                       <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>Pick an exact date</button></PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>

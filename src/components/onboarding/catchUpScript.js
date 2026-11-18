@@ -13,7 +13,7 @@
 // The line after the about-you question: an answer is thanked, a skip isn't.
 const afterAbout = (back) => (name, handle, about) =>
   String(about || '').trim()
-    ? `Got it. That shapes what counts as urgent and how hard the app nudges you. Back to your ${back}.`
+    ? `Got it. That shapes what counts as urgent and how often the app reminds you. Back to your ${back}.`
     : `That's ok — you can always revisit this in Settings. Back to your ${back}.`;
 
 const CATCH_UP_SCRIPT = [
@@ -27,7 +27,7 @@ const CATCH_UP_SCRIPT = [
   },
   {
     text: () =>
-      "First: what can we call you? You can change it in Settings anytime.",
+      "First: what can we call you? You can change this any time in Settings.",
     input: 'name',
   },
   {
@@ -75,7 +75,7 @@ export const FIRST_DONE_SCRIPT = [
     text: () => "First one done — nice. Two quick questions now that you've seen how this works.",
   },
   {
-    text: () => "What can we call you? You can change it in Settings anytime.",
+    text: () => "What can we call you? You can change this any time in Settings.",
     input: 'name',
   },
   {
@@ -123,7 +123,7 @@ export const ABOUT_NOW_SCRIPT = [
     text: () => "Two quick questions that make ADHDone a lot better at helping *you*.",
   },
   {
-    text: () => "What can we call you? You can change it in Settings anytime.",
+    text: () => "What can we call you? You can change this any time in Settings.",
     input: 'name',
   },
   {

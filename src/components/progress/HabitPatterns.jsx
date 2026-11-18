@@ -150,7 +150,7 @@ export default function HabitPatterns({ theme }) {
       <CardContent className="space-y-3">
         {habits.length === 0 && (
           <p className="text-sm text-gray-600">
-            No habits spotted yet. Do the same thing on a few different days and it shows up here. Time it and we learn how long it really takes you.
+            No habits spotted yet. Do the same thing on a few different days and it shows up here. Time it and ADHDone learns how long it really takes you.
           </p>
         )}
 

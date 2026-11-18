@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import LocationField from './LocationField';
 import { trackFire } from '@/lib/appTrack';
 
-// "Add the address and I'll time when to leave", right on an event's collapsed
+// "Add the address and ADHDone times when to leave", right on an event's collapsed
 // card. An event with an address gets "Time to leave" at the measured drive
 // (from home, work, or the event before it) instead of the blanket hour
 // before; one without an address, often a phone-calendar import, can't. Anna,
@@ -97,7 +97,7 @@ export default function AddAddressOffer({ task, theme, onRefreshTasks }) {
             can't just say "from home". Work is only named on an account
             that has a work address. */}
         <p className={`mt-1.5 text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-          I time the drive from home{hasWork ? ', or from work or the event right before it' : ', or from the event right before it'} if that's where you'll be.
+          ADHDone times the drive from home{hasWork ? ', or from work or the event right before it' : ', or from the event right before it'} if that's where you'll be.
         </p>
       </div>
     );
@@ -115,7 +115,7 @@ export default function AddAddressOffer({ task, theme, onRefreshTasks }) {
         }`}
       >
         <MapPin className="w-3 h-3" />
-        Add the address and I'll time when to leave
+        Add the address and ADHDone times when to leave
       </button>
       <button
         type="button"
