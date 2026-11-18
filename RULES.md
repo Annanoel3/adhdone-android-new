@@ -394,7 +394,7 @@ Finishing from there, all seen working that night: open the draft -> Add from li
 new version -> Add to release -> Next -> Save -> Go to overview -> Submit 1 change for review ->
 Send changes for review. The only warning was the usual one about debug symbols for native code.
 Rollout was left at Play's 100% and managed publishing was off, so it goes live when Google
-approves. `NEWEST_BUILD` in `QuickCapturePrompt.jsx` is bumped only when Anna says it is approved.
+approves. `NEWEST_BUILD` in `QuickCapturePrompt.jsx` is bumped only when Anna says it is approved. Nov 18 2026: set to 49. Build 49 had been on Google Play at full release since Nov 17 (seen in the Console) and Play had updated Anna's own phone to it; Anna asked "do we have an update popup for those not on 49?". Until then a phone on 48 got no card at all (phones below 48 still did, and its Update button already led to 49).
 
 ## 7. HOW TO DIAGNOSE (the meta-rule)
 
