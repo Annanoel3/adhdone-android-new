@@ -5,4 +5,6 @@
 - `store-slide-1-screen.jpg`, `store-slide-4-screen-plain.jpg`: the two screens used in the Play Store pictures 1 and 4.
 - `harness/`: how the pictures are made, and how the app is built to check a change to the phone code. From the app root in the Base44 sandbox: `python3 docs/alarm-screen/harness/setup.py` (unpacks a JDK and the Android SDK pieces under `/tmp/ab` and makes a build COPY of `android/` there; never build inside `/app`), then `/tmp/ab/build.sh :app:assembleDebug :app:lintVitalRelease :app:minifyReleaseWithR8 :app:testDebugUnitTest --tests '*AlarmShotTest*'`. Pictures land in `/tmp/ab/shots`. Change the phone code in the copy, build, look at the picture, and only then copy the changed files into `android/`.
 
+- Slips (Nov 18 2026): `AlarmBehaviorTest` also covers a tap the instant the alarm takes over a phone in use (not counted for 0.8 seconds; the Later hold and the banner's Done do not wait) and the reminder showing itself as a silent banner after Home. 31 tests.
+
 Look at the picture before describing the screen to anyone.
