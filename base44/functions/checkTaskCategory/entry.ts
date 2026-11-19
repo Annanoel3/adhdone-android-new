@@ -37,7 +37,9 @@ import { lean } from '../../shared/aiCost.ts';
 //
 // Checking it: an admin can send { texts: [...], today?, about_me? } to see how
 // several captures would be sorted, without saving anything, optionally with
-// { model, effort } to try another model.
+// { model, effort } to try another model, and { draft_note } to try a new
+// paragraph of the prompt before it is written in (it goes just above "When
+// it's truly unclear"; only this admin check reads it).
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -69,7 +71,7 @@ const SYSTEM =
   "with it, and who it's for. There is no list of magic words; judge it like a person would. " +
   "Respond with valid JSON only, filling every field.";
 
-const buildPrompt = (text: string, today: string, aboutMe?: string) => `Someone just captured this in ADHDone (typed, spoken, or shared from another app):
+const buildPrompt = (text: string, today: string, aboutMe?: string, note = "") => `Someone just captured this in ADHDone (typed, spoken, or shared from another app):
 
 """
 ${text}
@@ -116,7 +118,7 @@ it names something they deal with, attend or pay ("dentist", "oil change", "rent
 inspection"), it's a task. If it names a subject, a thing to make, or something to think about or
 look into ("collage", "podcast", "Greece", "collage outpatient"), it's an idea: a couple of nouns
 jotted down is a thought being kept, not a chore being assigned.
-
+${note ? `\n${note}\n` : ""}
 When it's truly unclear, choose "task": a to-do filed away as an idea can be missed, while a task
 they didn't need is easy to delete.
 
@@ -254,10 +256,11 @@ Deno.serve(async (req) => {
       if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
       const model = TRY_MODELS.includes(body?.model) ? body.model : MODEL;
       const effort = TRY_EFFORTS.includes(body?.effort) ? body.effort : EFFORT;
+      const draftNote = typeof body?.draft_note === "string" ? body.draft_note.trim().slice(0, 2000) : "";
       const results = await Promise.all(body.texts.slice(0, 40).map(async (t: any) => {
         const text = String(t || "");
         try {
-          return { text, ...(await classify(openai, buildPrompt(text, today, aboutMe), { model, effort })) };
+          return { text, ...(await classify(openai, buildPrompt(text, today, aboutMe, draftNote), { model, effort })) };
         } catch (e) {
           return { text, error: String(e?.message || e) };
         }
