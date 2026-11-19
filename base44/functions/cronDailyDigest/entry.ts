@@ -1,3 +1,4 @@
+// Nov 18 2026 (night): the evening message for someone who did not use the app today goes ONLY the first evening they skip, i.e. when they actually used the app the day before (Anna: "Come backs should be much more limited", then her pick "Cut to 2": one evening message the first night they skip, one come-back). It went every night for the 7 nights after their last OPEN: 41 of them to 10 real people from Oct 30 to Nov 18, runs of 5 and 6 nights; by nights 4 to 7, 1 of 11 was followed by an open. "How did today go?" for people who used the app today is unchanged.
 // Nov 13 2026 (night): "How did today go?" may go out from 2 hours before quiet hours, for people who used the app that day (it was the last hour); everyone else keeps the last hour. { "preview": true } (owner) shows who would get the evening push, sending nothing.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Nov 11 2026: the morning summary is gone (Anna: "ok get rid of it"). This function now sends only the evening check-in.
@@ -301,6 +302,19 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date, look:
     // Earlier than the last hour only "How did today go?" goes out (see
     // WIN_ASK_LEAD_MIN). Not claimed, so the later runs look again.
     if (minutesBefore > OTHERS_LEAD_MIN && !usedToday) { skip('has not used the app yet today: theirs waits for the last hour'); continue; }
+    // ONE EVENING MESSAGE PER TIME AWAY (Anna, Nov 18 2026: "Sounds like our
+    // come back stuff is annoying. Come backs should be much more limited",
+    // then her pick: one evening message the first night they skip, one
+    // come-back, "nothing more until they actually use the app again, not just
+    // open it"). Someone who did not use the app today gets tonight's line only
+    // when they actually used it the day before: that makes tonight the first
+    // evening they skipped. It used to go every night for a week after their
+    // last open (a 6-second open included). When the check can't run it counts
+    // as not used (no push).
+    if (!usedToday) {
+      const usedYesterday = await usedAppBetween(base44, email, new Date(sinceMs - DAY).toISOString(), sinceISO, false);
+      if (!usedYesterday) { skip('did not use the app today or yesterday: the one evening message is for the first night they skip'); continue; }
+    }
 
     const gate: any = replay ? { allowed: true } : await ledgerCheck(base44, { email, kind: 'motivation' });
     if (!gate.allowed) { skip(`held for now: ${gate.reason || 'another push is close'}`); continue; }
