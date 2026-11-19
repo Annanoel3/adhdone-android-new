@@ -273,11 +273,18 @@ export default function WidgetTaskSync({ user }) {
   // A capture made outside the app (share sheet, pinned notification, widget)
   // landed while the app is open: refresh the task list, the widget and the
   // phone's alarms right away instead of waiting for the next screen wake.
+  // It may have been an idea or a tracker reading, not a task (the phone only
+  // says how many things were made), so the Parking Lot is told as well: an
+  // open Parking Lot page reloads its list, and the menu's red dot looks now
+  // (useNewBadges). Nov 18 2026: before this only the task list was told, and
+  // a shared idea showed no dot until the next once-a-minute look.
   useEffect(() => {
     let handle = null;
     let cancelled = false;
     const onLanded = () => {
       window.dispatchEvent(new CustomEvent('tasks-changed'));
+      window.dispatchEvent(new Event('parking-lot-changed'));
+      window.dispatchEvent(new Event('capture-landed'));
       // Active tasks only, every page of them — the widget shows active tasks
       // and native drops any alarm missing from the set.
       listActiveTasks()
