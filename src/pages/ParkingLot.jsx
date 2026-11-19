@@ -469,11 +469,19 @@ export default function ParkingLot() {
   
   const queryClient = useQueryClient();
 
-  // An idea that couldn't become a task comes back into the list.
+  // An idea that couldn't become a task comes back into the list. So does
+  // anything shared into the app from outside it while this page was open:
+  // the list reloads when the phone says a capture landed (WidgetTaskSync
+  // sends parking-lot-changed) and whenever the app comes back on screen.
   useEffect(() => {
     const refresh = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    const shown = () => { if (document.visibilityState === 'visible') refresh(); };
     window.addEventListener('parking-lot-changed', refresh);
-    return () => window.removeEventListener('parking-lot-changed', refresh);
+    document.addEventListener('visibilitychange', shown);
+    return () => {
+      window.removeEventListener('parking-lot-changed', refresh);
+      document.removeEventListener('visibilitychange', shown);
+    };
   }, [queryClient]);
 
   useEffect(() => {
