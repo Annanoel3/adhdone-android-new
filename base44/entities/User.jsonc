@@ -302,11 +302,11 @@
     "comeback_from": {
       "type": "string",
       "format": "date-time",
-      "description": "Come-back pushes (cronBackBurnerCheckIn): the last-open time the current run of them counts from. When last_active_at moves on, the count starts over."
+      "description": "Come-back pushes (cronBackBurnerCheckIn): the last-open time the current run of them counts from. When last_active_at moves on, the count starts over, but a new come-back only goes out once they have actually used the app since comeback_last_at (shared/usedApp.ts), not just opened it."
     },
     "comeback_step": {
       "type": "integer",
-      "description": "How many come-back pushes went out since comeback_from: 1 = day 3, 2 = day 7, 3 = day 14 (the last)."
+      "description": "How many come-back pushes went out since comeback_from. There is ONE per time away since Nov 18 2026 (day 3; day 2 for a new account's first), so 1 = done. It is also set to 1 when none is owed: they only opened the app since their last come-back and never used it. Until Nov 18 2026: 1 = day 3, 2 = day 7, 3 = day 14."
     },
     "comeback_last_at": {
       "type": "string",
