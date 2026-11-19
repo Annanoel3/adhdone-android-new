@@ -19,10 +19,23 @@ import { base44 } from "@/api/base44Client";
 // is made and only the tracker's tracker_entries grow; those counted for
 // nothing before.
 //
+// Something shared into the app from outside it (Anna, Nov 18 2026: "When
+// someone adds something that belongs in the parking lot from sharing a
+// picture or text ... make sure the red dot appears on parking lot in the
+// menu"). The phone sends a share straight to the server and the app is never
+// told an idea was made, so the dot used to wait for the once-a-minute look,
+// and for longer than that when the app had been off screen. Now it looks the
+// moment the phone says a capture landed (WidgetTaskSync's "capture-landed":
+// the server has finished sorting it by then, so it counts at once), whenever
+// the app comes back on screen, and once more when an idea too new to count
+// has settled.
+//
 // While a page is open, and when it's left, it counts as seen up to that
 // moment: an idea typed on the Parking Lot, or notes that finish while Record
 // Notes is open, never light that page's own dot.
 const KEYS = { ParkingLot: "badge_seen_parkinglot", Notes: "badge_seen_notes" };
+// How long a brand-new idea waits before it counts (see check).
+const SETTLE_MS = 20000;
 
 function seenAt(page) {
   let v = localStorage.getItem(KEYS[page]);
@@ -44,20 +57,33 @@ export default function useNewBadges(currentPageName, enabled) {
   const [dots, setDots] = useState({ ParkingLot: false, Notes: false });
   const pageRef = useRef(currentPageName);
   pageRef.current = currentPageName;
+  // The newest look wins: an older one that answers late is dropped.
+  const lookRef = useRef(0);
+  // The one extra look booked for when a brand-new idea has settled.
+  const againRef = useRef(null);
+  // When a capture from outside the app last landed. The server had finished
+  // sorting it by then, so nothing made before that moment is still settling.
+  const landedRef = useRef(0);
 
   const check = useCallback(async () => {
     if (!enabled) return;
+    const look = ++lookRef.current;
     markSeen(pageRef.current);
     // Only ideas that stay in the Parking Lot. Every capture is saved here
     // first and turned into tasks a few seconds later (converted_to_task), so
     // counting those lit the dot with nothing new to see (Anna, Oct 31 2026).
     // The last 20 seconds wait for the next check, so a capture still being
     // sorted doesn't flash it either.
-    const settled = new Date(Date.now() - 20000).toISOString();
+    const settled = new Date(Math.max(Date.now() - SETTLE_MS, landedRef.current)).toISOString();
     const lotSeen = seenAt("ParkingLot");
-    const [ideas, notes, trackers] = await Promise.all([
+    const [ideas, settling, notes, trackers] = await Promise.all([
       base44.entities.ParkingLotIdea.count({
         created_date: { $gt: lotSeen, $lt: settled },
+        converted_to_task: false,
+      }).catch(() => 0),
+      // Too new to count yet: looked at again below, once they have settled.
+      base44.entities.ParkingLotIdea.count({
+        created_date: { $gte: lotSeen > settled ? lotSeen : settled },
         converted_to_task: false,
       }).catch(() => 0),
       base44.entities.EnergyLog.count({
@@ -69,6 +95,7 @@ export default function useNewBadges(currentPageName, enabled) {
         { tracker: true, updated_date: { $gt: lotSeen } }, "-updated_date", 20
       ).catch(() => []),
     ]);
+    if (look !== lookRef.current) return;
     const lotSeenMs = Date.parse(lotSeen);
     const newEntry = (trackers || []).some((t) =>
       (t?.tracker_entries || []).some((e) => entryMs(e?.at) > lotSeenMs));
@@ -78,6 +105,8 @@ export default function useNewBadges(currentPageName, enabled) {
       ParkingLot: (ideas > 0 || newEntry) && here !== "ParkingLot",
       Notes: notes > 0 && here !== "Notes",
     });
+    clearTimeout(againRef.current);
+    againRef.current = settling > 0 ? setTimeout(check, SETTLE_MS + 2000) : null;
   }, [enabled]);
 
   useEffect(() => {
@@ -92,16 +121,25 @@ export default function useNewBadges(currentPageName, enabled) {
 
   useEffect(() => {
     const later = () => setTimeout(check, 8000);
-    const settle = () => setTimeout(check, 25000); // past the 20-second wait above
+    const settle = () => setTimeout(check, SETTLE_MS + 5000); // past the wait above
+    // A capture from outside the app just landed, already sorted by the server.
+    const landed = () => { landedRef.current = Date.now(); check(); };
+    // Back on screen: whatever was shared while it was away shows now.
+    const shown = () => { if (document.visibilityState === "visible") check(); };
     window.addEventListener("parking-lot-changed", check);
     window.addEventListener("parking-lot-changed", settle);
+    window.addEventListener("capture-landed", landed);
     window.addEventListener("task-created", later);
+    document.addEventListener("visibilitychange", shown);
     const every = setInterval(check, 60000);
     return () => {
       window.removeEventListener("parking-lot-changed", check);
       window.removeEventListener("parking-lot-changed", settle);
+      window.removeEventListener("capture-landed", landed);
       window.removeEventListener("task-created", later);
+      document.removeEventListener("visibilitychange", shown);
       clearInterval(every);
+      clearTimeout(againRef.current);
     };
   }, [check]);
 
