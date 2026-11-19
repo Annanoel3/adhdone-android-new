@@ -1,3 +1,4 @@
+// Nov 18 2026 (evening): the planner is told how a person's reminders reach them. On regular notifications nothing is ever reported back, and every reminder read "sent; they have not opened the app since", which the planner took for nobody looking and held back (a daily task due that day got nothing by 7 PM; Anna: "everyone with normal notifications has been having a REALLY DUMB smart reminder experience"). New fact line HOW REMINDERS REACH THEM for anyone on regular notifications (onPlainNotifications), and each such reminder reads "sent as a regular notification". Nothing changes for someone on alarms. The brief is unchanged. No new AI call.
 // Nov 16 2026 (late): a nudge that rings as an alarm about a task that IS sending someone a text carries the words for the alarm's button that opens it ("Send the text" / "Write the text", shared/alarmScreen.ts). The phone's new alarm screen (build 49: a big round Done, a Later bar that has to be held; Anna: "Your design is good too") only shows that button when the alarm has words for it, and a text task's Send button lives on its page. Nothing about what Smart Reminders plans or sends changes; no plan is redone.
 // Nov 16 2026 (7:38 PM): brief r50 is LIVE, pacing (shared/reminderBrief.ts, Anna's doc updated to match). On r49's first evening the planner sent her one alarm every 30 minutes (5:29, 5:59, 6:29 PM), each put off with Later inside a minute. Anna: "users should not get too much or too little. So you should be figuring it out since you already have my direction". Three additions to the brief, no code change here: one thing after another put off in a short stretch is about the moment, so leave them alone for a good while and come back with the one thing that matters most; when several things wait at once, don't hand each one a turn; a time the planner gave is a time to look again, not a booking. Tried first as the candidate on owner replays of her Monday (after two Laters: 66 quiet minutes, then one thing; r49 came back in 40; a morning with nothing put off still got a reminder at once). The candidate file is back to its one line.
 // Nov 16 2026 (late): re-saved so the bundled shared/reminderBriefCandidate.ts (the r50 candidate: room after one thing after another is put off) is picked up for owner replays (third wording). Nothing live changes.
@@ -1280,6 +1281,7 @@ Deno.serve(async (req) => {
             return !Number.isFinite(seenMs) || dayOf(seenMs) <= firstDay;
           })(),
           sentSinceSeen,
+          plainNotifications: onPlainNotifications(user),
           oneADay,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
@@ -2118,6 +2120,9 @@ interface PlanContext {
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
+  // Their reminders arrive as regular notifications, which report nothing
+  // back (onPlainNotifications): the planner is told so (HOW REMINDERS REACH THEM).
+  plainNotifications?: boolean;
   // A look taken after at least one of today's nudges has already gone out
   // (a second look, an "are they landing?" look, a re-plan after an edit):
   // the planner is told so, and judges any addition against the whole day.
@@ -2817,6 +2822,22 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     });
 
     const seenAfter = (at: number) => Number.isFinite(lastSeenMs) && lastSeenMs > at;
+    // HOW REMINDERS REACH THEM (Anna, Nov 18 2026: "everyone with normal
+    // notifications has been having a REALLY DUMB smart reminder experience").
+    // A regular notification reports nothing back, so for someone on them
+    // every line here read "sent; they have not opened the app since", and the
+    // planner took that for nobody looking: it held a daily task due that day
+    // "rather than stack unanswered reminders" (the 7 PM "due today, never
+    // reminded" alert of Nov 18). In three days Anna's phone, on alarms, had
+    // sent back 44 answers and every other phone together 1. So the planner
+    // is told how their reminders arrive, and each one that went as a regular
+    // notification says so. One about a task they set to ring as an alarm
+    // still reports its answer and is left as it was.
+    const plain = ctx.plainNotifications === true;
+    const ringsById = new Map<string, boolean>();
+    for (const x of [...tasks, ...(ctx.fixed || [])]) if (x?.id) ringsById.set(String(x.id), x.alert_style === 'alarm');
+    const sentWord = (p: { taskId?: string; answer?: any; answers?: any[] }) =>
+      plain && !p.answer && !(p.answers && p.answers.length) && !(p.taskId && ringsById.get(String(p.taskId))) ? 'sent as a regular notification' : 'sent';
     // How fast an answer came (Anna, Nov 16 2026: "I keep pressing later
     // without even reading the alarm", and "smart reminders seeing the amount
     // of time it takes for someone to swipe away is a great idea"). Said only
@@ -2853,7 +2874,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         : a.choice === 'closed' ? `they saw it and got out of its alarm with ${a.how === 'back' ? 'Back' : 'Home'}${when}`
         : a.choice === 'ignored' ? 'its alarm rang out with no answer'
         : '';
-      return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
+      return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — ${sentWord(p)}; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
     });
 
     // PLANNER V2, 1, 2 and 5: every answer on the reminder it answered, in
@@ -2876,7 +2897,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         const fast = i === 0 ? answeredIn(p.at, a.at) : '';
         return didV2(a, fast ? ` ${fast}` : `, ${clock(a.at)}`);
       }).filter(Boolean).join('; then ');
-      return `- ${clock(p.at)} ${p.title} — sent; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
+      return `- ${clock(p.at)} ${p.title} — ${sentWord(p)}; ${did ? `${did}; ` : ''}${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
     };
     // Not theirs and not Smart Reminders': the app's own messages.
     const OTHER_KINDS = new Set(['', 'general', 'motivation', 'daily_digest', 'overlap', 'duplicate', 'chat']);
@@ -2889,6 +2910,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
+    if (plain) out.push('HOW REMINDERS REACH THEM: as regular notifications on their phone, not alarms. A regular notification sends nothing back to the app. It can be read on the lock screen, acted on or swiped away, and no answer is recorded either way. So for this person a reminder with no answer is what every reminder looks like, read or not: it does not show that they are not seeing them. Reading one never takes opening the app, so "they have not opened the app since" does not show it either. What you can see is a task being checked off and the app being opened.');
     if (ctx.dayStart) out.push(ctx.dayStart);
     if (ctx.oneADay) out.push("ONE A DAY: the app asked whether your reminders were helping and they said no, so they get ONE from you a day now, in all, and today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it. Nothing more from you reaches them today after it.");
     // EARLY DAYS takes over once their first day is over: NEW HERE goes by
