@@ -1,3 +1,4 @@
+// Nov 18 2026: a capture from outside the app (share sheet, pinned notification, widget) leaves a CaptureTrace row saying where it went ("outsideCapture": task or idea, how many, logged to a tracker or not; never the words). Anna: "When someone adds something that belongs in the parking lot from sharing a picture or text, make sure it ends up in the right place". Nothing kept said where a share had gone, so one that went wrong couldn't be traced.
 // Re-saved Nov 15 2026 (evening) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: a shared or quick-captured task that IS making a phone call is marked for the app's call box (Task.calls_someone, call_person). No popup for calls. Nothing else changes here.
 // Re-saved Nov 15 2026 (afternoon) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: a shared or quick-captured task that IS sending someone a text is saved as one (Task.texts_someone, text_person) and marked text_ask_pending, so the next time the app is open one popup offers to type the text now (Anna: "if its added from outside the app, it could have a popup next time they open"). Nothing else about a capture changes.
 // Re-saved Nov 15 2026 so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: a shared or quick-captured EVENT keeps the end the person gave ("from 2 to 5": Task.end_time, so its card reads "2:00 PM – 5:00 PM"), and one with no end gets the parser's estimate of how long that kind of event usually runs (Task.event_guess_minutes; never shown, read only by shared/leaveOrigin.ts). Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours".
@@ -129,6 +130,10 @@ const byIds = (ids: string[]) => (ids.length > 1 ? { capture_id: { $in: ids } } 
 // here instead, so the two never save the same words at once; if they ever
 // do, the earliest saved row wins (lostCaptureRace over sameCaptureIds).
 const GUARD_RE = /^(.+)~g(?:~([0-9a-f]{8}))?$/;
+// Trace rows the server writes itself (the safety copy's own marks, and the
+// Nov 18 2026 rows that say where an outside capture went and what a picture
+// read as). They say nothing about whether the person's app is alive.
+const SERVER_STEPS = new Set(["captureGuard", "captureGuardTook", "outsideCapture", "imageRead"]);
 const GUARD_TAKEOVER_MS = 60 * 1000;
 // A trace from their app this recently: it is alive, and it will ask here
 // itself. Past the cap the copy is made anyway.
@@ -238,6 +243,21 @@ Deno.serve(async (req) => {
     }
     const sameIds = capture_id ? sameCaptureIds(capture_id) : [];
 
+    // Where a capture from outside the app ended up (share sheet, pinned
+    // notification, widget: every id that isn't the app's own "pending-…"),
+    // kept as a row so a share that went to the wrong place can be traced.
+    // The kind, the count and the sorter's one-line reason; never the words.
+    const noteOutside = async (detail: Record<string, unknown>) => {
+      if (capture_id && APP_CAPTURE_RE.test(capture_id)) return;
+      try {
+        await base44.asServiceRole.entities.CaptureTrace.create({
+          step: "outsideCapture",
+          detail: JSON.stringify({ id: capture_id || null, chars: raw.length, ...detail }).slice(0, 4000),
+          user_email: user.email,
+        });
+      } catch (_) { /* a trace is never worth failing a capture for */ }
+    };
+
     // Idempotency: native retries after a network failure, and a lost response
     // would otherwise double-create. The same capture_id returns what the first
     // attempt already made instead of parsing and creating all over again.
@@ -286,7 +306,7 @@ Deno.serve(async (req) => {
         return notYet();
       }
       const age = now - rowMs(mark);
-      const appRow = recent.find((r: any) => r.step !== "captureGuard" && r.step !== "captureGuardTook");
+      const appRow = recent.find((r: any) => !SERVER_STEPS.has(r.step));
       const appQuietFor = appRow ? now - rowMs(appRow) : Infinity;
       if (!(age >= GUARD_TAKEOVER_MS) || (appQuietFor < GUARD_APP_ALIVE_MS && age < GUARD_HARD_CAP_MS)) return notYet();
       console.log(`[captureText] safety copy ${guardBase}: the app never finished it (${Math.round(age / 1000)} s), making it here`);
@@ -329,6 +349,7 @@ Deno.serve(async (req) => {
       // look folds it in (Anna, Oct 14 2026). See foldIdeaIntoTrackers.
       const fold = !feedback && ideas.length === 1 ? await foldIdeaIntoTrackers(base44, ideas[0]) : null;
       console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars${fold?.folded ? " — logged to a tracker" : ""}`);
+      await noteOutside({ went: "parking lot", sorted: category.category, count: ideas.length, on_tracker: !!fold?.folded, why: String(category.why || "").slice(0, 200) });
       return Response.json({
         success: true,
         duplicate: false,
@@ -352,6 +373,7 @@ Deno.serve(async (req) => {
             return duplicateResponse(winner);
           }
         }
+        await noteOutside({ went: "tasks", sorted: "birthday", count: 1 });
         return Response.json({
           success: true,
           duplicate: false,
@@ -471,6 +493,15 @@ Deno.serve(async (req) => {
       created.push({ id: task.id, title: task.title, reminders: reminderResult });
     }
 
+    await noteOutside({
+      went: created.length && parked.length ? "tasks and parking lot" : parked.length ? "parking lot" : created.length ? "tasks" : "nowhere",
+      sorted: category.category,
+      count: created.length + parked.length,
+      tasks: created.length,
+      ideas: parked.length,
+      pieces: sorted.pieces.map((p) => p.kind),
+      why: String(category.why || "").slice(0, 200),
+    });
     if (!created.length && parked.length) {
       console.log(`[captureText] ${parked.length} parking lot idea(s) from ${raw.length} chars`);
       return Response.json({ success: true, duplicate: false, kind: "idea", count: parked.length, tasks: parked, ideas: parked, sorted });
