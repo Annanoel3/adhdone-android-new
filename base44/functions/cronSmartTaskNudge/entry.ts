@@ -1,3 +1,4 @@
+// Nov 19 2026: Anna's put-off rule (a task put off 3 or more times stops getting the same reminder) is measured against the last few reminders, not the whole week, so a task can't run out of times of day and go silent (her laundry did: nothing after Tue Nov 17 10:29 AM). One fact line; the brief is unchanged, no version bump.
 // Nov 18 2026 (evening): the planner is told how a person's reminders reach them. On regular notifications nothing is ever reported back, and every reminder read "sent; they have not opened the app since", which the planner took for nobody looking and held back (a daily task due that day got nothing by 7 PM; Anna: "everyone with normal notifications has been having a REALLY DUMB smart reminder experience"). New fact line HOW REMINDERS REACH THEM for anyone on regular notifications (onPlainNotifications), and each such reminder reads "sent as a regular notification". How to read the silence (Anna, same evening: "it should assume the user sees every notification and is just pressing later until it gets done"): the line says to read each one the way Later on an alarm is read, seen and put off, coming back until the task is checked off. Nothing changes for someone on alarms. The brief is unchanged. No new AI call.
 // Nov 16 2026 (late): a nudge that rings as an alarm about a task that IS sending someone a text carries the words for the alarm's button that opens it ("Send the text" / "Write the text", shared/alarmScreen.ts). The phone's new alarm screen (build 49: a big round Done, a Later bar that has to be held; Anna: "Your design is good too") only shows that button when the alarm has words for it, and a text task's Send button lives on its page. Nothing about what Smart Reminders plans or sends changes; no plan is redone.
 // Nov 16 2026 (7:38 PM): brief r50 is LIVE, pacing (shared/reminderBrief.ts, Anna's doc updated to match). On r49's first evening the planner sent her one alarm every 30 minutes (5:29, 5:59, 6:29 PM), each put off with Later inside a minute. Anna: "users should not get too much or too little. So you should be figuring it out since you already have my direction". Three additions to the brief, no code change here: one thing after another put off in a short stretch is about the moment, so leave them alone for a good while and come back with the one thing that matters most; when several things wait at once, don't hand each one a turn; a time the planner gave is a time to look again, not a booking. Tried first as the candidate on owner replays of her Monday (after two Laters: 66 quiet minutes, then one thing; r49 came back in 40; a morning with nothing put off still got a reminder at once). The candidate file is back to its one line.
@@ -2779,8 +2780,18 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       }
       // Anna's rule (see pastNudgesFor): put off 3 or more times, it stops
       // getting the same notifications. A time they named themselves stays.
+      // Nov 19 2026: the line said nothing sent may repeat "the words, the
+      // angle or the time of day of what it already got", measured against
+      // the whole week listed above. A task that kept being put off ran out
+      // of times of day and went silent: Anna's laundry, put off with Later
+      // on 6 days at 6 different times, got nothing after Tue Nov 17 10:29 AM
+      // while the planner's notes kept asking for "a different approach"
+      // ("I totally stopped getting reminders about laundry. Not good."). It
+      // is now measured against the last few (words, angle) and the last two
+      // (time of day), and says outright that it is never a reason to leave
+      // the task out.
       const putOff = (t.snooze_count || 0) + (t.dismissed_count || 0) + (t.ignored_count || 0) + (t.later_count || 0) + (t.closed_count || 0);
-      if (putOff >= 3) parts.push(`put off ${putOff} times in all, so nothing you send about it repeats the words, the angle or the time of day of what it already got${past.length ? ' (listed above)' : ''}${hhmmLabel(t.anchor_time) ? ', except the time they named' : ''}`);
+      if (putOff >= 3) parts.push(`put off ${putOff} times in all, so it doesn't get the same reminder again: what you send changes the words and the angle from the last few it got${past.length ? ' (listed above)' : ''}, and goes out at a different time of day than its last two${hhmmLabel(t.anchor_time) ? ', except the time they named' : ''}. That is about not repeating yourself. It is never by itself a reason to leave the task out, and a time of day it had earlier in the week is open again`);
       const breakMs = utcMs(t.later_until);
       // PLANNER V2: a snooze is followed by the same kind of break (snoozeBreak
       // in cancelTaskNotifications), and the line called that a Later too.
