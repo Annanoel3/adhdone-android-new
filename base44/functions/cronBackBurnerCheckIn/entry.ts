@@ -1,3 +1,4 @@
+// Nov 18 2026 (night): come-backs cut to ONE per time away (Anna: "our come back stuff is annoying. Come backs should be much more limited", then "Cut to 2": one evening message the first night they skip, one come-back). Day 7 and day 14 ("Last one from us, promise") are gone, for an empty list and for a list paused after a week away alike. A new one only once they have actually used the app since the last (shared/usedApp.ts), not just opened it. For someone with things still on their list the come-back names their most important open task. What the numbers said, Oct 30 to Nov 18, real users: 22 come-backs to 10 people, 2 opens, 0 tasks added; one open was 6 seconds, then the app was removed.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).
@@ -23,6 +24,7 @@ import { lean } from '../../shared/aiCost.ts';
 import { isInQuietHours, resolveQuietHours, userTimeZone, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
+import { usedAppBetween } from '../../shared/usedApp.ts';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // Sent during the afternoon/early evening — a "want to pick this back up?"
@@ -68,9 +70,20 @@ const COMEBACK_STEPS = [
       { title: "Anything you're trying to remember?", body: 'Tell ADHDone and stop carrying it in your head.' },
     ],
   },
-  { day: 7, lines: [{ title: 'No pressure, just a door left open', body: "Say it or type it when you're ready. We'll handle the reminders." }] },
-  { day: 14, lines: [{ title: 'Last one from us, promise', body: "Whenever something pops into your head, ADHDone's ready to hold onto it." }] },
 ];
+// ONE PER TIME AWAY (Anna, Nov 18 2026: "Sounds like our come back stuff is
+// annoying. Come backs should be much more limited. And more effective if
+// possible.", then her pick: "Cut to 2", one evening message the first night
+// they skip (cronDailyDigest) and one come-back). The day-7 and day-14 pushes
+// above are gone ("No pressure, just a door left open", "Last one from us,
+// promise"), here and for a list paused after a week away. From Oct 30 to Nov
+// 18, 22 come-backs went to 10 real people: 2 were followed by an open, none by
+// a task added, and one of the two opens was 6 seconds long, 10 hours after
+// "Last one from us, promise", before the app was removed. Someone who drifted
+// away got up to 10 pushes in two weeks with the nightly evening messages.
+// And a new come-back only once they have ACTUALLY USED the app since the last
+// one (shared/usedApp.ts), not just opened it: that 6-second open would have
+// started the whole count again.
 
 // COME BACK WITH THINGS ON THE LIST (Anna, Nov 9 2026: "sounds goood" to:
 // once Smart Reminders pauses someone after a week away, start the come-back
@@ -82,11 +95,30 @@ const COMEBACK_STEPS = [
 // steps and spacing as COMEBACK_STEPS, counted from the pause; one line per
 // step; a tap opens their list. Never on a day their Back Burner check-in
 // went out. Her own accounts and family are left out.
-const LIST_COMEBACK_LINES = [
-  { title: 'Your list is still here', body: "Open ADHDone whenever you're ready and your reminders pick right back up." },
-  { title: 'No pressure, just a door left open', body: "Everything you saved is still on your list. Open ADHDone and we'll take it from there." },
-  { title: 'Last one from us, promise', body: 'Your list will be here if you ever want it. Open ADHDone and your reminders start again.' },
-];
+// Nov 18 2026: one of these, not three (ONE PER TIME AWAY above), and it names
+// their own most important open task (Anna: "Yes, name their task") instead of
+// "Your list is still here", which stays for a list with nothing to name (only
+// events, or everything on the Back Burner).
+const LIST_COMEBACK_LINE = { title: 'Your list is still here', body: "Open ADHDone whenever you're ready and your reminders pick right back up." };
+const URGENCY_RANK: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
+// The open task a come-back names: a task of theirs (not an event, a birthday,
+// a step or one on the Back Burner), the highest priority first, then the
+// soonest due, then the oldest.
+function topOpenTask(tasks: any[]): any | null {
+  const rank = (t: any) => URGENCY_RANK[String(t?.urgency || 'medium')] ?? 2;
+  const due = (t: any) => { const n = Date.parse(String(t?.due_date || '')); return Number.isFinite(n) ? n : Infinity; };
+  const made = (t: any) => { const n = Date.parse(String(t?.created_date || '')); return Number.isFinite(n) ? n : Infinity; };
+  const pool = tasks.filter((t) => t && t.status === 'active' && !t.silenced && !t.parent_task_id
+    && t.classification !== 'event' && t.classification !== 'birthday' && !t.birthday_person && String(t.title || '').trim());
+  pool.sort((a, b) => rank(a) - rank(b) || due(a) - due(b) || made(a) - made(b));
+  return pool[0] || null;
+}
+function listComebackLine(task: any | null): { title: string; body: string } {
+  const full = String(task?.title || '').trim();
+  if (!full) return LIST_COMEBACK_LINE;
+  const short = full.length > 30 ? `${full.slice(0, 27)}...` : full;
+  return { title: `Still on your list: ${short}`, body: LIST_COMEBACK_LINE.body };
+}
 const NOT_REAL = new Set([
   'annanoelwenballew@gmail.com', 'annanoelbusinessemail@gmail.com', 's2kap2chick@gmail.com',
   'mediocreatbestdev@outlook.com', 'annanoelwenballew@outlook.com',
@@ -203,11 +235,15 @@ Deno.serve(async (req) => {
       const isBirthday = (t: any) => t?.classification === 'birthday' || !!t?.birthday_person;
       const openFor = new Set<string>();
       const birthdaysOnly = new Set<string>();
+      // Their own open tasks, for the task a list come-back names (topOpenTask).
+      const ownOpen: Record<string, any[]> = {};
       for (const t of allTasks) {
         if (t?.status !== 'active') continue;
         const who = [t.created_by, t.notification_recipient_email].filter(Boolean).map((x: any) => String(x).toLowerCase());
         if (isBirthday(t)) { for (const w of who) birthdaysOnly.add(w); continue; }
         for (const w of who) openFor.add(w);
+        const owner = String(t.created_by || '').toLowerCase();
+        if (owner) (ownOpen[owner] ||= []).push(t);
       }
       const ms = (v: any) => { const n = Date.parse(String(v || '')); return Number.isFinite(n) ? n : NaN; };
       // Back Burner check-ins sent in this run (above): never a come-back the same day.
@@ -217,7 +253,7 @@ Deno.serve(async (req) => {
         if (!email) continue;
         const lc = String(email).toLowerCase();
         // Something still open: only once Smart Reminders has paused them for
-        // being away (LIST_COMEBACK_LINES).
+        // being away (listComebackLine).
         const pausedMs = ms(user.smart_nudge_paused_at);
         const listOpen = openFor.has(lc);
         const pausedAway = listOpen && user.smart_nudge_paused_reason === 'away' && Number.isFinite(pausedMs);
@@ -264,8 +300,8 @@ Deno.serve(async (req) => {
           continue;
         }
         if (!due) continue;
-        // Steps keep their spacing even for someone who's been gone a while:
-        // 4 days after the first, 7 after the second.
+        // Steps keep their spacing even for someone who's been gone a while
+        // (there is one step now, so this never runs; kept for a second one).
         if (step > 0) {
           const lastAt = ms(user.comeback_last_at);
           const gap = (next.day - COMEBACK_STEPS[step - 1].day) * DAY_MS;
@@ -280,13 +316,24 @@ Deno.serve(async (req) => {
           const bb = ms(user.last_backburner_checkin_at);
           if (checkedInNow.has(lc) || (Number.isFinite(bb) && localDayKey(new Date(bb), timeZone) === localDayKey(now, timeZone))) continue;
         }
+        // A come-back went out before and they have only OPENED the app since,
+        // never used it (ONE PER TIME AWAY): none this time away either. Marked
+        // as done for this absence, so it isn't asked again every run. When the
+        // check can't run it counts as not used (no push).
+        if (!sameAbsence && Number.isFinite(ms(user.comeback_last_at))
+          && !(await usedAppBetween(base44, email, new Date(ms(user.comeback_last_at)).toISOString(), null, false))) {
+          await base44.asServiceRole.entities.User.update(user.id, { comeback_from: seenIso, comeback_step: COMEBACK_STEPS.length })
+            .catch((e: any) => console.error(`[COME BACK] Could not record for ${email}:`, e?.message || e));
+          console.log(`[COME BACK] ${email}: opened but has not used the app since their last come-back; none this time away`);
+          continue;
+        }
         const gate = await ledgerCheck(base44, { email, kind: 'general' });
         if (!gate.allowed) continue;
 
         const round = Math.max(0, Number(user.comeback_round) || 0) + (step === 0 ? 1 : 0);
         const hasBirthdays = birthdaysOnly.has(String(email).toLowerCase());
         const usable = next.lines.filter((l: any) => !(hasBirthdays && l.emptyOnly));
-        const line = pausedAway ? LIST_COMEBACK_LINES[step] : usable[(round - 1 + usable.length) % usable.length];
+        const line = pausedAway ? listComebackLine(topOpenTask(ownOpen[lc] || [])) : usable[(round - 1 + usable.length) % usable.length];
         const outcome = await sendComeback(email, line.title, line.body, pausedAway ? '/Tasks' : '/AddTask');
         const fields: Record<string, any> = { comeback_from: seenIso, comeback_round: round, comeback_last_at: now.toISOString() };
         if (outcome === 'unsubscribed') {
