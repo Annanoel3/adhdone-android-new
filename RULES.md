@@ -608,8 +608,21 @@ How it works, and how it must keep working:
 4. **It sees what it already said, and a put-off task stops getting the same thing.** Each
    task's line shows the words and times of every nudge sent about it this past week. Once
    a task has been put off 3 or more times (snoozed, swiped away, rang out, Later, Home or
-   Back), its line also says that nothing sent about it repeats the words, the angle or the
-   time of day it already got (a time they named themselves stays). Anna's rule, Oct 18
+   Back), its line also says it doesn't get the same reminder again: the words and the angle
+   change from the last few it got, and it goes out at a different time of day than its last
+   two (a time they named themselves stays). The line also says this is never by itself a
+   reason to leave the task out, and that a time of day it had earlier in the week is open
+   again. MEASURED AGAINST THE LAST FEW, NEVER THE WHOLE WEEK (Nov 19 2026): until then the
+   line said nothing may repeat "the words, the angle or the time of day of what it already
+   got", against all seven days listed. A task that kept being put off ran out of times of
+   day and went silent: Anna's laundry, put off with Later on 6 days at 6 different times,
+   got nothing after Tue Nov 17 10:29 AM while the planner's notes kept asking for "a
+   different approach" (Anna: "I totally stopped getting reminders about laundry. Not good."
+   and "fix the hole. We can't have things just being skipped"). Checked on a free dry look
+   at her account: the new line shows. NOT yet checked with a real planner answer: the
+   OpenAI account had no credits left that afternoon (every AI call was refused with "429
+   You have no credits remaining" from some time after 1:09 PM CST), so no test call could
+   run. Anna's rule, Oct 18
    2026: "If I have a rule and smart reminders isnt following it... why would you not
    strive to follow my rule". Before this it only knew when it last brought a task up, and
    Sally got nearly the same oil-room nudge at the same two times every day Oct 13–18.
