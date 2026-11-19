@@ -1,3 +1,4 @@
+// Nov 18 2026 (night): an event's heads-up (night before, morning of, prep ask) that another push has since been booked onto is moved to a free minute in the hourly run (stackedHeadsUps, freeMinuteFor): new one booked first, then the old one cancelled, never lost. It only stepped aside when it was the one booked second; booked first, it went out in the same minute as a weekly task's 8 PM reminder and Anna got "two pushes in the same minute". previewRepeats lists what it would move as `headsUps`. No AI call.
 // Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`. The same for a birthday: one already on next year's date with only last year's reminders (the same sync, the evening of the day, ahead of the yearly rollover) is planned again exactly as the rollover plans it (birthday pass, 1b).
 // Re-saved Nov 16 2026 (late, again) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
 // Nov 16 2026 (late): when a phone stops taking notifications (owner check 11), a second alert gives the facts of that person's last days: how long and how much they used the app, their last time in it screen by screen, the first push that bounced afterwards and what had reached them in the 24 hours before (both from OneSignal's own list). Anna: "We really need to figure out the reasons people leave. We cant keep making bad guesses." See departureFacts. No AI call.
@@ -264,6 +265,16 @@ Deno.serve(async (req) => {
             reminders: moved.reminder_schedule.map((e: any) => `${e.send_at} ${e.label || ''}`.trim()), cancel: cancel.length,
           };
         }),
+        // Heads-ups that share their minute with another push, and the free
+        // minute each would move to (A HEADS-UP SOMETHING ELSE HAS LANDED ON).
+        headsUps: await (async () => {
+          const list: any[] = [];
+          for (const { row, task, index } of await stackedHeadsUps(base44, active, nowMs)) {
+            const owner = users[row.user_email];
+            list.push({ id: task.id, title: task.title, owner: row.user_email, label: task.reminder_schedule?.[index]?.label || '', from: row.send_at, to: owner ? await freeMinuteFor(base44, row, task, owner, nowMs) : null });
+          }
+          return list;
+        })(),
       });
     }
 
@@ -1326,6 +1337,72 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── A HEADS-UP SOMETHING ELSE HAS LANDED ON: moved to a free minute ─────────
+  // An event's heads-up (the night before, the morning of, the prep ask) goes
+  // at a time the app picked, and steps aside for other pushes: booked second,
+  // schedulePush moves it to a free minute. Booked FIRST, nothing moved it when
+  // a reminder at a time they set was later booked onto its minute (the send
+  // ledger never cancels a heads-up for one, RULES §9 Q6), so the two went out
+  // together: Nov 18 2026, 8:00 PM, a weekly 8 PM task (its next copy booked
+  // Nov 15) and the night-before of the next morning's appointment (booked Nov
+  // 11), and Anna got "two pushes in the same minute" again.
+  //
+  // So every hour, a heads-up booked in the next day or so that shares its
+  // minute with another push to the same person is moved the way schedulePush
+  // would have moved it: the new one is booked first (25, 50 or 75 minutes
+  // later, else 25 or 50 earlier; never in quiet hours, never within half an
+  // hour of the event), then the old one is cancelled. No free minute, or the
+  // booking refused: it stays where it was, never lost. Not a reminder they
+  // added at a time they picked (their_time), and not one about to go out.
+  let headsUpsMoved = 0;
+  try {
+    for (const { row, task, index } of await stackedHeadsUps(base44, allTasks, now.getTime())) {
+      try {
+        const owner = userMap[row.user_email];
+        if (!owner || isBeingScheduledElsewhere(task, now.getTime())) continue;
+        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+        if (!fresh || fresh.status !== 'active' || fresh.silenced || trackerMs(fresh.updated_date) !== trackerMs(task.updated_date)) continue;
+        const plan = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule.map((e: any) => ({ ...e })) : [];
+        const entry = plan[index];
+        const oldId = String(row.notification_id);
+        if (!entry || String(entry.notification_id || '') !== oldId) continue;
+        const to = await freeMinuteFor(base44, row, fresh, owner, Date.now());
+        if (!to) {
+          console.log(`🪜 [REFILL] "${fresh.title}" (${row.user_email}): its "${entry.label}" shares ${row.send_at} with another push and no free minute is near; left where it is`);
+          continue;
+        }
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: CRON_SECRET,
+          toUserExternalId: row.user_email,
+          title: entry.notification_title || fresh.title,
+          body: entry.notification_body || fresh.title,
+          sendAtISO: to,
+          data: { screen: '/TaskNotification', taskId: fresh.id, type: 'task_checkin' },
+        });
+        const result = res?.data || res;
+        if (!result?.notificationId) {
+          console.log(`🪜 [REFILL] "${fresh.title}" (${row.user_email}): its "${entry.label}" could not be booked at ${to} (${result?.reason || result?.error || 'no id'}); left where it is`);
+          continue;
+        }
+        entry.notification_id = result.notificationId;
+        entry.send_at = typeof result.sendAt === 'string' && result.sendAt ? result.sendAt : to;
+        entry.scheduled = true;
+        const ids = [...(Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String).filter((x: string) => x && x !== oldId), String(result.notificationId)];
+        const moved = { reminder_schedule: plan, onesignal_notification_ids: ids };
+        await base44.asServiceRole.entities.Task.update(fresh.id, moved);
+        await cancelJustBooked(base44, [oldId]);
+        Object.assign(task, moved);
+        await pushPhoneAlarms({ ...fresh, ...moved }, owner, { before: fresh, changedAt: Date.now(), source: 'cronRefillReminders' });
+        headsUpsMoved++;
+        console.log(`🪜 [REFILL] "${fresh.title}" (${row.user_email}): its "${entry.label}" shared ${row.send_at} with another push, moved to ${entry.send_at}`);
+      } catch (e) {
+        console.error(`[REFILL] Could not move the heads-up of ${task.id} off a shared minute:`, e);
+      }
+    }
+  } catch (e) {
+    console.error('[REFILL] Heads-up spacing failed:', e);
+  }
+
   // ── Event tasks (📅) — promote planned reminders within OneSignal's window ──
   // Events with classification='event' store a deterministic reminder schedule
   // (night before + 1 hour before) but OneSignal rejects scheduling more than
@@ -1874,7 +1951,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventPlansMoved, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventPlansMoved, headsUpsMoved, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
@@ -3736,6 +3813,73 @@ function eventPlanMove(fresh: any, timeZone: string, days: number, nowMs: number
     .filter((e: any) => isBookedId(e?.notification_id) && Date.parse(e?.send_at) > nowMs)
     .map((e: any) => String(e.notification_id));
   return { moved: { reminder_schedule: schedule, onesignal_notification_ids: [] }, cancel: [...new Set(cancel)] };
+}
+
+// ── A heads-up that something else has landed on ────────────────────────────
+// See A HEADS-UP SOMETHING ELSE HAS LANDED ON in the handler.
+const HEADS_UP_LOOK_AHEAD_MS = 26 * 60 * 60 * 1000;
+const HEADS_UP_MIN_LEAD_MS = 10 * 60 * 1000;
+const HEADS_UP_LABEL = /night before|morning of/i;
+
+// Of the pushes booked ahead (send-ledger rows), every event heads-up (the
+// night before, the morning of, the prep ask: a time the app picked, never one
+// they picked) that shares its minute with another push to the same person.
+// When every push in the minute is a heads-up, the one for the soonest event
+// keeps the minute and the rest move.
+function stackedHeadsUpsIn(rows: any[], tasks: any[]): { row: any; task: any; index: number }[] {
+  const taskById: Record<string, any> = {};
+  for (const t of tasks) if (t?.id) taskById[t.id] = t;
+  const byMinute: Record<string, any[]> = {};
+  for (const r of rows) {
+    const ms = Date.parse(r?.send_at || '');
+    if (!r?.user_email || !r.notification_id || !Number.isFinite(ms) || String(r.kind || '').startsWith('owner_')) continue;
+    (byMinute[`${r.user_email}|${Math.floor(ms / 60000)}`] ||= []).push(r);
+  }
+  const out: { row: any; task: any; index: number }[] = [];
+  for (const list of Object.values(byMinute)) {
+    if (list.length < 2) continue;
+    const movable = list.map((row: any) => {
+      const task = row.task_id ? taskById[row.task_id] : null;
+      if (!task || task.status !== 'active' || task.silenced || task.classification !== 'event') return null;
+      const plan = Array.isArray(task.reminder_schedule) ? task.reminder_schedule : [];
+      const index = plan.findIndex((e: any) => String(e?.notification_id || '') === String(row.notification_id));
+      const entry = index >= 0 ? plan[index] : null;
+      if (!entry || entry.their_time === true || !HEADS_UP_LABEL.test(String(entry.label || ''))) return null;
+      return { row, task, index };
+    }).filter(Boolean) as { row: any; task: any; index: number }[];
+    if (!movable.length) continue;
+    const startOf = (m: { task: any }) => trackerMs(m.task.event_time || m.task.next_reminder);
+    const moving = movable.length === list.length ? [...movable].sort((a, b) => startOf(a) - startOf(b)).slice(1) : movable;
+    for (const m of moving) out.push(m);
+  }
+  return out;
+}
+
+async function stackedHeadsUps(base44: any, tasks: any[], nowMs: number): Promise<{ row: any; task: any; index: number }[]> {
+  const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+    send_at: { $gte: new Date(nowMs + HEADS_UP_MIN_LEAD_MS).toISOString(), $lte: new Date(nowMs + HEADS_UP_LOOK_AHEAD_MS).toISOString() },
+  });
+  return stackedHeadsUpsIn(rows, tasks);
+}
+
+// The first free minute near a heads-up for it to move to: later first,
+// earlier if it must, never in their quiet hours, never within half an hour of
+// the event itself, never in the next few minutes. The same steps schedulePush
+// takes when a heads-up is the one booked second. Null when there is none.
+async function freeMinuteFor(base44: any, row: any, task: any, owner: any, nowMs: number): Promise<string | null> {
+  const tz = userTimeZone(owner);
+  const quiet = resolveQuietHours(owner);
+  const startMs = trackerMs(task.event_time || task.next_reminder);
+  const wantMs = Date.parse(row.send_at);
+  for (const shiftMin of [25, 50, 75, -25, -50]) {
+    const t = wantMs + shiftMin * 60 * 1000;
+    if (t <= nowMs + 5 * 60 * 1000) continue;
+    if (Number.isFinite(startMs) && t >= startMs - 30 * 60 * 1000) continue;
+    if (quiet.enabled && isInQuietHours(new Date(t), quiet.startMin, quiet.endMin, tz)) continue;
+    const gate = await ledgerCheck(base44, { email: String(row.user_email), taskId: String(task.id), kind: 'task_checkin', sendAt: new Date(t).toISOString() });
+    if (gate.allowed) return new Date(t).toISOString();
+  }
+  return null;
 }
 
 // ── A task's own time ─────────────────────────────────────────────────────────
