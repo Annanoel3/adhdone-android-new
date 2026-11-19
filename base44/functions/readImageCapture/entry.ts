@@ -1,3 +1,4 @@
+// Nov 18 2026: each read also leaves a CaptureTrace row ("imageRead": share or app, found or nothing, how many characters; never the words). The log lines from Nov 14 can't be read back (the function logs come back empty), so a shared picture that saved nothing still couldn't be traced.
 // Nov 14 2026: logs one line per read (share or app, found or nothing, never the words). Nothing else changes.
 // Nov 10 2026: says what they'll actually do (a lab order is a lab visit), what to bring, and leaves out order numbers, order dates, opening hours and fine print. Anna, on a shared lab-order screenshot whose task title carried all of it: "I wish it would have gotten rid of the extra crap in the title. Its a blood drawing."
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
@@ -69,14 +70,27 @@ export default async function (req: Request): Promise<Response> {
     // here, nothing was saved from it, and nothing kept said what this
     // function had answered.
     const from = file_url ? 'app' : 'share';
+    // The same thing kept as a row (see the Nov 18 2026 note at the top):
+    // what the reader answered for this picture, without any of its words.
+    const note = async (found: boolean, chars: number) => {
+      try {
+        await base44.asServiceRole.entities.CaptureTrace.create({
+          step: 'imageRead',
+          detail: JSON.stringify({ from, found, chars }),
+          user_email: user.email,
+        });
+      } catch (_) { /* a trace is never worth failing a read for */ }
+    };
     // "NOTHING" is the model's way of saying this photo isn't a task — passed
     // back so the UI can say so instead of creating a junk task from a selfie.
     if (!text || text.toUpperCase().startsWith('NOTHING')) {
       console.log(`[readImageCapture] ${from}: nothing found`);
+      await note(false, 0);
       return Response.json({ text: null, nothing_found: true });
     }
 
     console.log(`[readImageCapture] ${from}: read ${text.length} chars`);
+    await note(true, text.length);
     return Response.json({ text });
   } catch (error) {
     console.error('[readImageCapture] error:', error?.message || error);
