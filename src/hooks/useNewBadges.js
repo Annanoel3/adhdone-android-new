@@ -36,6 +36,10 @@ import { base44 } from "@/api/base44Client";
 const KEYS = { ParkingLot: "badge_seen_parkinglot", Notes: "badge_seen_notes" };
 // How long a brand-new idea waits before it counts (see check).
 const SETTLE_MS = 20000;
+// A capture that landed from outside the app counts at once. Its time is the
+// server's and "now" is the phone's, and a phone's clock can run a little
+// behind, so "at once" reaches this far past the phone's now.
+const LANDED_SLACK_MS = 30000;
 
 function seenAt(page) {
   let v = localStorage.getItem(KEYS[page]);
@@ -123,7 +127,7 @@ export default function useNewBadges(currentPageName, enabled) {
     const later = () => setTimeout(check, 8000);
     const settle = () => setTimeout(check, SETTLE_MS + 5000); // past the wait above
     // A capture from outside the app just landed, already sorted by the server.
-    const landed = () => { landedRef.current = Date.now(); check(); };
+    const landed = () => { landedRef.current = Date.now() + LANDED_SLACK_MS; check(); };
     // Back on screen: whatever was shared while it was away shows now.
     const shown = () => { if (document.visibilityState === "visible") check(); };
     window.addEventListener("parking-lot-changed", check);
