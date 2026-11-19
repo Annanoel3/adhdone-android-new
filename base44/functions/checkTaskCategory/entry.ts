@@ -24,6 +24,16 @@ import { lean } from '../../shared/aiCost.ts';
 // put it in parking lot if someone says note to self or something"). It goes to
 // the Parking Lot even with dates or bills in it, unless it also asks to be
 // reminded.
+// A link shared from another app is for keeping too (Anna, Nov 18 2026: "When
+// someone adds something that belongs in the parking lot from sharing a
+// picture or text, make sure it ends up in the right place"). The share sheet
+// sends the link with the other app's own line in front of it, and when that
+// line starts with a verb (YouTube's "Watch ... on YouTube", a page headed
+// "Download the free ...") it was read as the person asking for that, and
+// became a task with reminders. Checked on 36 made-up captures before it was
+// written in: the two links of that kind moved to the Parking Lot, and nothing
+// else moved (events, bills, a link with their own words, and everything
+// typed with no link stayed where it was).
 //
 // Callers: send { text, today?, about_me? }. today is the person's own date
 // (YYYY-MM-DD) so "her birthday is tomorrow" lands on the right day. The older
@@ -118,6 +128,14 @@ it names something they deal with, attend or pay ("dentist", "oil change", "rent
 inspection"), it's a task. If it names a subject, a thing to make, or something to think about or
 look into ("collage", "podcast", "Greece", "collage outpatient"), it's an idea: a couple of nouns
 jotted down is a thought being kept, not a chore being assigned.
+
+A link, alone or with the line another app put with it (a page's headline, a video's or product's
+name, or that app's own share wording such as "Watch ... on YouTube"), was shared from somewhere
+else. The words that came with the link are the other app's, not theirs, so a verb in them is not
+a request: they are keeping the link for later, and it's an "idea". It's a "task" when the page
+itself is something to attend, pay or handle on a day (an event listing, an appointment, a bill),
+or when they added words of their own asking for something to happen. With no link in it, none of
+this applies: the words are their own.
 ${note ? `\n${note}\n` : ""}
 When it's truly unclear, choose "task": a to-do filed away as an idea can be missed, while a task
 they didn't need is easy to delete.
