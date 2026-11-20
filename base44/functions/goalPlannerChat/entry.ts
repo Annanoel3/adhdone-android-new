@@ -37,6 +37,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { testGate } from '../../shared/testBudget.ts';
 import { stepDueDate } from '../../shared/goalPlan.ts';
 import { secrets } from "base44:runtime";
 
@@ -1582,6 +1583,10 @@ export default async function (req: Request) {
 
     if (body?.selftest === true) {
       if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+      // The daily cap on test spending (shared/testBudget.ts; Nov 20 2026):
+      // each self-test request is one model call.
+      const gate = await testGate(base44, 'goal', 1, body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
       const out = await selfTest(openai, body, today);
       return Response.json(out);
     }
