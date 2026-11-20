@@ -142,7 +142,24 @@ Deno.serve(async (req) => {
         inside_a_30_min_window_from_its_first_call: warmFixed,
         avg_input_tokens: real.length ? Math.round(real.reduce((n, x) => n + (Number(x.p.input) || 0), 0) / real.length) : 0,
       };
-      return Response.json({ success: true, as_of: iso(nowMs), rows: rows.length, first: rows.length ? iso(rows[0].ts) : null, models, parserRealUse, byDay, bursts });
+      // What test runs booked against the daily cap (shared/testBudget.ts,
+      // Nov 20 2026), day by day, at list price: tool, runs, model calls, cents.
+      const testRuns: Record<string, any> = {};
+      try {
+        const booked = await filterAll(svc.AppEvent, { event: 'ai_test_run' });
+        for (const ev of booked) {
+          const ms = utcMs(ev.created_date);
+          if (!Number.isFinite(ms)) continue;
+          const d = dayOf(ms);
+          const p = ev?.props || {};
+          const day = (testRuns[d] ||= { runs: 0, calls: 0, cents: 0, tools: {} as Record<string, number> });
+          day.runs++;
+          day.calls += Number(p.calls) || 0;
+          day.cents = Math.round((day.cents + (Number(p.cents) || 0)) * 10) / 10;
+          day.tools[String(p.tool || '?')] = (day.tools[String(p.tool || '?')] || 0) + (Number(p.calls) || 0);
+        }
+      } catch (_) { /* the usage numbers above still stand */ }
+      return Response.json({ success: true, as_of: iso(nowMs), rows: rows.length, first: rows.length ? iso(rows[0].ts) : null, models, parserRealUse, byDay, bursts, testRuns });
     }
 
     const [users, events, ledger] = await Promise.all([
