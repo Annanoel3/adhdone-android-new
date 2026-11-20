@@ -1,3 +1,4 @@
+// Nov 20 2026: the three admin test modes (selfTest, texts, renameTry) ask the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"). A full self-test is over the cap on its own, so it needs her yes each time. Nothing a person's own task add does changes.
 // Nov 15 2026 (evening; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser says when a task IS making a phone call and who it's to (calls_someone, call_person; a plain to-do only, never together with texts_someone), for the app's call box with a Call button (Anna: "And do calls?"). Self-test: 3 new sentences and the call checks added to 3 old ones.
 // Nov 15 2026 (later; bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser says when a task IS sending someone a text and who it's to (texts_someone, text_person; judgment, no word list), so the app can give it a spot to type the text ahead of time and a Send button (Anna: "If someone makes a task to text someone, maybe we should use our ability to press send from the app"). Self-test cases added.
 // Nov 15 2026 (bundled shared/taskParsePrompt.ts and runTaskParse.ts picked up): the parser reads an event's END when the person gave one ("from 2 to 5", "at 3 for two hours": end_time) and, for a timed event with none, estimates how long that kind of event usually runs (usual_minutes; never shown, read only by shared/leaveOrigin.ts). Anna: "Wish we could tell which events lasted an hour vs which ones last like 5 hours". The admin check of several inputs takes { only: [field names] } to answer with just those fields; self-test cases added.
@@ -24,6 +25,7 @@ import { buildTaskParsePrompt } from "../../shared/taskParsePrompt.ts";
 import { resolveQuietHours } from "../../shared/quietHours.ts";
 import OpenAI from "npm:openai";
 import { lean } from "../../shared/aiCost.ts";
+import { testGate } from "../../shared/testBudget.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy, Oct 12 2026:
@@ -139,7 +141,11 @@ Deno.serve(async (req) => {
     // of this file): { selfTest: true }.
     if (body?.selfTest === true) {
       if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
-      return Response.json(await runParserSelfTest(base44));
+      // The daily cap on test spending (shared/testBudget.ts): one model call
+      // per sentence, every one at full price.
+      const gate = await testGate(base44, 'parser', PARSER_CHECKS.length, body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
+      return Response.json({ ...(await runParserSelfTest(base44)), test_spend: gate.spend });
     }
 
     // Admin check of several inputs at once, exactly as the Add button would
@@ -148,6 +154,8 @@ Deno.serve(async (req) => {
       if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
       const tz = typeof body.timezone === "string" ? body.timezone : user?.timezone;
       const aboutMe = typeof body.about_me === "string" ? body.about_me : user?.about_me;
+      const gate = await testGate(base44, 'parser', Math.min(30, body.texts.length), body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
       const results = await Promise.all(body.texts.slice(0, 30).map(async (t: any) => {
         const text = String(t || "");
         try {
@@ -164,7 +172,7 @@ Deno.serve(async (req) => {
           return { text, error: String(e?.message || e) };
         }
       }));
-      return Response.json({ results });
+      return Response.json({ results, test_spend: gate.spend });
     }
 
     // A task was renamed: what the new name adds, and its parse. Signed-in
@@ -178,6 +186,8 @@ Deno.serve(async (req) => {
     // { renameTry: [{ from, to }] }
     if (Array.isArray(body?.renameTry)) {
       if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
+      const gate = await testGate(base44, 'rename', Math.min(30, body.renameTry.length), body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
       const results = await Promise.all(body.renameTry.slice(0, 30).map(async (r: any) => {
         try {
           const out = await rereadRename(base44, user, r?.from, r?.to);
@@ -195,7 +205,7 @@ Deno.serve(async (req) => {
           return { from: r?.from, to: r?.to, error: String((e as any)?.message || e) };
         }
       }));
-      return Response.json({ results });
+      return Response.json({ results, test_spend: gate.spend });
     }
 
     // The user's about-me line lets the parser judge work vs personal for this
