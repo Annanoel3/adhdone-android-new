@@ -1,7 +1,9 @@
+// Nov 20 2026: the admin check of several texts asks the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"). Nothing else changes.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { testGate } from '../../shared/testBudget.ts';
 
 // THE one place that decides what kind of thing a capture is: a task, an idea
 // (Parking Lot), a birthday, something meant for ADHDone itself, or a mix.
@@ -275,6 +277,10 @@ Deno.serve(async (req) => {
       const model = TRY_MODELS.includes(body?.model) ? body.model : MODEL;
       const effort = TRY_EFFORTS.includes(body?.effort) ? body.effort : EFFORT;
       const draftNote = typeof body?.draft_note === "string" ? body.draft_note.trim().slice(0, 2000) : "";
+      // The daily cap on test spending (shared/testBudget.ts): asked before
+      // any of these texts goes to the model. Over the cap, nothing runs.
+      const gate = await testGate(base44, 'sorter', Math.min(40, body.texts.length), body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
       const results = await Promise.all(body.texts.slice(0, 40).map(async (t: any) => {
         const text = String(t || "");
         try {
@@ -283,7 +289,7 @@ Deno.serve(async (req) => {
           return { text, error: String(e?.message || e) };
         }
       }));
-      return Response.json({ today, model, effort, results });
+      return Response.json({ today, model, effort, results, test_spend: gate.spend });
     }
 
     // Old callers sent a ready-made prompt; its answer only knows task / parking_lot.
