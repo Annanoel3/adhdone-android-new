@@ -2,6 +2,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { testGate } from '../../shared/testBudget.ts';
 
 // THE one place that decides whether a new task should get a checklist of
 // steps under it ("pay my bills: electric, rent, insurance" → "Pay bills" with
@@ -114,6 +115,9 @@ Deno.serve(async (req) => {
       const effort = TRY_EFFORTS.includes(body?.effort) ? body.effort : EFFORT;
       const legacy = Array.isArray(body?.prompts);
       const list: any[] = (legacy ? body.prompts : body.texts).slice(0, 30);
+      // The daily cap on test spending (shared/testBudget.ts; Nov 20 2026).
+      const gate = await testGate(base44, 'steps', list.length, body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
       const results = await Promise.all(list.map(async (t: any) => {
         const s = String(t || "");
         try {
@@ -124,7 +128,7 @@ Deno.serve(async (req) => {
           return { text: legacy ? "" : s, error: String(e?.message || e) };
         }
       }));
-      return Response.json({ model, effort, results });
+      return Response.json({ model, effort, results, test_spend: gate.spend });
     }
 
     // Old callers sent a ready-made prompt.
