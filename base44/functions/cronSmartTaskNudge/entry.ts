@@ -1,3 +1,4 @@
+// Nov 20 2026: owner-run looks that ask the model (a preview, a replay that is not dry, "re-plan now") ask the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"), and a plain preview is owner only like the other owner tools (it hands back a person's whole plan and it costs a model call; until now anyone who could call the function could ask for one). Scheduled runs and the re-plan after someone changes a task never go through either check.
 // Nov 19 2026: Anna's put-off rule (a task put off 3 or more times stops getting the same reminder) is measured against the last few reminders, not the whole week, so a task can't run out of times of day and go silent (her laundry did: nothing after Tue Nov 17 10:29 AM). One fact line; the brief is unchanged, no version bump.
 // Nov 18 2026 (evening): the planner is told how a person's reminders reach them. On regular notifications nothing is ever reported back, and every reminder read "sent; they have not opened the app since", which the planner took for nobody looking and held back (a daily task due that day got nothing by 7 PM; Anna: "everyone with normal notifications has been having a REALLY DUMB smart reminder experience"). New fact line HOW REMINDERS REACH THEM for anyone on regular notifications (onPlainNotifications), and each such reminder reads "sent as a regular notification". How to read the silence (Anna, same evening: "it should assume the user sees every notification and is just pressing later until it gets done"): the line says to read each one the way Later on an alarm is read, seen and put off, coming back until the task is checked off. Nothing changes for someone on alarms. The brief is unchanged. No new AI call.
 // Nov 16 2026 (late): a nudge that rings as an alarm about a task that IS sending someone a text carries the words for the alarm's button that opens it ("Send the text" / "Write the text", shared/alarmScreen.ts). The phone's new alarm screen (build 49: a big round Done, a Later bar that has to be held; Anna: "Your design is good too") only shows that button when the alarm has words for it, and a text task's Send button lives on its page. Nothing about what Smart Reminders plans or sends changes; no plan is redone.
@@ -81,6 +82,7 @@ import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { countUsage } from '../../shared/aiCost.ts';
+import { testGate } from '../../shared/testBudget.ts';
 
 // countUsage only counts tokens per feature (shared/aiCost.ts, Nov 6 2026);
 // every call goes out exactly as before.
@@ -300,6 +302,22 @@ Deno.serve(async (req) => {
     if (helpingPreview) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+    // A plain preview (no as_of) hands back everything the planner is shown
+    // about one person and costs a model call: owner only, like the replay,
+    // "re-plan now" and the helping preview above. Nothing in the app asks
+    // for one (onTaskUpdate sends { email } alone).
+    if (previewOnly && !replay) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+    // THE DAILY CAP ON TEST SPENDING (shared/testBudget.ts): an owner-run look
+    // that asks the model is one call at full price. A dry replay asks
+    // nothing and is free. Scheduled runs (no body) and onTaskUpdate's
+    // { email } never come through here.
+    if ((previewOnly && !dryRun) || replanNow) {
+      const gate = await testGate(base44, 'planner', 1, body);
+      if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
     }
 
     // 1. Users
