@@ -2,6 +2,7 @@
 // Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`. The same for a birthday: one already on next year's date with only last year's reminders (the same sync, the evening of the day, ahead of the yearly rollover) is planned again exactly as the rollover plans it (birthday pass, 1b).
 // Re-saved Nov 16 2026 (late, again) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
 // Nov 16 2026 (late): when a phone stops taking notifications (owner check 11), a second alert gives the facts of that person's last days: how long and how much they used the app, their last time in it screen by screen, the first push that bounced afterwards and what had reached them in the 24 hours before (both from OneSignal's own list). Anna: "We really need to figure out the reasons people leave. We cant keep making bad guesses." See departureFacts. No AI call.
+// Nov 20 2026: owner check 1 (can the app reach OpenAI) tries a second time before telling Anna about anything that isn't the account itself, and "out of credits" has its own alert title. On Nov 19 one "500" from OpenAI at 9:45 AM sent "AI calls are failing", and that title's 6-hour rest then held back the real out-of-credits alert from about 1:10 PM until 4:00 PM.
 // Nov 16 2026 (night): owner check 8 also tells Anna about a high-priority or urgent task with no date (or already late) that got nothing today or yesterday, with Smart Reminders' own latest reason for holding it ("⚠️ ADHDone: high priority, nothing in two days"). Anna, with the planner changes of that day: the goal is "for it to not leave things out that should have happened"; this is the free daily read of that. No AI call. See check 8b.
 // Re-saved Nov 15 2026 (evening, later) so the bundled shared/nextCopy.ts is picked up: a repeating call-someone task's next copy keeps who it's to and their number (Task.calls_someone, call_person, call_phone). Only the wording of owner check 14 reads that plan here.
 // Nov 15 2026 (evening): owner check 11's "phone stopped taking notifications" alert, for a phone with no check-in on record, now names that person's build and says whether a check-in was even due (a new install's first one comes about 12 hours after first open), instead of the stock "(only Android builds after 47 check in)" (Anna: "Did this person never update to 48?"). Alert wording only.
@@ -2440,22 +2441,54 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
 
   // 1. Can the app reach OpenAI? One tiny completion. A 429 here is the "no
   //    credits" that silently broke every AI feature on Oct 8 2026.
-  try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
-      // gpt-6-luna, the cheaper model: this only proves the key and its credit
-      // work, which is the same for every model (Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one").
-      // Room for its thinking: a cut-off answer is still a 200.
-      body: JSON.stringify({ model: 'gpt-6-luna', reasoning_effort: 'low', max_completion_tokens: 200, messages: [{ role: 'user', content: 'ok' }] }),
-    });
-    if (!res.ok) {
-      const err: any = await res.json().catch(() => ({}));
-      const msg = String(err?.error?.message || res.statusText || '').slice(0, 140);
-      problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI answered ${res.status}. ${msg} Smart Reminders, task parsing and steps are down until this is fixed.` });
+  //    Nov 20 2026, two changes after Nov 19: at 9:45 AM one answer of "500,
+  //    the server had an error" (a hiccup on OpenAI's side; everything worked
+  //    a moment later) sent "AI calls are failing", and since every alert
+  //    rests 6 hours by its TITLE, the same title was held back when the
+  //    credits really ran out at about 1:10 PM: Anna was not told until
+  //    4:00 PM. So (a) an answer that isn't about the account gets a second
+  //    try a few seconds later, and only two failures in a row are told;
+  //    (b) "out of credits" has a title of its own, so no other alert can
+  //    rest it.
+  {
+    const ping = async (): Promise<{ status: number; msg: string } | null> => {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
+          // gpt-6-luna, the cheaper model: this only proves the key and its credit
+          // work, which is the same for every model (Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one").
+          // Room for its thinking: a cut-off answer is still a 200.
+          body: JSON.stringify({ model: 'gpt-6-luna', reasoning_effort: 'low', max_completion_tokens: 200, messages: [{ role: 'user', content: 'ok' }] }),
+        });
+        if (res.ok) return null;
+        const err: any = await res.json().catch(() => ({}));
+        return { status: res.status, msg: String(err?.error?.message || res.statusText || '').slice(0, 140) };
+      } catch (e) {
+        return { status: 0, msg: String((e as any)?.message || e).slice(0, 120) };
+      }
+    };
+    const noCredit = (b: { status: number; msg: string }) => b.status === 429 && /credit|quota|billing/i.test(b.msg);
+    // The account itself is the problem (no credits, a key that is refused):
+    // a second try would say the same thing.
+    const aboutAccount = (b: { status: number; msg: string }) => noCredit(b) || b.status === 401 || b.status === 403;
+    let bad = await ping();
+    let tries = 1;
+    if (bad && !aboutAccount(bad)) {
+      await new Promise((r) => setTimeout(r, 5000));
+      bad = await ping();
+      tries = 2;
     }
-  } catch (e) {
-    problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI could not be reached: ${String((e as any)?.message || e).slice(0, 120)}` });
+    if (bad) {
+      problems.push(noCredit(bad)
+        ? { title: '🚨 ADHDone: OpenAI is out of credits', body: `OpenAI answered 429. ${bad.msg} Every AI feature is stopped for everyone until credits are added: Smart Reminders, task parsing and steps.` }
+        : {
+          title: '🚨 ADHDone: AI calls are failing',
+          body: bad.status
+            ? `OpenAI answered ${bad.status}${tries === 2 ? ' twice in a row' : ''}. ${bad.msg} Smart Reminders, task parsing and steps are down until this is fixed.`
+            : `OpenAI could not be reached${tries === 2 ? ', twice in a row' : ''}: ${bad.msg}`,
+        });
+    }
   }
 
   // 1b. Is Smart Reminders running at all? It runs every 10 minutes and marks
