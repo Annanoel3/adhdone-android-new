@@ -1,4 +1,4 @@
-// Nov 22 2026: a task with no date that the planner held back day after day is told so on its line (WAITED_LINE_LIVE below). Anna, Nov 21 2026, on the daily read of everyone's reminders ("Skipped chores are still happening": her laundry had nothing for 4 days, 11 of 22 owed tasks got nothing on Nov 20; one task got 6 Smart Reminders that day): "Fix......". Until now a task's line only said when it was last brought up; that the planner had left it for "tomorrow" on each of the days since was on the line at the day's first look and gone after it, and a task never brought up at all had no line saying so. Two facts, no instruction; the brief is unchanged, no version bump. Off (the switch), nothing the planner is shown changes by a character; an owner replay with candidate: true shows the facts either way.
+// Nov 22 2026: a task with no date that the planner held back day after day is told so on its line (WAITED_LINE_LIVE below). Anna, Nov 21 2026, on the daily read of everyone's reminders ("Skipped chores are still happening": her laundry had nothing for 4 days, 11 of 22 owed tasks got nothing on Nov 20; one task got 6 Smart Reminders that day): "Fix......". Until now a task's line only said when it was last brought up; that the planner had left it for "tomorrow" on each of the days since was on the line at the day's first look and gone after it, and a task never brought up at all had no line saying so. Two facts on the task's line and the same tasks in one short list under OPEN TASKS ("NO DATE AND STILL WAITING"), no instruction; the brief is unchanged, no version bump. Live since about 1 AM CST Nov 22. Off (the switch), nothing the planner is shown changes by a character; an owner replay with candidate: true shows the facts either way.
 // Nov 20 2026: owner-run looks that ask the model (a preview, a replay that is not dry, "re-plan now") ask the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"), and a plain preview is owner only like the other owner tools (it hands back a person's whole plan and it costs a model call; until now anyone who could call the function could ask for one). Scheduled runs and the re-plan after someone changes a task never go through either check.
 // Nov 19 2026: Anna's put-off rule (a task put off 3 or more times stops getting the same reminder) is measured against the last few reminders, not the whole week, so a task can't run out of times of day and go silent (her laundry did: nothing after Tue Nov 17 10:29 AM). One fact line; the brief is unchanged, no version bump.
 // Nov 18 2026 (evening): the planner is told how a person's reminders reach them. On regular notifications nothing is ever reported back, and every reminder read "sent; they have not opened the app since", which the planner took for nobody looking and held back (a daily task due that day got nothing by 7 PM; Anna: "everyone with normal notifications has been having a REALLY DUMB smart reminder experience"). New fact line HOW REMINDERS REACH THEM for anyone on regular notifications (onPlainNotifications), and each such reminder reads "sent as a regular notification". How to read the silence (Anna, same evening: "it should assume the user sees every notification and is just pressing later until it gets done"): the line says to read each one the way Later on an alarm is read, seen and put off, coming back until the task is checked off. Nothing changes for someone on alarms. The brief is unchanged. No new AI call.
@@ -138,7 +138,17 @@ const PLANNER_V2_LIVE = true;
 // it comes up is still the brief's judgment. Off: nothing the planner is
 // shown changes by a single character. An owner replay with candidate: true
 // shows them either way (that is how it was tried before it went live).
-const WAITED_LINE_LIVE = false;
+// The same tasks are also listed in one place under OPEN TASKS ("NO DATE AND
+// STILL WAITING"): with the fact only on the task's own long line, a replayed
+// look gave the same reasons as before; with the short list, its reasons
+// named the wait ("this task should not slip another day", "Three deferred
+// days make this a daylight priority today").
+// LIVE since Nov 22 2026, about 1 AM CST. Before: with this off, two replayed
+// moments were shown the same text as before the change, character for
+// character; 5 replayed looks on Anna's own account (Sat Nov 21 12:30 PM, Sun
+// Nov 22 2:00 PM); a dry look at everyone else reachable found one other
+// person with any such task (5 of them).
+const WAITED_LINE_LIVE = true;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
