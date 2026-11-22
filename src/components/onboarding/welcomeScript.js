@@ -88,9 +88,11 @@ const SCRIPT = [
   },
   {
     // The first win comes right after the name. One real thing on the list
-    // inside the first minute, before a bio, a tour or a permission — so there
-    // is a reminder to arrive, and a reason to come back. (The about-you
-    // question comes on the second open, CatchUpDialog.)
+    // inside the first minute, before a bio or a tour — so there is a reminder
+    // to arrive, and a reason to come back. (The about-you question comes on
+    // the second open, CatchUpDialog. The notifications question came after
+    // this until Nov 22 2026; it is the first card now, so the phone is
+    // already linked when this task goes in.)
     // (The @handle line that used to sit here promised sharing with friends,
     // which the app doesn't have; Anna, Oct 27 2026: no advertising what isn't there.)
     // It asks for something they can do today, so their first real reminder can
@@ -128,10 +130,9 @@ const SCRIPT = [
 // update: "if somebody doesn't complete the whole thing, it needs to come
 // back") used to count as done, because having a name looked like having
 // finished. Now the chat returns on the next open at the beat they left:
-// a one-line "welcome back", then the task (unless one is already on their
-// list), its time, the notifications question (unless already answered on
-// this account), and the closing line. Nothing already answered is asked
-// twice.
+// a one-line "welcome back", then the notifications question (unless already
+// answered on this account), the task (unless one is already on their list),
+// its time, and the closing line. Nothing already answered is asked twice.
 export function resumeScript({ hasTask = false, notifyAnswered = false } = {}) {
   // By what each beat is, not by where it sits in SCRIPT: the notifications
   // question (first, as in the first run, and stepped over once answered),
