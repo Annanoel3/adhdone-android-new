@@ -1,3 +1,4 @@
+// Nov 22 2026: the look at a captured idea (shared/captureToTasks.ts) also spots a list, a new one or items for one they keep (Anna: "if someone says something about making a list of some type, we should have something similar to tracking"); a list is handed to the Parking Lot page, which makes it. And { judge_test } (owner only) answers what that look says about a made-up sentence, counted against the daily test cap. Nothing else about a capture changes.
 // Nov 18 2026: a capture from outside the app (share sheet, pinned notification, widget) leaves a CaptureTrace row saying where it went ("outsideCapture": task or idea, how many, logged to a tracker or not; never the words). Anna: "When someone adds something that belongs in the parking lot from sharing a picture or text, make sure it ends up in the right place". Nothing kept said where a share had gone, so one that went wrong couldn't be traced.
 // Re-saved Nov 15 2026 (evening) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: a shared or quick-captured task that IS making a phone call is marked for the app's call box (Task.calls_someone, call_person). No popup for calls. Nothing else changes here.
 // Re-saved Nov 15 2026 (afternoon) so the bundled shared/taskParsePrompt.ts, runTaskParse.ts and captureToTasks.ts are picked up: a shared or quick-captured task that IS sending someone a text is saved as one (Task.texts_someone, text_person) and marked text_ask_pending, so the next time the app is open one popup offers to type the text now (Anna: "if its added from outside the app, it could have a popup next time they open"). Nothing else about a capture changes.
@@ -60,6 +61,7 @@ import {
   classifyCapture,
   createParkingLotIdeas,
   foldIdeaIntoTrackers,
+  judgeTest,
   createBirthdayTask,
   queueFeedbackPrompt,
   localToday,
@@ -189,7 +191,8 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
-    const { text, timezone, capture_id: sentId, said_at, foldIdea, guardProbe } = await req.json();
+    const reqBody = await req.json();
+    const { text, timezone, capture_id: sentId, said_at, foldIdea, guardProbe } = reqBody;
     // When the words were said (ms), for a capture the phone held on to and
     // delivered later (no signal, app killed): "tomorrow" counts from then.
     const saidRaw = Number(said_at);
@@ -209,6 +212,11 @@ Deno.serve(async (req) => {
     // one. A copy from before Nov 13 2026 answers "text is required", and
     // would have made a second task out of an id it didn't know.
     if (guardProbe) return Response.json({ success: true, guard: 1 });
+
+    // { judge_test: { text, trackers, lists } }, owner only: what the look at a
+    // Parking Lot idea answers for a made-up sentence (judgeTest in
+    // shared/captureToTasks.ts). Nothing is read or saved.
+    if (reqBody?.judge_test && user.role === 'admin') return await judgeTest(base44, reqBody);
 
     // { foldIdea: <id> }: the in-app Add box saved an idea of theirs; give it
     // the same tracker look a captured idea gets, right now (see
