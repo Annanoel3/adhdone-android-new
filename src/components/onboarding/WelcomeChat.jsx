@@ -462,7 +462,6 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const atEnd = !!beat?.final;
   useEffect(() => {
     if (atEnd && task) captureTask(task, phraseRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atEnd, task]);
 
   // What the card says.
