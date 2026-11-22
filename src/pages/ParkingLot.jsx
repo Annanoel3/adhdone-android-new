@@ -588,14 +588,24 @@ export default function ParkingLot() {
   };
   const isSecondaryTracker = (t) => t?.tracker && groupOf(t).slice(1).some((m) => trackerSince(m) < trackerSince(t) || (trackerSince(m) === trackerSince(t) && String(m.id) < String(t.id)));
 
+  // A tracker's last few entries, as they were logged (shown to the AI so it
+  // knows what an entry of this tracker looks like).
+  const recentOf = (t) => (t?.tracker_entries || []).map((e) => String(e?.text || '').trim()).filter(Boolean).slice(-3).map((x) => x.slice(0, 40));
+
   // One Log box for a linked group: the AI splits what was typed into a
   // reading per tracker (with the note); anything it can't place goes to the
   // card's own tracker, so nothing typed is ever lost.
   const splitLogForGroup = async (text, group) => {
-    const list = group.map((t) => ({ id: t.id, name: t.idea }));
+    // recent: what an entry of theirs looks like. A tracker of words (titles,
+    // names) had its entries filed as notes: the question below only knew
+    // entries as numbers for a chart (Anna, Nov 22 2026: "Why does my most
+    // recent entry look different and have a different button": the third
+    // title logged to a tracker of show titles was saved as a note with no
+    // entry).
+    const list = group.map((t) => ({ id: t.id, name: t.idea, recent: recentOf(t) }));
     const prompt = `Someone logged this to the things they keep track of: "${text.slice(0, 500)}"
 Those things: ${JSON.stringify(list)}
-Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Something they noticed or describe about one of them that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is its own item, with "entry": null and their words in "note": "entry" is only ever the reading itself, because entries are drawn on a chart as numbers. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
+Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Something they noticed or describe about one of them that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is its own item, with "entry": null and their words in "note": "entry" is only ever the reading itself, because entries are drawn on a chart as numbers. That holds for something kept in numbers. When what they keep track of is words (titles, names, places; its "recent" entries show what one looks like), the thing they named is the entry itself, never a note. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
     try {
       const res = await base44.functions.invoke('categorizeIdea', { prompt, private: true });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -809,28 +819,113 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
   // reading for one tracker and, if there's no heart rate tracker yet, a new
   // one (Anna, Oct 13 2026: "would it save my heart rate somewhere?") — so
   // the answer is a list, each part logged or started on its own.
-  const judgeIdea = async (idea, all) => {
-    if (judging.current.has(idea.id)) return;
-    judging.current.add(idea.id);
-    const trackers = all.filter((i) => i.tracker && !i.parent_idea_id && i.id !== idea.id).map((i) => ({ id: i.id, name: i.idea }));
-    const prompt = `Someone typed this into the Parking Lot of an app for people with ADHD (a place to dump thoughts so they don't lose them):
-"${String(idea.idea || '').slice(0, 500)}"
+  // LISTS (Anna, Nov 22 2026: "if someone says something about making a list
+  // of some type, we should have something similar to tracking where entering
+  // items separated by comma gets made into list items or people can add list
+  // items one by one like logging something"). An idea with items under it
+  // was already shown as a list (sub-ideas, list_format), but nothing made
+  // one from what was typed, and the box to add an item only showed once a
+  // list had its first item. Now the same look that spots something to keep
+  // track of also spots a list (a new one, or items for one they have), the
+  // items they gave become its items, and a list keeps its "Add item" box even
+  // when it is empty (is_list). No question is asked first: the idea keeps its
+  // place and its name, and the notice that says what was made has Undo.
+  const listsIn = (all, selfId) => all.filter((i) => !i.parent_idea_id && !i.tracker && i.id !== selfId
+    && (i.is_list || all.some((s) => s.parent_idea_id === i.id)));
+  // The question the look asks. The server asks the same one, word for word,
+  // about anything captured outside this page (trackerJudgePrompt in
+  // base44/shared/captureToTasks.ts): keep the two together.
+  const judgePromptFor = (text, all, selfId) => {
+    const trackers = all.filter((i) => i.tracker && !i.parent_idea_id && i.id !== selfId).map((i) => ({ id: i.id, name: i.idea, recent: recentOf(i) }));
+    const lists = listsIn(all, selfId).map((i) => ({ id: i.id, name: i.idea }));
+    return `Someone typed this into the Parking Lot of an app for people with ADHD (a place to dump thoughts so they don't lose them):
+"${String(text || '').slice(0, 500)}"
 
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
+Lists they already keep here (a name with items under it): ${lists.length ? JSON.stringify(lists) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
+1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. When what they keep track of is words, not numbers (titles, names, places; its "recent" entries show what one looks like), the thing they named is the entry itself. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
-3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
+3. Something to put on one of the lists they already keep, like "add milk and eggs to the grocery list" when they have a grocery list: {"add_to": "<that list's id>", "items": ["<each thing, one per item, in their words>"]}. Match the list by meaning, not spelling.
+4. They are starting a list: they call it a list, or they name a kind of thing to collect and give several of them, or it is plainly a place to collect items ("grocery list: milk, eggs, bread", "packing list for the trip", "movies to watch: Dune, Arrival"). {"list": "<a short name for the list, in their words>", "items": ["<each thing they already gave for it, one per item, in their words>"]}, with "items": [] when they gave none yet. A list they already keep, under any wording, is 3: never start a second one for it.
+5. Anything else: an idea, a to-do, a note, a one-time thing. {"none": true}
 
 note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 5. Only 3 or 4 when they clearly mean a list of items; one thing to do, or one thought, is 5. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is a list (4), not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+  };
+  // The look starts the moment they tap Add, while the idea is still being
+  // saved (Anna, Nov 22 2026: "it takes a while for the prompt to track
+  // something to come up"). Measured that day: 4.6 seconds from the idea
+  // being saved to the question, of which the look itself is 1.9 to 2.8; the
+  // rest was waiting for the save to come back and the list to reload before
+  // the look was even asked for.
+  const startLook = (text) => base44.functions.invoke('categorizeIdea', { prompt: judgePromptFor(text, ideas, null), private: true }).catch(() => null);
+  // Items onto a list, one row each (the same rows the "Add item" box makes).
+  const addListItems = async (parentId, items) => {
+    const made = [];
+    for (const item of items) {
+      const row = await base44.entities.ParkingLotIdea.create({ idea: item, parent_idea_id: parentId, converted_to_task: false }).catch(() => null);
+      if (row?.id) made.push(row.id);
+    }
+    return made;
+  };
+  // What the look found, made: items for lists they have, and new lists (the
+  // first takes over the row they typed, like a new tracker does).
+  const makeLists = async (idea, adds, newLists) => {
+    const madeItems = [];
+    const madeLists = [];
+    for (const { target, items } of adds) madeItems.push(...await addListItems(target.id, items));
+    const [first, ...rest] = newLists;
+    if (first) {
+      await base44.entities.ParkingLotIdea.update(idea.id, { idea: first.name, is_list: true, tracker_checked: true });
+      madeItems.push(...await addListItems(idea.id, first.items));
+    } else {
+      // All of it went onto lists they already keep: what they typed is
+      // HIDDEN, not deleted (the same as a logged reading), so Undo can put
+      // it back.
+      await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: true, tracker_checked: true });
+    }
+    for (const n of rest) {
+      const row = await base44.entities.ParkingLotIdea.create({ idea: n.name, is_list: true, tracker_checked: true, converted_to_task: false, parent_idea_id: null }).catch(() => null);
+      if (!row?.id) continue;
+      madeLists.push(row.id);
+      madeItems.push(...await addListItems(row.id, n.items));
+    }
+    let undone = false;
+    const undo = async () => {
+      if (undone) return;
+      undone = true;
+      try {
+        for (const id of [...madeItems, ...madeLists]) await base44.entities.ParkingLotIdea.delete(id).catch(() => {});
+        await base44.entities.ParkingLotIdea.update(idea.id, { idea: idea.idea, is_list: false, converted_to_task: false, tracker_checked: true });
+        toast({ title: 'Kept as you typed it' });
+      } catch (e) {
+        toast({ title: "Couldn't undo that", description: 'Try again in a moment.' });
+      } finally {
+        refreshIdeas();
+      }
+    };
+    const names = [...adds.flatMap((x) => x.items), ...newLists.flatMap((x) => x.items)];
+    toast({
+      title: first ? `Made a list: ${[first, ...rest].map((n) => n.name).join(' and ')}` : `Added to ${Array.from(new Set(adds.map((x) => x.target.idea))).join(' and ')}`,
+      description: names.length ? names.join(', ').slice(0, 120) : 'Add items under it whenever you like.',
+      duration: 8000,
+      action: <ToastAction altText="Undo" onClick={undo}>Undo</ToastAction>,
+    });
+  };
+
+  const judgeIdea = async (idea, all, look = null) => {
+    if (judging.current.has(idea.id)) return;
+    judging.current.add(idea.id);
     let out = null;
     let answered = false;
     try {
-      // categorizeIdea runs on gpt-6-astra (Oct 17 2026).
-      const res = await base44.functions.invoke('categorizeIdea', { prompt, private: true });
+      // categorizeIdea runs on gpt-6-astra (Oct 17 2026). `look` is this same
+      // call already under way (startLook), when the idea was typed on this
+      // page; a look that failed comes back null and is asked again later.
+      const res = await (look || base44.functions.invoke('categorizeIdea', { prompt: judgePromptFor(idea.idea, all, idea.id), private: true }));
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       answered = raw.length > 0;
       out = JSON.parse(raw);
@@ -866,7 +961,22 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         const s = typeof v === 'string' ? v.trim() : '';
         return /^(null|undefined)$/i.test(s) ? '' : s;
       };
+      // LISTS: items for a list they already keep, and lists to start.
+      const adds = [];
+      const newLists = [];
+      const listRows = listsIn(all, idea.id);
+      const itemsOf = (v) => (Array.isArray(v) ? v : []).map(answerText).filter(Boolean).map((x) => x.slice(0, 200)).slice(0, 60);
       for (const a of actions) {
+        const listName = answerText(a.list).slice(0, 120);
+        if (a.add_to || listName) {
+          const items = itemsOf(a.items);
+          // A "new" list with the name of one they already keep is items for it.
+          const onto = (a.add_to ? listRows.find((i) => i.id === a.add_to) : null)
+            || (listName ? listRows.find((i) => sameName(i.idea, listName)) : null);
+          if (onto) { if (items.length) adds.push({ target: onto, items }); }
+          else if (listName) newLists.push({ name: listName, items });
+          continue;
+        }
         const entry = answerText(a.entry);
         const note = answerText(a.note).slice(0, 300);
         const trackName = answerText(a.track).slice(0, 120);
@@ -878,6 +988,13 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         // it never lands on the chart (Oct 21 2026, see captureToTasks.ts).
         if (target && (entry || note)) logs.push({ target, entry, note });
         else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
+      }
+      // A list and nothing about trackers: made here, and that is the whole
+      // of it. (With a reading or a new tracker in the same sentence, the
+      // tracker part goes first, as before.)
+      if (logs.length === 0 && news.length === 0 && (adds.length > 0 || newLists.length > 0)) {
+        await makeLists(idea, adds, newLists);
+        return;
       }
       const together = logs.map((l) => l.target.id); // every tracker this one sentence touched
       const added = [];
@@ -1362,7 +1479,7 @@ Return ONLY the category name, nothing else.`;
                   if (!textInput.trim()) return;
                   
                   // Check if user is trying to add to an existing list
-                  const addToListMatch = textInput.toLowerCase().match(/add (.+?) to (?:the |my )?(.+?)(?:\s+list)?$/i);
+                  const addToListMatch = textInput.trim().match(/add (.+?) to (?:the |my )?(.+?)(?:\s+list)?$/i);
                   
                   if (addToListMatch) {
                     const [_, itemToAdd, listName] = addToListMatch;
@@ -1375,12 +1492,15 @@ Return ONLY the category name, nothing else.`;
                     );
                     
                     if (matchingIdea) {
-                      // Add as sub-idea to the matched list
-                      await base44.entities.ParkingLotIdea.create({
-                        idea: itemToAdd.trim(),
-                        parent_idea_id: matchingIdea.id,
-                        converted_to_task: false
-                      });
+                      // Add to the matched list, one item per thing named
+                      // (several at once, separated by commas).
+                      for (const item of itemToAdd.split(/[,\n]+/).map((x) => x.trim()).filter(Boolean)) {
+                        await base44.entities.ParkingLotIdea.create({
+                          idea: item,
+                          parent_idea_id: matchingIdea.id,
+                          converted_to_task: false
+                        });
+                      }
                       queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
                       setTextInput("");
                       setShowQuickAdd(false);
@@ -1388,12 +1508,16 @@ Return ONLY the category name, nothing else.`;
                     }
                   }
                   
-                  // Otherwise create as new idea
-                  await base44.entities.ParkingLotIdea.create({
+                  // Otherwise create as new idea. The look at what it is (a
+                  // reading, something to keep track of, a list) starts now,
+                  // while it is being saved (startLook).
+                  const look = startLook(textInput);
+                  const made = await base44.entities.ParkingLotIdea.create({
                     idea: textInput,
                     converted_to_task: false,
                     parent_idea_id: null
                   });
+                  if (made?.id) judgeIdea({ ...made, idea: made.idea || textInput }, ideas, look);
                   queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
                   setTextInput("");
                   setShowQuickAdd(false);
@@ -1705,7 +1829,7 @@ Return ONLY the category name, nothing else.`;
                   );
                 })()}
 
-                {group.subIdeas.length > 0 && (
+                {(group.subIdeas.length > 0 || group.parent.is_list) && (
                   <div className="ml-6 space-y-2 mt-4">
                     {group.subIdeas.map((subIdea, index) => {
                       const format = group.parent.list_format || 'plain';
@@ -1804,11 +1928,15 @@ Return ONLY the category name, nothing else.`;
                       e.preventDefault();
                       const input = e.target.elements.subidea.value;
                       if (!input.trim()) return;
-                      await base44.entities.ParkingLotIdea.create({
-                        idea: input.trim(),
-                        parent_idea_id: group.parent.id,
-                        converted_to_task: false
-                      });
+                      // One item per thing named: several at once,
+                      // separated by commas (Anna, Nov 22 2026).
+                      for (const item of input.split(/[,\n]+/).map((x) => x.trim()).filter(Boolean)) {
+                        await base44.entities.ParkingLotIdea.create({
+                          idea: item,
+                          parent_idea_id: group.parent.id,
+                          converted_to_task: false
+                        });
+                      }
                       queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
                       e.target.reset();
                     }} className="flex gap-2">
