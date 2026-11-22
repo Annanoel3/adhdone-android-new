@@ -26,7 +26,15 @@ import { textTaskOpenLabel } from './alarmScreen.ts';
 // ("It's time — "…), and schedulePush, which every booking goes through,
 // swaps them for these. Null when no good answer comes back in time: the plain
 // words go out, so a reminder is never held up or lost over its wording.
-export async function atTimeWords(task: any, atMs: number, timeZone: string, timeoutMs = 6000): Promise<{ title: string; body: string } | null> {
+//
+// READ OUT LOUD (Anna, Nov 22 2026: "the most recent alarm I got was wayyy to
+// many words. For those that have the speaking alarm noise, long ass sentences
+// are really annoying"). When this reminder rings as an alarm whose sound is
+// "Read it to me", the phone's voice reads the body from start to finish, so
+// the caller says so (`opts.spoken`, schedulePush) and the body is asked for
+// as one short sentence. Smart Reminders is told the same thing its own way
+// (THEIR ALARMS ARE READ OUT LOUD, cronSmartTaskNudge).
+export async function atTimeWords(task: any, atMs: number, timeZone: string, timeoutMs = 6000, opts: { spoken?: boolean } = {}): Promise<{ title: string; body: string } | null> {
   try {
     const title = String(task?.title || '').trim();
     if (!title || !Number.isFinite(atMs)) return null;
@@ -51,6 +59,9 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
       `The time they set for it: ${when}${repeats ? ` (it repeats ${repeats})` : ''}`,
       task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
     ].filter(Boolean).join('\n');
+    const bodyAsk = opts?.spoken
+      ? "<ONE short sentence, about a dozen words at most. This one rings as an alarm and the phone's voice reads it out loud from start to finish, so leave out whatever they can do without hearing>"
+      : '<one or two complete sentences>';
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'reminderTitle' });
     // gpt-6-astra (was gpt-6-luna, the cheaper one, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
@@ -60,7 +71,7 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
       max_completion_tokens: 2000,
       messages: [
         { role: 'system', content: REMINDER_BRIEF },
-        { role: 'user', content: `${facts}\n\nThis is the one reminder that goes out at exactly that time, the reminder for the time they set. Write it. It has to be plain from the words alone what it is for and that the time is now. Return JSON only: {"title": "<2-6 words, may include one emoji that fits what it literally says>", "body": "<one or two complete sentences>"}` },
+        { role: 'user', content: `${facts}\n\nThis is the one reminder that goes out at exactly that time, the reminder for the time they set. Write it. It has to be plain from the words alone what it is for and that the time is now. Return JSON only: {"title": "<2-6 words, may include one emoji that fits what it literally says>", "body": "${bodyAsk}"}` },
       ],
     });
     // A late answer is dropped, not waited for.
