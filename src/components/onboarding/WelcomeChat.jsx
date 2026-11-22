@@ -12,7 +12,7 @@ import SCRIPT from './welcomeScript';
 import { claimHandle } from '@/functions/claimHandle';
 import { enqueueCapture } from '@/lib/pendingCaptures';
 import { firstUseSeen, markFirstUseSeen } from './FirstUseDialog';
-import { ONBOARDING_STEPS, markStepDone } from './onboardingGate';
+import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { onThisPhone } from '@/lib/phonePlatform';
 
 // The "this is what a reminder looks like" push: booked once per account, a
@@ -79,6 +79,10 @@ function whenOptions(now = new Date()) {
 // and settled the same way that card did, so everything downstream — the
 // re-ask on Home, OneSignal waiting for an answer, the shortcut offer on the
 // second open — behaves exactly as before.
+// The phone's bridge for the notifications question. It attaches a moment
+// after the web layer boots (see the wait in WelcomeChat).
+const hasNotifyBridge = () => !!window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+
 function settleNotifications() {
   try {
     localStorage.setItem('quick_capture_prompt_seen', 'true');
@@ -193,6 +197,32 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     return () => { stopped = true; };
   }, [offerPin]);
 
+  // THE NOTIFICATIONS QUESTION COMES FIRST NOW (welcomeScript.js; Anna, Nov 22
+  // 2026: "Move the notifications"), so it can come up before the phone's
+  // bridge has attached. Stepping over it then, as "nothing to ask here",
+  // would skip the question on the very phones it is for. So while that beat
+  // is up and the bridge isn't there yet, the card waits (the hello line
+  // shows meanwhile): up to 2.5 seconds for any sign of the phone app, up to
+  // 12 once the phone app is known to be there. Only after that is it a
+  // browser with nothing to ask.
+  const [bridgeWait, setBridgeWait] = useState('waiting');
+  const onNotifyBeat = script[idx]?.input === 'notify';
+  useEffect(() => {
+    if (!onNotifyBeat || bridgeWait !== 'waiting' || hasNotifyBridge()) return undefined;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (hasNotifyBridge()) { setBridgeWait('here'); return; }
+      const native = !!window.Capacitor?.isNativePlatform?.();
+      if (Date.now() - started > (native ? 12000 : 2500)) setBridgeWait('none');
+    }, 100);
+    return () => clearInterval(timer);
+  }, [onNotifyBeat, bridgeWait]);
+  // Already answered on this phone before this sitting began (they answered
+  // it, closed the app before the name, and are back at the start): not
+  // asked twice. Read once, so answering it in this sitting changes nothing
+  // about the card that is up.
+  const notifySettledAtStart = useRef(isStepDone(ONBOARDING_STEPS.permissions));
+
   // Beats that don't apply are stepped over (a "when?" with no task; the
   // notifications question outside the phone app, where there is nothing to
   // ask). Decided as each beat comes up, not once at the start: the phone's
@@ -202,26 +232,35 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   useLayoutEffect(() => {
     const b = script[idx];
     if (!b) return;
-    const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+    // Still waiting to see whether this is the phone app: neither shown nor
+    // stepped over yet (see bridgeWait).
+    if (b.input === 'notify' && !hasNotifyBridge() && bridgeWait === 'waiting') return;
+    const noBridge = b.input === 'notify' && !hasNotifyBridge();
+    const settledBefore = b.input === 'notify' && notifySettledAtStart.current;
     const alreadyOn = b.input === 'notify' && !offerPin && phoneAllows === true && !notify;
     if (alreadyOn) {
       settleNotifications();
       setNotify('allowed');
     }
     const gone =
-      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn;
+      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn || settledBefore;
+    // The task waits for its time, then goes in. With the notifications
+    // question already behind them, a "when?" that is stepped over because the
+    // task says when is that moment.
+    if (b.input === 'when' && gone && task && !script.slice(idx + 1).some((x) => x.input === 'notify')) captureTask(task, phraseRef.current);
     // No notifications question here (a browser, or an account that already
     // answered it when the chat is picked back up): the task goes in now
     // instead of after that answer.
     if (b.input === 'notify' && gone && task && hasWhenBeat) captureTask(task, phraseRef.current);
     if (gone) setIdx((i) => nextStop(script, i + 1));
-  }, [idx, script, name, handle, about, task, when, notify, phoneAllows]);
+  }, [idx, script, name, handle, about, task, when, notify, phoneAllows, bridgeWait]);
   // The same test, for this render: is the beat we're on one of those?
   const beatGone = (b) => {
     if (!b) return false;
-    const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+    const noBridge = b.input === 'notify' && !hasNotifyBridge() && bridgeWait !== 'waiting';
+    const settledBefore = b.input === 'notify' && notifySettledAtStart.current;
     const alreadyOn = b.input === 'notify' && !offerPin && phoneAllows === true && !notify;
-    return (typeof b.skip === 'function' && !!b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn;
+    return (typeof b.skip === 'function' && !!b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn || settledBefore;
   };
 
   // The about-you question is asked once per account, wherever it comes up
@@ -233,6 +272,8 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
   const beat = script[idx];
   const skippedNow = beatGone(beat);
+  // The notifications card, waiting to see whether this is the phone app.
+  const holding = beat?.input === 'notify' && !skippedNow && !hasNotifyBridge() && bridgeWait === 'waiting';
   // The last argument says whether there is a name to say (they can skip the
   // name question); lines that greet by name drop it when there isn't.
   const sayArgs = [name || 'you', handle, about, task, when, notify, { named: !!name }];
@@ -253,9 +294,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // events have no `ui`), so the two can be compared (ownerFirstDays).
   const beatKind = beat ? (beat.final ? 'done' : beat.input || '') : '';
   useEffect(() => {
-    if (!beatKind || skippedNow) return;
+    if (!beatKind || skippedNow || holding) return;
     trackFire('welcome_chat', { props: { beat: beatKind, step: idx, ui: 'cards' } });
-  }, [beatKind, idx, skippedNow]);
+  }, [beatKind, idx, skippedNow, holding]);
 
   // On to the next card. What was said before this point has been read.
   const advance = () => {
@@ -385,6 +426,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         first_win_pick: { pick: opt.firstWin, at: new Date().toISOString(), text: String(task).slice(0, 200) },
       }).catch(() => {});
     }
+    // With the notifications question already behind them (it is the first
+    // card since Nov 22 2026), this is where the task goes in. In a script
+    // that still asks it after this, the task waits for that answer as before.
+    if (task && !script.slice(idx + 1).some((b) => b.input === 'notify')) captureTask(task, phraseRef.current);
     answer();
   };
 
@@ -413,6 +458,13 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer();
   };
 
+  // Whatever path was taken, a task they gave is in by the closing card.
+  const atEnd = !!beat?.final;
+  useEffect(() => {
+    if (atEnd && task) captureTask(task, phraseRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atEnd, task]);
+
   // What the card says.
   const parts = cardParts(line);
   const smallPrint = [...saidOnTheWay, parts.lead].filter(Boolean);
@@ -428,7 +480,15 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     <div className="space-y-5">
       <OnboardingBrandMark />
 
-      {beat && !skippedNow && (
+      {holding && saidOnTheWay.length > 0 && (
+        <div className="space-y-2">
+          {saidOnTheWay.map((t, i) => (
+            <p key={i} className="text-sm leading-relaxed text-muted-foreground">{rich(t)}</p>
+          ))}
+        </div>
+      )}
+
+      {beat && !skippedNow && !holding && (
         <div
           key={idx}
           className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300"
