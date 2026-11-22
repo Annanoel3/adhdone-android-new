@@ -42,7 +42,11 @@ export const TEST_CENTS: Record<string, number> = {
   sorter: 2.5,  // checkTaskCategory: about 1,600 tokens in, 110 out
   parser: 9,    // runTaskParse: about 7,600 in at full price, 250 out
   rename: 10,   // parseTask renameTry: a short look, then a parse when it finds something
-  planner: 9,   // cronSmartTaskNudge: one look (a preview that asks the model, or "re-plan now")
+  // 14 since Nov 22 2026 (it was 9, from the average look across everyone):
+  // owner looks are run on the fullest account, and 5 of them that night
+  // came to 13.8 cents each in the app's own count (about 9,480 tokens in, of
+  // which 6,460 written to the cache and 3,010 read from it, and 1,080 out).
+  planner: 14,  // cronSmartTaskNudge: one look (a preview that asks the model, or "re-plan now")
   steps: 0.5,   // checkSubtasks
   goal: 6,      // goalPlannerChat self-test: one model call per request
 };
