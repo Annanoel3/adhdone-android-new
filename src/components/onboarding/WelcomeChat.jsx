@@ -82,6 +82,10 @@ function whenOptions(now = new Date()) {
 // The phone's bridge for the notifications question. It attaches a moment
 // after the web layer boots (see the wait in WelcomeChat).
 const hasNotifyBridge = () => !!window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
+// Is this the phone app at all? Known from the first moment, unlike the
+// bridge: the phone puts its own object on the page before any of the site's
+// code runs, and that object is what Capacitor reads for isNativePlatform.
+const inPhoneApp = () => !!(window.Capacitor?.isNativePlatform?.() || window.androidBridge || window.webkit?.messageHandlers?.bridge);
 
 function settleNotifications() {
   try {
@@ -176,7 +180,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // fresh account on the same iPhone: the line said the iPhone was about to
   // ask, and the only thing that happened was the app's own button. Already
   // allowed: the question is stepped over and counts as answered "yes".
-  // null = not known yet (the beat then shows as usual).
+  // null = not known yet (the card waits a moment for it; see bridgeWait).
   const [phoneAllows, setPhoneAllows] = useState(null);
   useEffect(() => {
     if (offerPin) return undefined;
@@ -191,7 +195,11 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
       try {
         const st = await NB.getPermissionState();
         if (!stopped) setPhoneAllows(!!st?.granted);
-      } catch (e) { /* unknown: the question shows as usual */ }
+      } catch (e) {
+        // Unknown, and it won't become known: the question shows as usual
+        // (false rather than null, so the card stops waiting for an answer).
+        if (!stopped) setPhoneAllows(false);
+      }
     };
     look();
     return () => { stopped = true; };
@@ -199,24 +207,36 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
   // THE NOTIFICATIONS QUESTION COMES FIRST NOW (welcomeScript.js; Anna, Nov 22
   // 2026: "Move the notifications"), so it can come up before the phone's
-  // bridge has attached. Stepping over it then, as "nothing to ask here",
-  // would skip the question on the very phones it is for. So while that beat
-  // is up and the bridge isn't there yet, the card waits (the hello line
-  // shows meanwhile): up to 2.5 seconds for any sign of the phone app, up to
-  // 12 once the phone app is known to be there. Only after that is it a
-  // browser with nothing to ask.
-  const [bridgeWait, setBridgeWait] = useState('waiting');
+  // bridge has attached, and on the iPhone before the phone has said whether
+  // it already allows them. Stepping over it then, as "nothing to ask here",
+  // would skip the question on the very phones it is for; showing it and
+  // taking it away a moment later would be a card that flashes. So in the
+  // phone app that card waits until both are known (the hello line shows
+  // meanwhile): up to 12 seconds for the bridge, then up to 2 more on the
+  // iPhone for its answer. A browser is known at once (inPhoneApp) and waits
+  // for nothing: the card is stepped over before the screen is drawn.
+  const [bridgeWait, setBridgeWait] = useState(() => (inPhoneApp() ? 'waiting' : 'none'));
+  const notifyReady = hasNotifyBridge() && (offerPin || phoneAllows !== null);
   const onNotifyBeat = script[idx]?.input === 'notify';
   useEffect(() => {
-    if (!onNotifyBeat || bridgeWait !== 'waiting' || hasNotifyBridge()) return undefined;
+    if (!onNotifyBeat || bridgeWait !== 'waiting' || notifyReady) return undefined;
     const started = Date.now();
+    let seenAt = 0;
     const timer = setInterval(() => {
-      if (hasNotifyBridge()) { setBridgeWait('here'); return; }
-      const native = !!window.Capacitor?.isNativePlatform?.();
-      if (Date.now() - started > (native ? 12000 : 2500)) setBridgeWait('none');
+      if (hasNotifyBridge()) {
+        if (!seenAt) seenAt = Date.now();
+        // Android has nothing more to wait for. The iPhone's answer arrives
+        // by itself (phoneAllows, above) and ends this wait; this is the cap.
+        if (offerPin || Date.now() - seenAt > 2000) setBridgeWait('here');
+        return;
+      }
+      if (Date.now() - started > 12000) setBridgeWait('none');
     }, 100);
     return () => clearInterval(timer);
-  }, [onNotifyBeat, bridgeWait]);
+  }, [onNotifyBeat, bridgeWait, notifyReady, offerPin]);
+  // The notifications card was stepped over without being shown (a browser,
+  // already allowed, already answered): it gets no dot either.
+  const [notifyStepped, setNotifyStepped] = useState(false);
   // Already answered on this phone before this sitting began (they answered
   // it, closed the app before the name, and are back at the start): not
   // asked twice. Read once, so answering it in this sitting changes nothing
@@ -232,18 +252,20 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   useLayoutEffect(() => {
     const b = script[idx];
     if (!b) return;
-    // Still waiting to see whether this is the phone app: neither shown nor
-    // stepped over yet (see bridgeWait).
-    if (b.input === 'notify' && !hasNotifyBridge() && bridgeWait === 'waiting') return;
-    const noBridge = b.input === 'notify' && !hasNotifyBridge();
-    const settledBefore = b.input === 'notify' && notifySettledAtStart.current;
-    const alreadyOn = b.input === 'notify' && !offerPin && phoneAllows === true && !notify;
+    const isNotify = b.input === 'notify';
+    const skipped = typeof b.skip === 'function' && !!b.skip(name, handle, about, task, when, notify);
+    const settledBefore = isNotify && notifySettledAtStart.current;
+    // Still waiting on the phone (see bridgeWait): neither shown nor stepped
+    // over yet. One that was answered before has nothing to wait for.
+    if (isNotify && !skipped && !settledBefore && !notifyReady && bridgeWait === 'waiting') return;
+    const noBridge = isNotify && !hasNotifyBridge();
+    const alreadyOn = isNotify && !offerPin && phoneAllows === true && !notify;
     if (alreadyOn) {
       settleNotifications();
       setNotify('allowed');
     }
-    const gone =
-      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge || alreadyOn || settledBefore;
+    const gone = skipped || noBridge || alreadyOn || settledBefore;
+    if (isNotify && gone) setNotifyStepped(true);
     // The task waits for its time, then goes in. With the notifications
     // question already behind them, a "when?" that is stepped over because the
     // task says when is that moment.
@@ -253,7 +275,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     // instead of after that answer.
     if (b.input === 'notify' && gone && task && hasWhenBeat) captureTask(task, phraseRef.current);
     if (gone) setIdx((i) => nextStop(script, i + 1));
-  }, [idx, script, name, handle, about, task, when, notify, phoneAllows, bridgeWait]);
+  }, [idx, script, name, handle, about, task, when, notify, phoneAllows, bridgeWait, notifyReady]);
   // The same test, for this render: is the beat we're on one of those?
   const beatGone = (b) => {
     if (!b) return false;
@@ -272,8 +294,8 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
   const beat = script[idx];
   const skippedNow = beatGone(beat);
-  // The notifications card, waiting to see whether this is the phone app.
-  const holding = beat?.input === 'notify' && !skippedNow && !hasNotifyBridge() && bridgeWait === 'waiting';
+  // The notifications card, still waiting on the phone (see bridgeWait).
+  const holding = beat?.input === 'notify' && !skippedNow && !notifyReady && bridgeWait === 'waiting';
   // The last argument says whether there is a name to say (they can skip the
   // name question); lines that greet by name drop it when there isn't.
   const sayArgs = [name || 'you', handle, about, task, when, notify, { named: !!name }];
@@ -419,8 +441,8 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     phraseRef.current = opt ? opt.phrase : '';
     // Later today / Sometime tomorrow: Smart Reminders gives this task its
     // first reminder 1.5 to 5 hours on (FIRST WIN in cronSmartTaskNudge). Saved
-    // now, on the tap, so it's there before the task is (the task goes in after
-    // the notifications answer) and a closed app can't lose it.
+    // now, on the tap, alongside the task itself (below), so a closed app
+    // can't lose it; the planner only reads it at its next look.
     if (opt?.firstWin && task) {
       base44.auth.updateMe({
         first_win_pick: { pick: opt.firstWin, at: new Date().toISOString(), text: String(task).slice(0, 200) },
@@ -468,7 +490,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const parts = cardParts(line);
   const smallPrint = [...saidOnTheWay, parts.lead].filter(Boolean);
   // Dots: one per card this script can show, the one on screen wide.
-  const stops = script.map((b, i) => (isStop(b) ? i : -1)).filter((i) => i >= 0);
+  const stops = script.map((b, i) => (isStop(b) ? i : -1)).filter((i) => i >= 0 && !(notifyStepped && script[i].input === 'notify'));
   const stepNumber = stops.indexOf(idx) + 1;
   // The first card of a sitting doesn't put the keyboard up by itself: they
   // get to read it whole first (the dialogs don't focus anything on opening
