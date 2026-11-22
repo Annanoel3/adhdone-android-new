@@ -16,8 +16,9 @@ import { phoneOs } from '@/lib/phonePlatform';
 // that it's the app talking to the user, so everything below stays in the app's
 // voice ("this app", "we") and never says "I'm Anna" again.
 //
-// Shape: the whole first sitting is a name, one task, one time, one permission,
-// then the alert-style question — under a minute. It used to open with a bio
+// Shape: the whole first sitting is one permission, a name, one task, one time,
+// then the alert-style question — under a minute. (The permission was fourth
+// until Nov 22 2026; see the notifications beat.) It used to open with a bio
 // and a Places explainer before the first task, and most new people left
 // inside four minutes with nothing set up that could reach them.
 // The about-you question is NOT in the first sitting any more (Anna, Nov 4
@@ -49,6 +50,28 @@ export function saysWhen(text) {
 const SCRIPT = [
   {
     text: () => "Hey, welcome to ADHDone. Built by Anna, who got tired of missing doctor's appointments and of apps that don't work.",
+  },
+  {
+    // THE NOTIFICATIONS QUESTION, FIRST (Anna, Nov 22 2026: "Move the
+    // notifications"). Until then it was the fourth card, after the name, the
+    // first task and its time, "at the one moment it makes sense". But a phone
+    // is only linked for reminders once this is answered, and of the last 12
+    // new accounts 3 left before ever reaching it (one after 44 seconds, on the
+    // name card): nothing could reach them again. Asked first, anyone who sees
+    // even one card has been asked. Its "Not now" is the app's own button, so
+    // a no here doesn't use up the phone's one real permission question.
+    // The words are the ones Anna settled on Nov 15 2026 ("Android will ask
+    // for notification permission or something shorter"; before that the line
+    // was "So it can reach you, Android's about to ask if ADHDone can send
+    // notifications"). In a script that still asks it after a time was
+    // picked, it says the time first. Only in the phone app; the browser has
+    // nothing to ask (WelcomeChat waits a moment for the phone's bridge before
+    // deciding it is a browser).
+    text: (name, handle, about, task, when) =>
+      task
+        ? `${when ? `Set for ${when}. ` : ''}${phoneOs({ capital: true })} will ask to allow notifications.`
+        : `${phoneOs({ capital: true })} will ask to allow notifications.`,
+    input: 'notify',
   },
   {
     // Anna, Nov 15 2026 (the cards' wording, as few words as get the point
@@ -88,19 +111,6 @@ const SCRIPT = [
     skip: (name, handle, about, task) => !task || saysWhen(task),
   },
   {
-    // The notifications question, asked at the one moment it makes sense —
-    // right after they set a time. (Until Nov 15 2026 the line was "So it can
-    // reach you, Android's about to ask if ADHDone can send notifications";
-    // Anna: "Android will ask for notification permission or something
-    // shorter".) Only in the phone
-    // app; the browser has nothing to ask (WelcomeChat skips it there).
-    text: (name, handle, about, task, when) =>
-      task
-        ? `${when ? `Set for ${when}. ` : ''}${phoneOs({ capital: true })} will ask to allow notifications.`
-        : `${phoneOs({ capital: true })} will ask to allow notifications.`,
-    input: 'notify',
-  },
-  {
     // The closing line. Nothing that reaches them comes after this; the
     // about-you question waits for the second open.
     text: (name, handle, about, task, when, notify) =>
@@ -123,7 +133,16 @@ const SCRIPT = [
 // this account), and the closing line. Nothing already answered is asked
 // twice.
 export function resumeScript({ hasTask = false, notifyAnswered = false } = {}) {
-  const rest = SCRIPT.slice(2).map((beat) => {
+  // By what each beat is, not by where it sits in SCRIPT: the notifications
+  // question (first, as in the first run, and stepped over once answered),
+  // the task, its time, the closing line. The name is never asked again here.
+  const pick = (test) => SCRIPT.find(test);
+  const rest = [
+    pick((b) => b.input === 'notify'),
+    pick((b) => b.input === 'task'),
+    pick((b) => b.input === 'when'),
+    pick((b) => b.final),
+  ].map((beat) => {
     if (beat.input === 'task') {
       return {
         ...beat,
