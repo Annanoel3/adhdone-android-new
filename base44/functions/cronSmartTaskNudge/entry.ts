@@ -1,3 +1,4 @@
+// Nov 22 2026 (midday): Anna's rule on waiting, in her words: "nothing should be deferred multiple days unless it is low priority" (she had read that the planner's own note said "three deferred days make this a priority"). The NO DATE AND STILL WAITING list now says it (WAITED_RULE_LIVE below): a task there that is not low priority gets its reminder today. Her rule, said as a rule, the same way as her put-off rule; the brief is unchanged, no version bump.
 // Re-saved Nov 22 2026 so the bundled shared/testBudget.ts is picked up: an owner look that asks the model is counted at 14 cents against the daily test cap (it was 9; the 5 looks that tried the change below came to 13.8 cents each on Anna's account). Nothing a person gets changes.
 // Nov 22 2026: a task with no date that the planner held back day after day is told so on its line (WAITED_LINE_LIVE below). Anna, Nov 21 2026, on the daily read of everyone's reminders ("Skipped chores are still happening": her laundry had nothing for 4 days, 11 of 22 owed tasks got nothing on Nov 20; one task got 6 Smart Reminders that day): "Fix......". Until now a task's line only said when it was last brought up; that the planner had left it for "tomorrow" on each of the days since was on the line at the day's first look and gone after it, and a task never brought up at all had no line saying so. Two facts on the task's line and the same tasks in one short list under OPEN TASKS ("NO DATE AND STILL WAITING"), no instruction; the brief is unchanged, no version bump. Live since about 1 AM CST Nov 22. Off (the switch), nothing the planner is shown changes by a character; an owner replay with candidate: true shows the facts either way.
 // Nov 20 2026: owner-run looks that ask the model (a preview, a replay that is not dry, "re-plan now") ask the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"), and a plain preview is owner only like the other owner tools (it hands back a person's whole plan and it costs a model call; until now anyone who could call the function could ask for one). Scheduled runs and the re-plan after someone changes a task never go through either check.
@@ -150,6 +151,20 @@ const PLANNER_V2_LIVE = true;
 // Nov 22 2:00 PM); a dry look at everyone else reachable found one other
 // person with any such task (5 of them).
 const WAITED_LINE_LIVE = true;
+// ANNA'S RULE ON WAITING (Nov 22 2026, midday): "nothing should be deferred
+// multiple days unless it is low priority". The facts above made the planner
+// say "three days without a mention should not become another silent
+// deferral" in its notes, and still left when to act to its own judgment;
+// she read "three deferred days" and said three is already wrong. So the
+// list now carries her rule as a rule (like her put-off rule on a task's
+// line, RULES.md §10 point 4): a task on it that is not low priority has had
+// its one day of waiting and gets a reminder today. Each row shows the
+// task's priority. What still stands above the rule is the person's own
+// word on the task (a tag that parks it, a reminder wish) and anything the
+// app itself holds (a Later break, quiet hours, one-a-day). Off: the list
+// reads as it did before, character for character. An owner replay with
+// candidate: true shows it either way.
+const WAITED_RULE_LIVE = false;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
@@ -1341,6 +1356,7 @@ Deno.serve(async (req) => {
           v2: plannerV2 && useBrief,
           // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file).
           waitedLine: (WAITED_LINE_LIVE || useCandidate) && plannerV2 && useBrief,
+          waitedRule: (WAITED_RULE_LIVE || useCandidate) && plannerV2 && useBrief,
           // What it held back at its earlier looks (PLANNER V2, 3).
           passedBefore: plannerV2 && Array.isArray(user.smart_nudge_passed) ? user.smart_nudge_passed : [],
           dryRun,
@@ -2189,8 +2205,10 @@ interface PlanContext {
   // PLANNER V2 (top of file), and what it held back at its earlier looks.
   v2?: boolean;
   passedBefore?: any[];
-  // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file).
+  // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file), and Anna's rule
+  // on it (WAITED_RULE_LIVE).
   waitedLine?: boolean;
+  waitedRule?: boolean;
   fixed: any[];
   habits?: Record<string, any>;
   // Filled in by generateDailySchedule for THIS call (see PlanOut).
@@ -2740,7 +2758,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     for (const d of doneToday) { const k = sameName(d); if (k) nameCount[k] = (nameCount[k] || 0) + 1; }
     // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE): the tasks whose line says
     // so, gathered for the short list under OPEN TASKS.
-    const waited: { n: number; title: string; run: number }[] = [];
+    const waited: { n: number; title: string; run: number; pr: string }[] = [];
     const line = (t: any, i: number) => {
       const parts: string[] = [];
       const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
@@ -2870,7 +2888,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
             : `you held it back on each of the last ${run} days and nothing went out about it on any of them`}${never
             ? `; nothing has gone out about it at all ${sinceAdded ? 'since it was added' : 'in the past week'}`
             : ''}`);
-          waited.push({ n: i + 1, title: String(t.title || ''), run });
+          waited.push({ n: i + 1, title: String(t.title || ''), run, pr: String(t.urgency || 'medium') });
         }
       }
       const react: string[] = [];
@@ -3049,7 +3067,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
     // The same fact as on those tasks' own lines, in one place (the lines are
     // long, and on a full day this was the part that went unread).
-    if (waited.length) out.push(`NO DATE AND STILL WAITING (from the list above: you held each of these back on every one of the days shown, and nothing has gone out about it on those days or yet today):\n${[...waited].sort((a, b) => b.run - a.run || a.n - b.n).map((w) => `- ${w.n}. "${w.title}": ${w.run === 1 ? 'yesterday' : `the last ${w.run} days`}`).join('\n')}`);
+    // ANNA'S RULE ON WAITING (WAITED_RULE_LIVE, top of file): said once, over
+    // the list, when anything on it is not low priority.
+    const waitedRule = ctx.waitedRule && waited.some((w) => w.pr !== 'low')
+      ? ' A task is not held back for more than one day unless it is low priority, or their own tag or reminder wish on it says to leave it alone. Every one below that is not low priority has had its day of waiting: a reminder about it goes out today, at the best moment still left in their day, and it is not left for tomorrow again. A low-priority one may wait longer.'
+      : '';
+    if (waited.length) out.push(`NO DATE AND STILL WAITING (from the list above: you held each of these back on every one of the days shown, and nothing has gone out about it on those days or yet today):${waitedRule}\n${[...waited].sort((a, b) => b.run - a.run || a.n - b.n).map((w) => `- ${w.n}. "${w.title}"${ctx.waitedRule ? ` (${w.pr} priority)` : ''}: ${w.run === 1 ? 'yesterday' : `the last ${w.run} days`}`).join('\n')}`);
     const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
     const justAdded = notYet.filter((t: any) => holdEnds.has(t.id));
     if (laterDay.length && v2) out.push(`OPEN TASKS NOT YOURS TODAY:\n${laterDay.map((t: any) => {
