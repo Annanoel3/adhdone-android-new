@@ -1061,6 +1061,35 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ideas]);
 
+  // A tracker marked to become a list (make_list): its entries become the
+  // list's items and it stops being a tracker. Done here, in the app, because
+  // a list's items are rows of their own and a row only belongs to the person
+  // when the app makes it as them (RULES §8.5). Nothing in the app sets the
+  // mark yet; it is set on the row from outside when the owner asks (Anna,
+  // Nov 22 2026, about a tracker of show titles made before lists existed:
+  // "Make my chinese dramas a list"). Until this runs the tracker stays as it
+  // is, so nothing is ever out of sight in between.
+  const listing = useRef(new Set());
+  useEffect(() => {
+    for (const t of ideas) {
+      if (!t.make_list || !t.tracker || t.parent_idea_id || listing.current.has(t.id)) continue;
+      listing.current.add(t.id);
+      (async () => {
+        try {
+          const have = new Set(ideas.filter((s) => s.parent_idea_id === t.id).map((s) => s.idea));
+          const items = (t.tracker_entries || []).map((e) => String(e?.text || e?.note || '').trim()).filter((x) => x && !have.has(x));
+          await addListItems(t.id, items);
+          await base44.entities.ParkingLotIdea.update(t.id, { tracker: false, is_list: true, make_list: false, tracker_checked: true });
+        } catch (e) {
+          listing.current.delete(t.id);
+        } finally {
+          refreshIdeas();
+        }
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ideas]);
+
   // A reminder's tap opens straight to its log (/ParkingLot?log=<id>).
   useEffect(() => {
     const id = new URLSearchParams(location.search).get('log');
