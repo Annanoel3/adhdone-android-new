@@ -1,3 +1,4 @@
+// Nov 22 2026 (3 PM), three things Anna asked for. (1) WAITING, as she then worked it through on a real pile-up: "For anyone who has tasks that piled up, give them one of each reminder today. UNLESS its something that can be saved for tomorrow", and of a gift-planning task for a holiday still weeks away, "could have waited quite a while". So "not more than a day" is no longer flat: what a thing's own nature gives room may wait for a moment that suits it, and on a pile-up each task gets ONE reminder that day, the ones that matter most first, unless it can honestly be saved for tomorrow (TASKS WITH NO DATE and the list under it). (2) SPOKEN ALARMS: "the most recent alarm I got was wayyy to many words. For those that have the speaking alarm noise, long ass sentences are really annoying" (hers had run to 38 words, read aloud). Someone whose alarm sound is the one that speaks (User.alarm_sound_url 'speak:') now has that said to the planner, with her rule: one short sentence (THEIR ALARMS ARE READ OUT LOUD). (3) COST: "Cheaper smart reminders is fine so long as it doesnt get dumber". The call goes out through lean() (shared/aiCost.ts) like every other feature's: the brief is marked as the part to reuse, so the rest of each look is no longer billed as a cache write (a quarter more than plain). The words sent are the same, so are the answers; if OpenAI ever refuses the marking, the call is sent exactly as before. The brief is unchanged, no version bump.
 // Nov 22 2026 (afternoon): the other half of Anna's rule on waiting, the part that comes before a day is lost. Her words: "There are a lot of medium tasks without a date that the user wanted to get done that day. I dont think we can afford to wait on anything medium and above for more than a day. But it really should depend on the smart reminders being SMART and reading the task to determine if it sounds like something that can wait or not." Said once under OPEN TASKS whenever a task there has no date (TASKS WITH NO DATE): what plainly is meant for today or soon gets its reminder today; only what its own words show can wait may wait, and never more than a day unless low priority. No examples in it: reading the task is the planner's job. The brief is unchanged, no version bump.
 // Nov 22 2026 (midday): Anna's rule on waiting, in her words: "nothing should be deferred multiple days unless it is low priority" (she had read that the planner's own note said "three deferred days make this a priority"). The NO DATE AND STILL WAITING list now says it (WAITED_RULE_LIVE below): a task there that is not low priority gets its reminder today. Her rule, said as a rule, the same way as her put-off rule; the brief is unchanged, no version bump.
 // Re-saved Nov 22 2026 so the bundled shared/testBudget.ts is picked up: an owner look that asks the model is counted at 14 cents against the daily test cap (it was 9; the 5 looks that tried the change below came to 13.8 cents each on Anna's account). Nothing a person gets changes.
@@ -85,12 +86,19 @@ import { REMINDER_BRIEF_CANDIDATE } from '../../shared/reminderBriefCandidate.ts
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
-import { countUsage } from '../../shared/aiCost.ts';
+import { lean } from '../../shared/aiCost.ts';
 import { testGate } from '../../shared/testBudget.ts';
 
-// countUsage only counts tokens per feature (shared/aiCost.ts, Nov 6 2026);
-// every call goes out exactly as before.
-const openai = countUsage(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronSmartTaskNudge' });
+// lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
+// the part of the request OpenAI keeps and reuses (Anna, Nov 22 2026:
+// "Cheaper smart reminders is fine so long as it doesnt get dumber"). Until
+// then this was countUsage: counting only, the request untouched (Oct 28
+// 2026, "Smart Reminders is not to be touched"), which left OpenAI's own
+// automatic caching to write the whole changing request to its cache on
+// every look, at a quarter more than plain input. The model, the brief and
+// every word shown to it are the same; if OpenAI refuses the marking, lean
+// sends the call exactly as written.
+const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronSmartTaskNudge' });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // PLANNER V2 (Anna, Nov 16 2026: "Our goal is for it to not leave things out
@@ -1352,6 +1360,9 @@ Deno.serve(async (req) => {
           })(),
           sentSinceSeen,
           plainNotifications: onPlainNotifications(user),
+          // Their alarms ring with the sound that reads the reminder aloud
+          // (THEIR ALARMS ARE READ OUT LOUD, in briefData).
+          spokenAlarm: !onPlainNotifications(user) && String(user.alarm_sound_url || '').trim() === 'speak:',
           oneADay,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
@@ -2196,6 +2207,7 @@ interface PlanContext {
   // Their reminders arrive as regular notifications, which report nothing
   // back (onPlainNotifications): the planner is told so (HOW REMINDERS REACH THEM).
   plainNotifications?: boolean;
+  spokenAlarm?: boolean;
   // A look taken after at least one of today's nudges has already gone out
   // (a second look, an "are they landing?" look, a re-plan after an edit):
   // the planner is told so, and judges any addition against the whole day.
@@ -3063,6 +3075,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
     if (plain) out.push('HOW REMINDERS REACH THEM: as regular notifications on their phone, not alarms. A regular notification sends nothing back to the app. It can be read on the lock screen, acted on or swiped away, and no answer is recorded either way. So no answer is what every reminder to this person looks like. Read each one the way you read Later on an alarm: they saw it and put it off for now. The thing is still undone, and it comes back at its next good moment until it is checked off. Reading one never takes opening the app, so "they have not opened the app since" says nothing about whether it was seen. What you can see is a task being checked off and the app being opened.');
+    // The alarm that speaks (Settings, "Read it to me": the phone's own voice
+    // reads the push's body, AlarmSpeech.java). Anna, Nov 22 2026: "the most
+    // recent alarm I got was wayyy to many words. For those that have the
+    // speaking alarm noise, long ass sentences are really annoying". Hers
+    // that afternoon was 38 words. Said as what it is, with her rule.
+    if (ctx.spokenAlarm) out.push('THEIR ALARMS ARE READ OUT LOUD: they chose the alarm sound that speaks, so the phone\'s voice reads the words of your message aloud, start to finish, every time it rings. A long message is tiresome to sit through. For anything that rings as an alarm, write the message as ONE short sentence, about a dozen words at most, that says the one thing that matters; leave out whatever they can do without hearing.');
     if (ctx.dayStart) out.push(ctx.dayStart);
     if (ctx.oneADay) out.push("ONE A DAY: the app asked whether your reminders were helping and they said no, so they get ONE from you a day now, in all, and today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it. Nothing more from you reaches them today after it.");
     // EARLY DAYS takes over once their first day is over: NEW HERE goes by
@@ -3083,11 +3101,11 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // list has no date, this says what a missing date does and does not
     // mean. A principle, no examples: telling one kind of task from another
     // by its words is the planner's own reading.
-    if (ctx.waitedRule && anyNoDate) out.push('TASKS WITH NO DATE: a missing date does not mean a task can wait. Read each one\'s own words and what the thing is, the way a person would. Something they plainly mean to do today or soon gets its reminder today, at a good moment still left in their day (first thing tomorrow only when today has none left). Only something whose own words show it can wait may be left, and never for more than one day unless it is low priority, or their own tag or reminder wish on it says to leave it alone.');
+    if (ctx.waitedRule && anyNoDate) out.push('TASKS WITH NO DATE: a missing date does not mean a task can wait. Read each one\'s own words and what the thing is, the way a person would. Something they plainly mean to do today or soon gets its reminder today, at a good moment still left in their day (first thing tomorrow only when today has none left). How long anything else may wait is read the same way: something whose own nature gives it room (its occasion or season is still well off, and nothing is lost meanwhile) can wait for a moment that suits it; anything else that is not low priority is not left for more than a day. Their own tag or reminder wish on a task comes first.');
     // ANNA'S RULE ON WAITING (WAITED_RULE_LIVE, top of file): said once, over
     // the list, when anything on it is not low priority.
     const waitedRule = ctx.waitedRule && waited.some((w) => w.pr !== 'low')
-      ? ' A task is not held back for more than one day unless it is low priority, or their own tag or reminder wish on it says to leave it alone. Every one below that is not low priority has had its day of waiting: a reminder about it goes out today, at the best moment still left in their day, and it is not left for tomorrow again. A low-priority one may wait longer.'
+      ? ' These have piled up. Each one gets ONE reminder from you today, the ones that matter most first, unless it is something that can honestly be saved for tomorrow: weigh what each one is, what waiting costs, and how long it has been since anything went out about it. One whose own nature gives it room (see TASKS WITH NO DATE) can take its turn tomorrow or later; none of the others is left for tomorrow again. A low-priority one may wait longer.'
       : '';
     if (waited.length) out.push(`NO DATE AND STILL WAITING (from the list above: you held each of these back on every one of the days shown, and nothing has gone out about it on those days or yet today):${waitedRule}\n${[...waited].sort((a, b) => b.run - a.run || a.n - b.n).map((w) => `- ${w.n}. "${w.title}"${ctx.waitedRule ? ` (${w.pr} priority)` : ''}: ${w.run === 1 ? 'yesterday' : `the last ${w.run} days`}`).join('\n')}`);
     const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
