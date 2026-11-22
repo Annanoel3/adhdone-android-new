@@ -656,11 +656,24 @@ How it works, and how it must keep working:
    them. A free dry look at every other reachable account found one person with any such
    task (5). NOT YET SEEN: a full real day under it. One look sends one thing, so a replay
    cannot show whether each waiting task gets its turn across a day; read it from the next
-   day's reminders (free). IF CHORES STILL GO A DAY WITH NOTHING, the next step is a
-   sentence in Anna's brief about keeping a "tomorrow", shown to her first (her doc, a
-   version bump, everyone re-planned). NEVER: turn the facts into an order ("must go out
-   today"), add a code rule that forces a reminder out, or widen it to dated tasks without
-   Anna's word.
+   day's reminders (free). ANNA'S RULE ON WAITING (Nov 22 2026, midday; switch `WAITED_RULE_LIVE`). She read
+   that the planner's note said "three deferred days make this a priority" and answered:
+   "nothing should be deferred multiple days unless it is low priority". So the NO DATE AND
+   STILL WAITING list carries her rule as a rule, the same way point 4 carries her put-off
+   rule: a task is not held back for more than one day unless it is low priority; every
+   task on the list that is not low priority has had its day of waiting and gets a
+   reminder today, at the best moment still left in their day; a low-priority one may
+   wait longer. Each row shows the task's priority. What stays above the rule: the
+   person's own word on the task (a tag that parks it, a reminder wish) and what the app
+   itself holds (a Later break, quiet hours, one-a-day). The brief is unchanged and nobody
+   was re-planned. CHECKED on one paid look at Anna's own account before it went live
+   (about 14 cents): its notes on her two waiting tasks read "Must get a mention today
+   after three days held back" and "Must get a fresh mention today after two days held
+   back", each with a time that day. WHAT IT MEANS IN NUMBERS: a no-date task that is not
+   low priority now comes up at least every other day; the one other person with waiting
+   tasks that day had 5. NOT YET SEEN: a full real day under it (read it from the next
+   day's reminders, free). NEVER: soften the rule back into a fact, drop the priority from
+   the rows, or widen it to dated tasks, without Anna's word.
 5. **"Not now" gets a break, by Anna's table (Oct 20 2026).** Later, and a snooze they
    picked (a run of snoozes counts once), are each a "not now". 1st: 3 hours for low and
    medium, 2 for high, 1 for urgent. 2nd: 3 hours for low, medium and high, 1 for urgent.
