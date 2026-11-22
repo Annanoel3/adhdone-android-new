@@ -48,6 +48,7 @@ export const TEST_CENTS: Record<string, number> = {
   // which 6,460 written to the cache and 3,010 read from it, and 1,080 out).
   planner: 14,  // cronSmartTaskNudge: one look (a preview that asks the model, or "re-plan now")
   steps: 0.5,   // checkSubtasks
+  tracker: 1.5, // the look at a Parking Lot idea (captureText judge_test): about 1,000 tokens in, 40 out
   goal: 6,      // goalPlannerChat self-test: one model call per request
 };
 
