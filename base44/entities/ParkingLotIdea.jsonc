@@ -57,6 +57,10 @@
       "type": "string",
       "description": "Additional notes for this idea"
     },
+    "is_list": {
+      "type": "boolean",
+      "description": "A list: 'idea' is its name and its items are the ideas under it (parent_idea_id). Made when what they typed means a list (the AI judges, ParkingLot.jsx, Nov 22 2026), so its 'Add item' box shows even while it is empty. An idea that simply has items under it is shown as a list too, with or without this."
+    },
     "tracker": {
       "type": "boolean",
       "description": "Something they log to over time, whatever they want it to be (Anna, Oct 12 2026). 'idea' is its name; the entries are in tracker_entries. Made when what they typed means it (the AI judges, ParkingLot.jsx)."
