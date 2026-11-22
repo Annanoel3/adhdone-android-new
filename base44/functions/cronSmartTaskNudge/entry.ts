@@ -2727,6 +2727,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const nameCount: Record<string, number> = {};
     for (const x of [...tasks, ...(ctx.fixed || [])]) { const k = sameName(x?.title); if (k) nameCount[k] = (nameCount[k] || 0) + 1; }
     for (const d of doneToday) { const k = sameName(d); if (k) nameCount[k] = (nameCount[k] || 0) + 1; }
+    // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE): the tasks whose line says
+    // so, gathered for the short list under OPEN TASKS.
+    const waited: { n: number; title: string; run: number }[] = [];
     const line = (t: any, i: number) => {
       const parts: string[] = [];
       const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
@@ -2856,6 +2859,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
             : `you held it back on each of the last ${run} days and nothing went out about it on any of them`}${never
             ? `; nothing has gone out about it at all ${sinceAdded ? 'since it was added' : 'in the past week'}`
             : ''}`);
+          waited.push({ n: i + 1, title: String(t.title || ''), run });
         }
       }
       const react: string[] = [];
@@ -3032,6 +3036,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
+    // The same fact as on those tasks' own lines, in one place (the lines are
+    // long, and on a full day this was the part that went unread).
+    if (waited.length) out.push(`NO DATE AND STILL WAITING (from the list above: you held each of these back on every one of the days shown, and nothing has gone out about it on those days or yet today):\n${[...waited].sort((a, b) => b.run - a.run || a.n - b.n).map((w) => `- ${w.n}. "${w.title}": ${w.run === 1 ? 'yesterday' : `the last ${w.run} days`}`).join('\n')}`);
     const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
     const justAdded = notYet.filter((t: any) => holdEnds.has(t.id));
     if (laterDay.length && v2) out.push(`OPEN TASKS NOT YOURS TODAY:\n${laterDay.map((t: any) => {
