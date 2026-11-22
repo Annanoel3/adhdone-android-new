@@ -164,7 +164,11 @@ const WAITED_LINE_LIVE = true;
 // app itself holds (a Later break, quiet hours, one-a-day). Off: the list
 // reads as it did before, character for character. An owner replay with
 // candidate: true shows it either way.
-const WAITED_RULE_LIVE = false;
+// LIVE since Nov 22 2026, about 11:30 AM CST. Tried first on one look at
+// Anna's own account at that moment: its notes on her two waiting tasks read
+// "Must get a mention today after three days held back" and "Must get a
+// fresh mention today after two days held back", each with a time that day.
+const WAITED_RULE_LIVE = true;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
