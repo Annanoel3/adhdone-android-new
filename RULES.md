@@ -631,6 +631,36 @@ How it works, and how it must keep working:
    A nudge is a plain notification instead of an alarm ("light") only when a task it names
    has a tag; for an alarm user everything else rings (Anna, Oct 7 and Oct 13 2026: an alarm
    is never turned into a plain notification, and too many alarms is never fixed that way).
+   HELD BACK DAY AFTER DAY (Nov 22 2026; switch `WAITED_LINE_LIVE`, top of
+   cronSmartTaskNudge). Anna, Nov 21 2026, on the daily read ("Skipped chores are still
+   happening": her laundry had nothing for 4 days; on Nov 20, 11 of 22 owed tasks across
+   everyone got nothing while one task of hers got 6 Smart Reminders): "Fix......". THE
+   CAUSE: a task's line said when it was last brought up and what the planner answered at
+   its LAST look only. Its bedtime promise ("review tomorrow at 11") was on the line at the
+   next day's first look and gone from the second on, and a task never brought up had no
+   line saying so. Each look a no-date chore lost to whatever had a time on it, and nothing
+   on the page said this was the fourth such day. NOW: a task with NO DATE that has had
+   nothing go out about it yet today says, on its line, on how many days in a row (counting
+   back from yesterday) it was held back with nothing going out about it, and, when nothing
+   went out about it in the week's history at all, that. The same tasks are listed in one
+   place under OPEN TASKS ("NO DATE AND STILL WAITING"), longest wait first. Facts only, no
+   instruction: whether and when it comes up stays the brief's judgment; the brief is
+   unchanged and nobody was re-planned. The count comes from the planner's own "passed"
+   rows (kept 3 days, so it tops out at 3) and the week's sent history. CHECKED: with the
+   switch off, two replayed moments were shown the same text as before, character for
+   character (free dry looks); 5 paid replayed looks on Anna's own account (Sat Nov 21
+   12:30 PM, Sun Nov 22 2:00 PM; about 32 cents, inside the daily test cap): with the fact
+   only on the long task line the planner's reasons did not change; with the short list
+   they named the wait ("this task should not slip another day", "Three deferred days make
+   this a daylight priority today") and it set an earlier time to come back to one of
+   them. A free dry look at every other reachable account found one person with any such
+   task (5). NOT YET SEEN: a full real day under it. One look sends one thing, so a replay
+   cannot show whether each waiting task gets its turn across a day; read it from the next
+   day's reminders (free). IF CHORES STILL GO A DAY WITH NOTHING, the next step is a
+   sentence in Anna's brief about keeping a "tomorrow", shown to her first (her doc, a
+   version bump, everyone re-planned). NEVER: turn the facts into an order ("must go out
+   today"), add a code rule that forces a reminder out, or widen it to dated tasks without
+   Anna's word.
 5. **"Not now" gets a break, by Anna's table (Oct 20 2026).** Later, and a snooze they
    picked (a run of snoozes counts once), are each a "not now". 1st: 3 hours for low and
    medium, 2 for high, 1 for urgent. 2nd: 3 hours for low, medium and high, 1 for urgent.
