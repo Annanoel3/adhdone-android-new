@@ -13,6 +13,7 @@
 import OpenAI from "npm:openai";
 import { lean } from './aiCost.ts';
 import { privateOpenAiKey } from './privateAi.ts';
+import { testGate } from './testBudget.ts';
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
@@ -263,20 +264,37 @@ export const trackerCanon = (name: unknown): string => {
   return ({ hr: "heartrate", pulse: "heartrate", heartbeat: "heartrate", bpm: "heartrate", bp: "bloodpressure", pressure: "bloodpressure", temp: "temperature", wt: "weight" } as Record<string, string>)[k] || k;
 };
 
-export function trackerJudgePrompt(text: string, trackers: { id: string; name: string }[]): string {
+export function trackerJudgePrompt(text: string, trackers: { id: string; name: string; recent?: string[] }[], lists: { id: string; name: string }[] = []): string {
   return `Someone typed this into the Parking Lot of an app for people with ADHD (a place to dump thoughts so they don't lose them):
 "${String(text || '').slice(0, 500)}"
 
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
+Lists they already keep here (a name with items under it): ${lists.length ? JSON.stringify(lists) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
+1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. When what they keep track of is words, not numbers (titles, names, places; its "recent" entries show what one looks like), the thing they named is the entry itself. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
-3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
+3. Something to put on one of the lists they already keep, like "add milk and eggs to the grocery list" when they have a grocery list: {"add_to": "<that list's id>", "items": ["<each thing, one per item, in their words>"]}. Match the list by meaning, not spelling.
+4. They are starting a list: they call it a list, or they name a kind of thing to collect and give several of them, or it is plainly a place to collect items ("grocery list: milk, eggs, bread", "packing list for the trip", "movies to watch: Dune, Arrival"). {"list": "<a short name for the list, in their words>", "items": ["<each thing they already gave for it, one per item, in their words>"]}, with "items": [] when they gave none yet. A list they already keep, under any wording, is 3: never start a second one for it.
+5. Anything else: an idea, a to-do, a note, a one-time thing. {"none": true}
 
 note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 5. Only 3 or 4 when they clearly mean a list of items; one thing to do, or one thought, is 5. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is a list (4), not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+}
+
+// { judge_test: { text, trackers, lists } } to captureText, owner only: what
+// the look answers for a made-up sentence, with made-up trackers and lists.
+// Nothing is read or saved. Counted against the daily cap on test spending
+// (shared/testBudget.ts) before the model is asked.
+export async function judgeTest(base44: any, body: any) {
+  const t = body?.judge_test || {};
+  const gate = await testGate(base44, 'tracker', 1, body);
+  if (!gate.ok) return Response.json(gate.refusal, { status: 429 });
+  const prompt = trackerJudgePrompt(String(t.text || ''), Array.isArray(t.trackers) ? t.trackers : [], Array.isArray(t.lists) ? t.lists : []);
+  const openai = lean(new OpenAI({ apiKey: privateOpenAiKey('captureToTasks') }), { name: 'captureToTasks' });
+  const completion = await openai.chat.completions.create({ model: "gpt-6-astra", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
+  return Response.json({ answer: String(completion.choices?.[0]?.message?.content || ''), prompt_chars: prompt.length, test_spend: gate.spend });
 }
 
 export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; title: string }) {
@@ -289,7 +307,16 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
     const rows = await base44.entities.ParkingLotIdea.filter({ tracker: true, converted_to_task: false }).catch(() => []);
     const trackers = (rows || []).filter((i: any) => i && i.tracker && !i.parent_idea_id && i.id !== idea.id);
     if (trackers.length === 0) return await handBack("no trackers yet");
-    const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea })));
+    // LISTS (Anna, Nov 22 2026; ParkingLot.jsx, "LISTS"): the same look also
+    // spots a list. Making one, or putting items on one, is the page's work
+    // (it has the Undo), so a list is handed back like a new tracker is.
+    const everything = await base44.entities.ParkingLotIdea.filter({ converted_to_task: false }).catch(() => []);
+    const lists = (everything || []).filter((i: any) => i && !i.tracker && !i.parent_idea_id && i.id !== idea.id
+      && (i.is_list || (everything || []).some((s: any) => s?.parent_idea_id === i.id)));
+    // A tracker's last few entries, so a tracker of words (titles, names) is
+    // read as one (see the question).
+    const recentOf = (t: any) => (t?.tracker_entries || []).map((e: any) => String(e?.text || '').trim()).filter(Boolean).slice(-3).map((x: string) => x.slice(0, 40));
+    const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea, recent: recentOf(i) })), lists.map((i: any) => ({ id: i.id, name: i.idea })));
     // On the private key (shared/privateAi.ts), like the page's look: tracker
     // readings are often health readings.
     const openai = lean(new OpenAI({ apiKey: privateOpenAiKey('captureToTasks') }), { name: 'captureToTasks' });
@@ -316,7 +343,9 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
       const s = typeof v === "string" ? v.trim() : "";
       return /^(null|undefined)$/i.test(s) ? "" : s;
     };
+    let wantsList = false;
     for (const a of actions) {
+      if (a.add_to || said(a.list)) { wantsList = true; continue; }
       const entry = said(a.entry);
       const note = said(a.note).slice(0, 300);
       const trackName = said(a.track).slice(0, 120);
@@ -331,6 +360,7 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
       else if (trackName && !target) wantsNew = true;
     }
     if (wantsNew) return await handBack("starts a new tracker (the page does that)");
+    if (wantsList) return await handBack("a list (the page does that)");
     if (logs.length === 0) {
       // Not a reading: stays marked, so the page doesn't ask again either.
       await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true }).catch(() => {});
