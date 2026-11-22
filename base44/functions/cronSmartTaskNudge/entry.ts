@@ -1,3 +1,4 @@
+// Nov 22 2026 (afternoon): the other half of Anna's rule on waiting, the part that comes before a day is lost. Her words: "There are a lot of medium tasks without a date that the user wanted to get done that day. I dont think we can afford to wait on anything medium and above for more than a day. But it really should depend on the smart reminders being SMART and reading the task to determine if it sounds like something that can wait or not." Said once under OPEN TASKS whenever a task there has no date (TASKS WITH NO DATE): what plainly is meant for today or soon gets its reminder today; only what its own words show can wait may wait, and never more than a day unless low priority. No examples in it: reading the task is the planner's job. The brief is unchanged, no version bump.
 // Nov 22 2026 (midday): Anna's rule on waiting, in her words: "nothing should be deferred multiple days unless it is low priority" (she had read that the planner's own note said "three deferred days make this a priority"). The NO DATE AND STILL WAITING list now says it (WAITED_RULE_LIVE below): a task there that is not low priority gets its reminder today. Her rule, said as a rule, the same way as her put-off rule; the brief is unchanged, no version bump.
 // Re-saved Nov 22 2026 so the bundled shared/testBudget.ts is picked up: an owner look that asks the model is counted at 14 cents against the daily test cap (it was 9; the 5 looks that tried the change below came to 13.8 cents each on Anna's account). Nothing a person gets changes.
 // Nov 22 2026: a task with no date that the planner held back day after day is told so on its line (WAITED_LINE_LIVE below). Anna, Nov 21 2026, on the daily read of everyone's reminders ("Skipped chores are still happening": her laundry had nothing for 4 days, 11 of 22 owed tasks got nothing on Nov 20; one task got 6 Smart Reminders that day): "Fix......". Until now a task's line only said when it was last brought up; that the planner had left it for "tomorrow" on each of the days since was on the line at the day's first look and gone after it, and a task never brought up at all had no line saying so. Two facts on the task's line and the same tasks in one short list under OPEN TASKS ("NO DATE AND STILL WAITING"), no instruction; the brief is unchanged, no version bump. Live since about 1 AM CST Nov 22. Off (the switch), nothing the planner is shown changes by a character; an owner replay with candidate: true shows the facts either way.
@@ -2763,6 +2764,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE): the tasks whose line says
     // so, gathered for the short list under OPEN TASKS.
     const waited: { n: number; title: string; run: number; pr: string }[] = [];
+    // Whether any task on the list has no date (TASKS WITH NO DATE, below).
+    let anyNoDate = false;
     const line = (t: any, i: number) => {
       const parts: string[] = [];
       const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
@@ -2793,6 +2796,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       } else {
         parts.push('no date');
         noDate = true;
+        anyNoDate = true;
       }
       if (t.start_date) parts.push(`start date ${formatDateShort(t.start_date, timeZone)}`);
       if (!Number.isFinite(pin) && hhmmLabel(t.anchor_time)) parts.push(`time they named: ${hhmmLabel(t.anchor_time)}`);
@@ -3071,6 +3075,15 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
     // The same fact as on those tasks' own lines, in one place (the lines are
     // long, and on a full day this was the part that went unread).
+    // ANNA'S RULE ON WAITING, the part before a day is lost (Nov 22 2026,
+    // afternoon; her words are at the top of the file). The list below only
+    // speaks once a task has already waited a day, and its "not more than one
+    // day" could be read as a free day for everything: a task typed with no
+    // date is very often meant for that same day. So whenever a task on the
+    // list has no date, this says what a missing date does and does not
+    // mean. A principle, no examples: telling one kind of task from another
+    // by its words is the planner's own reading.
+    if (ctx.waitedRule && anyNoDate) out.push('TASKS WITH NO DATE: a missing date does not mean a task can wait. Read each one\'s own words and what the thing is, the way a person would. Something they plainly mean to do today or soon gets its reminder today, at a good moment still left in their day (first thing tomorrow only when today has none left). Only something whose own words show it can wait may be left, and never for more than one day unless it is low priority, or their own tag or reminder wish on it says to leave it alone.');
     // ANNA'S RULE ON WAITING (WAITED_RULE_LIVE, top of file): said once, over
     // the list, when anything on it is not low priority.
     const waitedRule = ctx.waitedRule && waited.some((w) => w.pr !== 'low')
