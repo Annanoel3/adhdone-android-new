@@ -1,3 +1,4 @@
+// Nov 22 2026: a task with no date that the planner held back day after day is told so on its line (WAITED_LINE_LIVE below). Anna, Nov 21 2026, on the daily read of everyone's reminders ("Skipped chores are still happening": her laundry had nothing for 4 days, 11 of 22 owed tasks got nothing on Nov 20; one task got 6 Smart Reminders that day): "Fix......". Until now a task's line only said when it was last brought up; that the planner had left it for "tomorrow" on each of the days since was on the line at the day's first look and gone after it, and a task never brought up at all had no line saying so. Two facts, no instruction; the brief is unchanged, no version bump. Off (the switch), nothing the planner is shown changes by a character; an owner replay with candidate: true shows the facts either way.
 // Nov 20 2026: owner-run looks that ask the model (a preview, a replay that is not dry, "re-plan now") ask the daily cap on test spending first (shared/testBudget.ts; Anna: "Cap it"), and a plain preview is owner only like the other owner tools (it hands back a person's whole plan and it costs a model call; until now anyone who could call the function could ask for one). Scheduled runs and the re-plan after someone changes a task never go through either check.
 // Nov 19 2026: Anna's put-off rule (a task put off 3 or more times stops getting the same reminder) is measured against the last few reminders, not the whole week, so a task can't run out of times of day and go silent (her laundry did: nothing after Tue Nov 17 10:29 AM). One fact line; the brief is unchanged, no version bump.
 // Nov 18 2026 (evening): the planner is told how a person's reminders reach them. On regular notifications nothing is ever reported back, and every reminder read "sent; they have not opened the app since", which the planner took for nobody looking and held back (a daily task due that day got nothing by 7 PM; Anna: "everyone with normal notifications has been having a REALLY DUMB smart reminder experience"). New fact line HOW REMINDERS REACH THEM for anyone on regular notifications (onPlainNotifications), and each such reminder reads "sent as a regular notification". How to read the silence (Anna, same evening: "it should assume the user sees every notification and is just pressing later until it gets done"): the line says to read each one the way Later on an alarm is read, seen and put off, coming back until the task is checked off. Nothing changes for someone on alarms. The brief is unchanged. No new AI call.
@@ -119,6 +120,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // it writes to smart_nudge_passed is in the old shape (no back_at) and is
 // folded in at the next scheduled look.
 const PLANNER_V2_LIVE = true;
+// HELD BACK DAY AFTER DAY (Nov 22 2026; Anna: "Fix......" on "Skipped
+// chores are still happening"). Under V2 a task's line says when it was last
+// brought up, and what the planner answered about it at its LAST look. So the
+// promise it made at bedtime ("review tomorrow at 11") is on the line at the
+// next day's first look and gone from the second on, replaced by that day's
+// own "held back, come back at 2"; and a task it has never brought up has no
+// line saying so. Each look, a no-date chore lost to whatever had a time on
+// it, the day ended with "tomorrow" again, and nothing on the page said this
+// was the fourth such day (Anna's laundry: nothing from Tue Nov 17 10:29 AM to
+// Sat Nov 21 2:09 PM; on Fri Nov 20, 11 of 22 owed tasks across everyone got
+// nothing while one task of hers got 6 Smart Reminders). On: the line of a
+// task with NO DATE carries two more facts, all day: on how many days in a
+// row, counting back from yesterday, it was held back with nothing going out
+// about it (its own "passed" rows, kept 3 days), and, when nothing went out
+// about it in the week's history at all, that. Facts only: whether and when
+// it comes up is still the brief's judgment. Off: nothing the planner is
+// shown changes by a single character. An owner replay with candidate: true
+// shows them either way (that is how it was tried before it went live).
+const WAITED_LINE_LIVE = false;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
@@ -1308,6 +1328,8 @@ Deno.serve(async (req) => {
           useBrief,
           briefText: useCandidate ? REMINDER_BRIEF_CANDIDATE : null,
           v2: plannerV2 && useBrief,
+          // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file).
+          waitedLine: (WAITED_LINE_LIVE || useCandidate) && plannerV2 && useBrief,
           // What it held back at its earlier looks (PLANNER V2, 3).
           passedBefore: plannerV2 && Array.isArray(user.smart_nudge_passed) ? user.smart_nudge_passed : [],
           dryRun,
@@ -2156,6 +2178,8 @@ interface PlanContext {
   // PLANNER V2 (top of file), and what it held back at its earlier looks.
   v2?: boolean;
   passedBefore?: any[];
+  // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file).
+  waitedLine?: boolean;
   fixed: any[];
   habits?: Record<string, any>;
   // Filled in by generateDailySchedule for THIS call (see PlanOut).
@@ -2242,6 +2266,26 @@ function mergePassed(prev: any, add: any[], nowMs: number): any[] {
     return Number.isFinite(at) && nowMs - at < PASSED_KEEP_MS;
   });
   return [...kept, ...add].slice(-PASSED_MAX);
+}
+
+// HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file): on how many days
+// in a row, counting back from yesterday, a task was held back with nothing
+// going out about it. heldDays: the owner's dates (YYYY-MM-DD) that have a
+// "passed" row for the task; sentDays: the dates a Smart Reminder about it
+// went out. 0 when yesterday isn't such a day (a day with no row, because the
+// task wasn't on the planner's list, ends the count).
+function heldDaysRunning(heldDays: Iterable<string>, sentDays: Iterable<string>, todayStr: string): number {
+  const held = new Set(heldDays);
+  const sent = new Set(sentDays);
+  const base = Date.parse(`${todayStr}T00:00:00Z`);
+  if (!Number.isFinite(base)) return 0;
+  let n = 0;
+  for (let k = 1; k <= 14; k++) {
+    const day = new Date(base - k * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (!held.has(day) || sent.has(day)) break;
+    n++;
+  }
+  return n;
 }
 
 // PLANNER V2, 3: one row per task per day, the newest answer with how many
@@ -2361,6 +2405,21 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const today = dayOf(r.at) === todayStr;
       const cur = passedByTask.get(r.id);
       passedByTask.set(r.id, { nToday: (cur?.nToday || 0) + (today ? r.n : 0), at: r.at, why: r.why, backAt: r.backAt, notToday: r.notToday, today });
+    }
+  }
+  // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE): the days before today each
+  // task has a "passed" row on.
+  const heldDaysByTask = new Map<string, Set<string>>();
+  if (v2 && ctx.waitedLine) {
+    for (const p of (Array.isArray(ctx.passedBefore) ? ctx.passedBefore : [])) {
+      const id = String(p?.task_id || '');
+      const at = utcMs(p?.at);
+      if (!id || !Number.isFinite(at) || at > nowMs) continue;
+      const day = dayOf(at);
+      if (day === todayStr) continue;
+      const set = heldDaysByTask.get(id) || new Set<string>();
+      set.add(day);
+      heldDaysByTask.set(id, set);
     }
   }
   const holdEnds = new Map<string, number>();
@@ -2681,6 +2740,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (notesText) parts.push(`notes: ${notesText.slice(0, 400)}`);
       if (t.goal_context) parts.push(`this is ${String(t.goal_context).slice(0, 200)}`);
       const pin = pinnedMoment(t);
+      // No date of any kind on it (HELD BACK DAY AFTER DAY, below).
+      let noDate = false;
       if (isClockDeadline(t) && Number.isFinite(pin)) {
         parts.push(pin <= nowMs ? `due by ${whenLabel(pin)} — that time has passed and it isn't done` : `due by ${whenLabel(pin)}`);
       } else if (isAtTime(t) && Number.isFinite(pin)) {
@@ -2695,6 +2756,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         else parts.push(`due by ${d} (${rel})${days < 0 ? ', not done' : ''}`);
       } else {
         parts.push('no date');
+        noDate = true;
       }
       if (t.start_date) parts.push(`start date ${formatDateShort(t.start_date, timeZone)}`);
       if (!Number.isFinite(pin) && hhmmLabel(t.anchor_time)) parts.push(`time they named: ${hhmmLabel(t.anchor_time)}`);
@@ -2779,6 +2841,22 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         parts.push(held.today
           ? `you held it back at ${held.nToday} look${held.nToday === 1 ? '' : 's'} today; at the last one, ${clock(held.at)}, your reason was "${held.why}"${back}`
           : `at your last look at it, ${whenLabel(held.at)}, you held it back: "${held.why}"${back}`);
+      }
+      // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file): a task with
+      // no date, nothing out about it yet today. Facts as they are; the
+      // brief decides what they mean for today.
+      if (v2 && ctx.waitedLine && noDate && !(h && h.today.length)) {
+        const sentDays = (ctx.pastNudges?.get(t.id) || []).filter((p) => p.at <= nowMs).map((p) => dayOf(p.at));
+        const run = heldDaysRunning(heldDaysByTask.get(String(t.id)) || [], sentDays, todayStr);
+        if (run > 0) {
+          const never = !sentDays.length && !(h && Number.isFinite(h.lastBefore));
+          const sinceAdded = Number.isFinite(created) && nowMs - created < 7 * 24 * 60 * 60 * 1000;
+          parts.push(`${run === 1
+            ? 'you held it back yesterday and nothing went out about it'
+            : `you held it back on each of the last ${run} days and nothing went out about it on any of them`}${never
+            ? `; nothing has gone out about it at all ${sinceAdded ? 'since it was added' : 'in the past week'}`
+            : ''}`);
+        }
       }
       const react: string[] = [];
       if ((t.snooze_count || 0) > 0) react.push(`snoozed ${t.snooze_count}x`);
