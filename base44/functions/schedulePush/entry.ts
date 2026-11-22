@@ -182,7 +182,11 @@ Deno.serve(async (req) => {
                 if (oneTime && !task.day_only_task) {
                     // 6 seconds (was 4.5): gpt-6-astra writes these now, and answered in
                     // 2.5–3.5 s in tests (Oct 17 2026); past this the plain words go out.
-                    reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 6000);
+                    // Read out loud (Anna, Nov 22 2026): an alarm whose sound is "Read it
+                    // to me" has its words read by the phone's voice, so they are asked
+                    // for as one short sentence (atTimeWords, `spoken`).
+                    const spoken = !!owner && taskRingsAsAlarm(task, owner) && String(owner.alarm_sound_url || '').trim() === 'speak:';
+                    reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 6000, { spoken });
                     if (reworded) {
                         pushTitle = reworded.title;
                         // An event's prep note stays on the reworded words
