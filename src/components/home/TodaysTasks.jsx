@@ -484,13 +484,16 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
             of this header (phone-size clean-up, item 10) because it squeezed
             the title onto two lines on a phone. So the title never wraps now: when the
             row is too narrow for the title, the sort menu and View All, the
-            sort menu and View All move under the title, to the right. */}
+            sort menu and View All move under the title, to the right (on
+            every phone width; one row from about 600px wide). Checked Nov 23
+            2026 at 320 to 884px wide and 100/115/130% text size: the title is
+            one line every time and nothing spills past the card. */}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <CardTitle className={`flex items-center gap-2 whitespace-nowrap ${theme === 'dark' ? 'text-gray-100' : ''}`}>
             <Clock className="w-5 h-5" />
             Today's Focus
           </CardTitle>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             <TaskSortDropdown />
             <Button
               variant="ghost"
