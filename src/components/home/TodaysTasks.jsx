@@ -479,10 +479,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       <CardHeader className={`border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
         {/* VIEW ALL IS BACK UP HERE, AND THE "See all" UNDER THE LIST IS GONE
             (Anna, Nov 23 2026: "Return the view all and get rid of the see
-            all"). From Nov 14 to Nov 23 2026 it was the other way round: View
-            All had been taken out of this header (phone-size clean-up, item
-            10) because both opened the Tasks page and, on a phone, it squeezed
-            the title onto two lines. So the title never wraps now: when the
+            all"). Both open the Tasks page. Until Nov 14 2026 there were both;
+            from Nov 14 to Nov 23 only "See all": View All had been taken out
+            of this header (phone-size clean-up, item 10) because it squeezed
+            the title onto two lines on a phone. So the title never wraps now: when the
             row is too narrow for the title, the sort menu and View All, the
             sort menu and View All move under the title, to the right. */}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -607,8 +607,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
             </div>
           </div>
         )}
-        {/* (The full-width "See all" button that sat here, Nov 14 to Nov 23
-            2026, is gone: View All in the header opens the same page.) */}
+        {/* (The full-width "See all" button that sat here is gone since Nov 23
+            2026: View All in the header opens the same page.) */}
       </CardContent>
     </Card>
   );
