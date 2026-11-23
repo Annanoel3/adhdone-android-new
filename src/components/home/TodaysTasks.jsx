@@ -477,16 +477,29 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       ) : ''
     }`}>
       <CardHeader className={`border-b ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-        <div className="flex items-center justify-between">
-          <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : ''}`}>
+        {/* VIEW ALL IS BACK UP HERE, AND THE "See all" UNDER THE LIST IS GONE
+            (Anna, Nov 23 2026: "Return the view all and get rid of the see
+            all"). From Nov 14 to Nov 23 2026 it was the other way round: View
+            All had been taken out of this header (phone-size clean-up, item
+            10) because both opened the Tasks page and, on a phone, it squeezed
+            the title onto two lines. So the title never wraps now: when the
+            row is too narrow for the title, the sort menu and View All, the
+            sort menu and View All move under the title, to the right. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <CardTitle className={`flex items-center gap-2 whitespace-nowrap ${theme === 'dark' ? 'text-gray-100' : ''}`}>
             <Clock className="w-5 h-5" />
             Today's Focus
           </CardTitle>
-          {/* "View All" used to sit here too; it opened the same page as the
-              "See all" button under the list, and on a phone it squeezed the
-              title onto two lines (Nov 14 2026). */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <TaskSortDropdown />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(createPageUrl("Tasks"))}
+              className={`text-sm whitespace-nowrap ${theme === 'dark' ? 'text-gray-300 hover:text-gray-100' : ''}`}
+            >
+              View All
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -594,20 +607,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
             </div>
           </div>
         )}
-
-        <Button
-          onClick={() => navigate(createPageUrl("Tasks"))}
-          variant="outline"
-          className={`w-full mt-5 ${
-            theme === 'minimalist'
-              ? 'border-gray-200 text-gray-700 hover:bg-gray-50'
-              : theme === 'dark'
-                ? 'border-gray-600 text-gray-200 hover:bg-gray-700'
-                : 'border-purple-200 text-purple-700 hover:bg-purple-50'
-          }`}
-        >
-          See all
-        </Button>
+        {/* (The full-width "See all" button that sat here, Nov 14 to Nov 23
+            2026, is gone: View All in the header opens the same page.) */}
       </CardContent>
     </Card>
   );
