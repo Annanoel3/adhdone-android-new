@@ -1355,7 +1355,7 @@ async function judgeNotesForUndatedEvent(base44: any, task: any, id: string) {
     const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by });
     if (owners?.[0]?.notes_can_record !== true) return;
     const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
-      notesCheck: { title: task.title || '', location: task.location || '' },
+      notesCheck: { title: task.title || '', location: task.location || '', ownerEmail: task.notification_recipient_email || task.created_by || '' },
     });
     const notes = (res?.data ?? res)?.notes === true;
     await base44.asServiceRole.entities.Task.update(id, { notes_worthy: notes });
