@@ -3,8 +3,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
+import { aiServe } from '../../shared/aiPerson.ts';
 
-export default async function(req) {
+async function aiHandledRequest(req) {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -52,3 +53,6 @@ Rules:
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

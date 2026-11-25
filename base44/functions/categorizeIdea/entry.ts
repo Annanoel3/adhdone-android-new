@@ -3,6 +3,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
 import { privateOpenAiKey } from '../../shared/privateAi.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // The platform's calls occasionally fail once and pass a moment later.
 async function whoIsAsking(base44: any) {
@@ -16,7 +17,7 @@ async function whoIsAsking(base44: any) {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   // Only signed-in people may use this: it runs whatever prompt it's handed
   // on the app's OpenAI account.
   const base44 = await createClientFromRequest(req);
@@ -65,4 +66,4 @@ Deno.serve(async (req) => {
   });
   const message = completion.choices[0].message.content;
   return Response.json({ message });
-});
+}));

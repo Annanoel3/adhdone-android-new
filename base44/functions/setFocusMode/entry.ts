@@ -5,6 +5,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { isInQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -299,7 +300,7 @@ async function exitFocus(base44: any, user: any, keepOffer: boolean) {
   }
 }
 
-export default async function(req: Request): Promise<Response> {
+async function aiHandledRequest(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     ledgerClient = base44;
@@ -391,3 +392,6 @@ export default async function(req: Request): Promise<Response> {
     return Response.json({ error: String(err) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

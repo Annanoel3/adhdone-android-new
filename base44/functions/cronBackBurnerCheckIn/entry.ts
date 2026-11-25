@@ -21,7 +21,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
-import { asPerson } from '../../shared/aiPerson.ts';
+import { asPerson, aiServe } from '../../shared/aiPerson.ts';
 import { isInQuietHours, resolveQuietHours, userTimeZone, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
@@ -126,7 +126,7 @@ const NOT_REAL = new Set([
   'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com',
 ]);
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     if (req.method !== 'POST') {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -362,7 +362,7 @@ Deno.serve(async (req) => {
     console.error('[BACK BURNER] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
-});
+}));
 
 function localHourIn(d: Date, timeZone: string): number {
   try {

@@ -3,6 +3,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
 import { testGate } from '../../shared/testBudget.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // THE one place that decides whether a new task should get a checklist of
 // steps under it ("pay my bills: electric, rent, insurance" → "Pay bills" with
@@ -98,7 +99,7 @@ async function whoIsAsking(base44: any) {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     // Only signed-in people may use this: otherwise anyone could run prompts
     // on the app's OpenAI account.
@@ -142,4 +143,4 @@ Deno.serve(async (req) => {
     console.error("[checkSubtasks] error:", error);
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
-});
+}));

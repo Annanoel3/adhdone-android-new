@@ -5,6 +5,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // Turns a PHOTO (event flyer, appointment card, invitation, handwritten note,
 // screenshot) into the same kind of plain sentence a user would have typed.
@@ -33,7 +34,7 @@ Rules:
 Write it the way a person would say it out loud, e.g.:
 JDM Night on Sept 12th from 6-9pm at 7025 Burnet Rd Austin TX 78757`;
 
-export default async function (req: Request): Promise<Response> {
+async function aiHandledRequest(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -97,3 +98,6 @@ export default async function (req: Request): Promise<Response> {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

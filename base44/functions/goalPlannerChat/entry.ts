@@ -40,6 +40,7 @@ import { lean } from '../../shared/aiCost.ts';
 import { testGate } from '../../shared/testBudget.ts';
 import { stepDueDate } from '../../shared/goalPlan.ts';
 import { secrets } from "base44:runtime";
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const MODEL = 'gpt-6-astra';
 // The platform stops a function after a few minutes; the plan is never left
@@ -1569,7 +1570,7 @@ async function selfTest(openai: any, body: any, today: string) {
   };
 }
 
-export default async function (req: Request) {
+async function aiHandledRequest(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     let user: any = null;
@@ -1649,3 +1650,6 @@ export default async function (req: Request) {
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

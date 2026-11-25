@@ -23,6 +23,7 @@
 // Signed-in people only, on their own tasks.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { flagConflicts, pendingFlags, resolveFlag } from '../../shared/eventConflicts.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 async function whoIsAsking(base44: any) {
   for (let i = 0; i < 3; i++) {
@@ -35,7 +36,7 @@ async function whoIsAsking(base44: any) {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
     const user = await whoIsAsking(base44);
@@ -79,7 +80,7 @@ Deno.serve(async (req) => {
     console.error('[checkEventConflicts]', e);
     return Response.json({ error: String((e as any)?.message || e) }, { status: 500 });
   }
-});
+}));
 
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 

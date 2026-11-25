@@ -39,7 +39,7 @@ import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSl
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { easeNow } from '../../shared/easeOff.ts';
-import { asPerson } from '../../shared/aiPerson.ts';
+import { asPerson, aiServe } from '../../shared/aiPerson.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
@@ -114,7 +114,7 @@ const intervalMsMap = {
   'every_other_day': 2 * 24 * 60 * 60 * 1000,
 };
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     console.log('🔄 [REFILL] Starting reminder refill check...');
 
@@ -1960,7 +1960,7 @@ Deno.serve(async (req) => {
     console.error('❌ [REFILL] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
-});
+}));
 
 // ── Owner health check ──────────────────────────────────────────────────────
 // Runs at the end of every refill (hourly): a few cheap questions about

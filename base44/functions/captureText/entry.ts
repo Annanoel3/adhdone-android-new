@@ -67,6 +67,7 @@ import {
   localToday,
   TASK_KIND,
 } from "../../shared/captureToTasks.ts";
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // Two deliveries of the SAME capture can arrive at once — the phone re-sending
 // while the first attempt is still being worked on. Both pass the capture_id
@@ -188,7 +189,7 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
   return Response.json({ success: true, duplicate: true, kind: "task", count: tasks.length, tasks });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
     const reqBody = await req.json();
@@ -533,7 +534,7 @@ Deno.serve(async (req) => {
     console.error("[captureText] error:", error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
   }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).

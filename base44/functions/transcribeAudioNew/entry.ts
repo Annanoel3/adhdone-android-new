@@ -3,6 +3,7 @@ import OpenAI, { toFile } from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
 import { privateOpenAiKey } from '../../shared/privateAi.ts';
 import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // Two jobs, both on the app's own OpenAI key (RULES.md rule 1):
 //
@@ -956,7 +957,7 @@ async function notesTry(user: any, body: any) {
 
 // ── Entry ──────────────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await whoIsAsking(base44);
@@ -988,4 +989,4 @@ Deno.serve(async (req) => {
     console.error("[transcribeAudioNew] error:", error);
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
-});
+}));

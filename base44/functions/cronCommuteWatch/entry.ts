@@ -76,6 +76,7 @@ import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../sh
 import { listAll } from '../../shared/listAll.ts';
 import { taskRingsAsAlarm, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { withPrep } from '../../shared/prepNote.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 // OneSignal "Android notification channel" for the leave-now push, created in
@@ -526,7 +527,7 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
   return done;
 }
 
-export default async function (req: Request): Promise<Response> {
+async function aiHandledRequest(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     const now = new Date();
@@ -741,6 +742,9 @@ export default async function (req: Request): Promise<Response> {
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

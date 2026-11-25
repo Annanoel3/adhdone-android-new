@@ -21,7 +21,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
-import { aiRouteStatus, currentPerson, asPerson, setAiPerson } from '../../shared/aiPerson.ts';
+import { aiRouteStatus, currentPerson, asPerson, setAiPerson, aiServe } from '../../shared/aiPerson.ts';
 import { claudeKey, claudeFor, CLAUDE_FOR, CLAUDE_EVERYONE, CLAUDE_MODELS } from '../../shared/claudeAi.ts';
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
@@ -37,7 +37,7 @@ const timed = async <T>(fn: () => Promise<T>) => {
   }
 };
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   const base44 = createClientFromRequest(req);
   const me = await base44.auth.me().catch(() => null);
   if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
@@ -122,4 +122,4 @@ Deno.serve(async (req) => {
   }
 
   return Response.json(out);
-});
+}));

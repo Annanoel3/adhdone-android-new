@@ -8,6 +8,7 @@
 // an overnight shift belongs to the day it starts and runs past midnight.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // WHO MAY SEND. This sends a push RIGHT NOW with whatever text it is handed,
 // and it used to do that for any signed-in user, to any email — anyone with an
@@ -21,7 +22,7 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 // partners" button (WeeklyChallenges.jsx, never mounted; file removed Nov 4
 // 2026), which pushed to other people's emails — partner/challenge pushes are
 // meant to be off (RULES.md §2), and this was the one path that still sent them.
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
     try {
         console.log('[sendOneSignalPush] ⏹️ Function started');
         const base44 = createClientFromRequest(req);
@@ -125,7 +126,7 @@ Deno.serve(async (req) => {
             error: error.message
         }, { status: 500 });
     }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

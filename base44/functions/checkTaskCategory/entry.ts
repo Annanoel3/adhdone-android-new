@@ -4,6 +4,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
 import { testGate } from '../../shared/testBudget.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // THE one place that decides what kind of thing a capture is: a task, an idea
 // (Parking Lot), a birthday, something meant for ADHDone itself, or a mix.
@@ -249,7 +250,7 @@ async function whoIsAsking(base44: any) {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
@@ -306,4 +307,4 @@ Deno.serve(async (req) => {
     console.error("[checkTaskCategory] error:", error);
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
-});
+}));

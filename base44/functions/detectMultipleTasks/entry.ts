@@ -13,6 +13,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // THE one place that decides whether a capture is one task or several.
 //
@@ -112,7 +113,7 @@ async function whoIsAsking(base44: any) {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
@@ -162,7 +163,7 @@ Deno.serve(async (req) => {
     console.error("[detectMultipleTasks] error:", error);
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
-});
+}));
 
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 

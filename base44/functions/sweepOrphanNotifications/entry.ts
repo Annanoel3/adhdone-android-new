@@ -3,6 +3,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { filterAll } from '../../shared/listAll.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // Audits OneSignal's scheduled-notification list against what the app actually
 // tracks, and cancels anything live that no task references.
@@ -14,7 +15,7 @@ import { ledgerCancel } from '../../shared/sendLedger.ts';
 //
 // Resumable on purpose: OneSignal rate-limits list paging hard, so one call
 // walks a slice and returns nextOffset. Pass dryRun to measure without deleting.
-export default async function (req: Request): Promise<Response> {
+async function aiHandledRequest(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -136,3 +137,6 @@ export default async function (req: Request): Promise<Response> {
     return Response.json({ error: String(error) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

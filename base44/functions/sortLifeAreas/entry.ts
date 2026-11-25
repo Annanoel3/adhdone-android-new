@@ -45,6 +45,7 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
 import { secrets } from "base44:runtime";
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const AREAS = ['work', 'home', 'health', 'family_friends', 'money', 'errands', 'self_care', 'pets'];
 const AREA_SET = new Set<string>(AREAS);
@@ -334,7 +335,7 @@ async function sortPerson(openai: any, taskEntity: any, rowsEntity: any, email: 
   };
 }
 
-export default async function (req: Request) {
+async function aiHandledRequest(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     let user: any = null;
@@ -441,3 +442,6 @@ export default async function (req: Request) {
     return Response.json({ error: String((error as any)?.message || error) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

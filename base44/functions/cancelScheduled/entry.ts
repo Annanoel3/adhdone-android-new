@@ -7,8 +7,9 @@
 // Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const { notificationId } = await req.json();
     
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
       error: error.message 
     }, { status: 500 });
   }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

@@ -87,7 +87,7 @@ import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
-import { setAiPerson, setAiTest } from '../../shared/aiPerson.ts';
+import { setAiPerson, setAiTest, aiServe } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
@@ -284,7 +284,7 @@ function recipientOf(t: any): string | null {
   return null;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     if (req.method !== 'POST') {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -1840,7 +1840,7 @@ Deno.serve(async (req) => {
     console.error('[SMART NUDGE] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
-});
+}));
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

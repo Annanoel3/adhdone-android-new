@@ -26,6 +26,7 @@ import { resolveQuietHours } from "../../shared/quietHours.ts";
 import OpenAI from "npm:openai";
 import { lean } from "../../shared/aiCost.ts";
 import { testGate } from "../../shared/testBudget.ts";
+import { aiServe } from '../../shared/aiPerson.ts';
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy, Oct 12 2026:
@@ -124,7 +125,7 @@ async function rereadRename(base44: any, user: any, fromRaw: any, toRaw: any) {
   return { added, parsed };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
@@ -229,7 +230,7 @@ Deno.serve(async (req) => {
     console.error("[parseTask] error:", error);
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
   }
-});
+}));
 
 // ── Parser self-test ─────────────────────────────────────────────────────────
 // Admin only: { selfTest: true }. Runs a fixed set of sentences the way they

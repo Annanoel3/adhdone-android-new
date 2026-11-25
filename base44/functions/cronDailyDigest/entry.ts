@@ -32,8 +32,9 @@ import { localMinutesOfDay, userTimeZone, theirDayKeyFor, resolveQuietHours } fr
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
 import { usedAppBetween } from '../../shared/usedApp.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     if (req.method !== 'POST') {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
@@ -87,7 +88,7 @@ Deno.serve(async (req) => {
     console.error('[DIGEST] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
-});
+}));
 
 // Paused by Smart Reminders after a week away and not back since (opening the
 // app moves last_active_at past it; cronSmartTaskNudge clears it when any

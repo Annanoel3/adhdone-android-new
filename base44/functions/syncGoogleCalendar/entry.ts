@@ -29,7 +29,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
-import { setAiPerson } from '../../shared/aiPerson.ts';
+import { setAiPerson, aiServe } from '../../shared/aiPerson.ts';
 import { wallClockToUtc, nextLocalOccurrence, localReminderUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -1668,7 +1668,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail, more: left, conflicts: { flags: conflicts.flags || [], items: conflicts.items || {} } };
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   // Which call we're on. The top-level catch used to log a bare
   // "Base44Error: 403" with a minified stack, which named no call at all — so a
   // sync failing at the very first step looked identical to one failing deep in
@@ -1767,7 +1767,7 @@ Deno.serve(async (req) => {
     console.error('[syncGoogleCalendar] FAILED at step=', step, '| name=', error?.name, '| status=', status, '| message=', error?.message, '| detail=', detail);
     return Response.json({ error: error.message, failed_step: step, upstream_status: status }, { status: 500 });
   }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).

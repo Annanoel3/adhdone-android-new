@@ -14,7 +14,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { userTimeZone, localDateKey } from '../../shared/quietHours.ts';
 import { assignTaskFamilies, judgeCompletionHabit, judgeDailyThing } from '../../shared/runTaskParse.ts';
-import { setAiPerson } from '../../shared/aiPerson.ts';
+import { setAiPerson, aiServe } from '../../shared/aiPerson.ts';
 
 // Records ONE analytics row when a task is completed, with the reminder history
 // that led up to it. Driven by the Task-update workflow rather than the UI,
@@ -26,7 +26,7 @@ import { setAiPerson } from '../../shared/aiPerson.ts';
 // (Until Nov 14 2026 a "next step" push was booked from here when a chore was
 // checked off. Removed: see the note in shared/runTaskParse.ts.)
 
-export default async function (req: Request): Promise<Response> {
+async function aiHandledRequest(req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
@@ -112,6 +112,9 @@ export default async function (req: Request): Promise<Response> {
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);
 
 // ── Families, finishing times and completion habits (Anna, Oct 10 2026) ─────
 // "Track what time users finish tasks that are recurring or created

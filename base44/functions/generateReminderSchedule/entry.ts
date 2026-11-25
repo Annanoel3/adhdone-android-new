@@ -19,7 +19,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
-import { setAiPerson } from '../../shared/aiPerson.ts';
+import { setAiPerson, aiServe } from '../../shared/aiPerson.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { leaveOriginFor, fromWords } from '../../shared/leaveOrigin.ts';
@@ -169,7 +169,7 @@ function getEventNotificationText(label, title, lead, whenToday) {
   return templates[label] || { title: `🎉 ${t}`, body: `Reminder: ${t}` };
 }
 
-export default async function(req) {
+async function aiHandledRequest(req) {
   try {
     const base44 = createClientFromRequest(req);
     // No user-specific data is read here — this only turns a title + date into a
@@ -675,6 +675,9 @@ Examples:
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).

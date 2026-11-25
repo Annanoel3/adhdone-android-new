@@ -2,12 +2,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const openai = lean(new OpenAI({
   apiKey: Deno.env.get("OPENAI_API_KEY"),
 }), { name: 'decomposeTask' });
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -44,4 +45,4 @@ Deno.serve(async (req) => {
     console.error("Error decomposing task:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
-});
+}));

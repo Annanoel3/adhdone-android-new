@@ -2,6 +2,7 @@
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 /**
  * Cancels ALL OneSignal notifications (scheduled or sent) that reference a given
@@ -9,7 +10,7 @@ import { ledgerCancel } from '../../shared/sendLedger.ts';
  * were already cleared from the entity but the actual OneSignal notifications
  * still exist and keep firing.
  */
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -73,4 +74,4 @@ Deno.serve(async (req) => {
     console.error('[cancelOrphanedNotifications] Error:', error);
     return Response.json({ error: String(error) }, { status: 500 });
   }
-});
+}));

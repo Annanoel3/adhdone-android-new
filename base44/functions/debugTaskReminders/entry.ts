@@ -9,6 +9,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { judgeAlarmPairs, lastPairRaw } from '../../shared/runTaskParse.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // Admin-only audit of how the app is doing for real people: one JSON report
 // (nothing is written). Per person: how often they come back, what they made,
@@ -21,7 +22,7 @@ const ms = (v: any) => { const t = Date.parse(v || ''); return Number.isFinite(t
 const day = (v: any) => (Number.isFinite(ms(v)) ? new Date(ms(v)).toISOString().slice(0, 10) : '');
 const inc = (m: Record<string, number>, k: string, n = 1) => { m[k] = (m[k] || 0) + n; };
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
@@ -286,6 +287,6 @@ Deno.serve(async (req) => {
   } catch (e) {
     return Response.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
   }
-});
+}));
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).

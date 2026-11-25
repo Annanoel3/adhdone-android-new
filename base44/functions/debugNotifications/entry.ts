@@ -16,6 +16,7 @@ import { getReminderContent, pushPhoneAlarms, ringsOutLoudOn } from '../../share
 import { userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { applyPrepToPlan, rewordEntryForPrep, withPrep, stripPrep, prepNoteOf, wantsPrepAsk, needsPrepAskPush, nightBeforeWords, prepAskPushWords, startWords, PREP_ASK_LABEL, QUESTIONS_LABEL, PREP_MAX } from '../../shared/prepNote.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // One-time repair, run by the app owner from the editor: { mode: 'reword_pending',
 // ids: [OneSignal ids], apply: false|true }. Reminders booked before the wording
@@ -95,7 +96,7 @@ async function rewordPending(base44: any, ids: string[], apply: boolean) {
   return out;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
     try {
         const base44 = createClientFromRequest(req);
         const user = await base44.auth.me();
@@ -542,7 +543,7 @@ Deno.serve(async (req) => {
             stack: error.stack
         }, { status: 500 });
     }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

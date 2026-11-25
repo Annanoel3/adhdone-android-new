@@ -12,6 +12,7 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { atTimeWords, isPlainAtTimeWords, taskRingsAsAlarm, ringsOutLoudOn } from '../../shared/reminderTitle.ts';
 import { userTimeZone, resolveQuietHours, isInQuietHours } from '../../shared/quietHours.ts';
 import { withPrep } from '../../shared/prepNote.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 // (Re-saved Nov 4 2026 so the bundled shared/sendLedger.ts is picked up: event_conflict and first_task_nudge are soft pushes that yield to a reminder tied to a moment.)
 
 // WHO MAY BOOK A PUSH
@@ -30,7 +31,7 @@ import { withPrep } from '../../shared/prepNote.ts';
 // only once the logs show every real caller passing.
 const ENFORCE_CALLER_CHECK = false;
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
     console.log('[schedulePush] ========== FUNCTION START ==========');
     
     try {
@@ -305,7 +306,7 @@ Deno.serve(async (req) => {
         console.error('[schedulePush] Unhandled error:', error.message);
         return Response.json({ success: false, error: 'Internal server error', error_message: error.message }, { status: 500 });
     }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

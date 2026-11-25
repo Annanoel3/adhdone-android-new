@@ -13,6 +13,7 @@ import { isRecurringInterval } from '../../shared/reminderIntervalDecision.ts';
 import { isBookedId } from '../../shared/eventReminderPlan.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { filterAll } from '../../shared/listAll.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -28,7 +29,7 @@ async function cancelOneSignalNotification(id) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
     console.error('[applyQuietHours] Error:', err);
     return Response.json({ error: err.message }, { status: 500 });
   }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026 (evening): shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.

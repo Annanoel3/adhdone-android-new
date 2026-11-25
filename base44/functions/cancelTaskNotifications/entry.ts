@@ -38,6 +38,7 @@ import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 import { putOffFields, easeStep } from '../../shared/easeOff.ts';
 import { repairMissingRepeatsAs } from '../../shared/nextCopy.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
@@ -703,7 +704,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   return Response.json({ success: true, alarm_screen: alarmScreenFor(owner) });
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   try {
     const body = await req.json();
     if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke' || body?.mode === 'push_state' || body?.mode === 'push_change') {
@@ -888,7 +889,7 @@ Deno.serve(async (req) => {
       error: error.message 
     }, { status: 500 });
   }
-});
+}));
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).

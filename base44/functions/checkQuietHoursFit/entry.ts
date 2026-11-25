@@ -32,6 +32,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 // The same as fitKey in src/components/shared/QuickCapturePrompt.jsx: change
 // both together.
@@ -111,7 +112,7 @@ Answer in JSON only: {"fits": true or false, "why": "one short sentence on what 
 // school hours in it and no work hours are saved yet.
 const offerWorkHours = (verdict: any, work: string[]) => verdict?.hasSetHours === true && work.length === 0;
 
-export default async function(req: Request) {
+async function aiHandledRequest(req: Request) {
   try {
     const base44 = createClientFromRequest(req);
     const me = await base44.auth.me();
@@ -206,3 +207,6 @@ export default async function(req: Request) {
     return Response.json({ error: String((error as any)?.message || error) }, { status: 500 });
   }
 }
+
+// Whose AI calls this request makes (shared/aiPerson.ts, Nov 24 2026).
+export default aiServe(aiHandledRequest);

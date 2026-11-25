@@ -28,6 +28,7 @@ import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { leaveOriginFor, fromWords, CHAIN_GAP_MS, ASSUMED_EVENT_MS, eventEndMs, calendarLengths } from '../../shared/leaveOrigin.ts';
 import { withPrep, prepNoteOf, rewordEntryForPrep } from '../../shared/prepNote.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
@@ -1399,7 +1400,7 @@ async function movePhoneAlarms(client: any, payload: any) {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   let payload: any = null;
   try {
     payload = JSON.parse(await req.clone().text());
@@ -1410,7 +1411,7 @@ Deno.serve(async (req) => {
   const res = await handleTaskEvent(req);
   if (payload && res.ok) await movePhoneAlarms(client, payload);
   return res;
-});
+}));
 
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 

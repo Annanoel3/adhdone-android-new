@@ -2,8 +2,9 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
+import { aiServe } from '../../shared/aiPerson.ts';
 
-Deno.serve(async (req) => {
+Deno.serve(aiServe(async (req) => {
   await createClientFromRequest(req);
   const { prompt } = await req.json();
   const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'checkPredatoryBehavior' });
@@ -16,4 +17,4 @@ Deno.serve(async (req) => {
   });
   const response = JSON.parse(completion.choices[0].message.content);
   return Response.json({ response });
-});
+}));
