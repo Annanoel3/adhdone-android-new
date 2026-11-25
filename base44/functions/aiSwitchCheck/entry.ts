@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
     claude_for: [...CLAUDE_FOR],
     claude_everyone: CLAUDE_EVERYONE,
     models: CLAUDE_MODELS,
+    saved_by: 'run_command test',
   };
 
   // { "probe": true }: does "whose call is this" carry across awaits here, and
