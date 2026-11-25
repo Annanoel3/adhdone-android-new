@@ -11,20 +11,24 @@
 // 1. The call names them: `ai_person` on the request (lean() takes it off
 //    before anything is sent anywhere). Used where the code has the task or
 //    the person in hand: a task's own reminder words, the Later break, the
-//    eased plan, a tracker fold.
-// 2. asPerson(email, fn): everything fn does, and nothing after it.
-// 3. setAiPerson(email): from that line on, for the rest of this request.
-//    Deno carries it across awaits, and also back out of the function that
-//    set it (checked Nov 24 2026 on Deno 2.9), so it is used only at the top
-//    of each turn of a loop over people (each turn sets its own) or in a
-//    request that is about one person only.
-// 4. The person signed in to the app who made the request: read from the
-//    request's sign-in token. Every function that imports this file has its
-//    Deno.serve handler wrapped (below); Base44 is only asked who the token
-//    belongs to when an AI call actually needs to know.
-// Nobody known: OpenAI, exactly as before. Every request runs in its own,
-// fresh context, so one person's request can never see another's (checked
-// with four requests at once, Nov 24 2026).
+//    eased plan, the planner's look.
+// 2. asPerson(email, fn): everything fn does, and nothing after it. Used in
+//    loops over people (each person's part runs inside its own).
+// 3. setAiPerson(email): the rest of THIS request is that person's. Only in a
+//    request that is about one person (one task's completion, one owner's
+//    reminder plan).
+// 4. The person signed in to the app who made the request, read from the
+//    request's sign-in token by aiServe(), which wraps the function's
+//    Deno.serve handler. Base44 is only asked who the token belongs to when
+//    an AI call actually needs to know.
+// Nobody known: OpenAI, exactly as before.
+//
+// Checked on the platform's own runtime (Deno 1.40.2, aiSwitchCheck probe,
+// Nov 24 2026): AsyncLocalStorage.run keeps two requests at once apart;
+// enterWith does NOT work there, and Deno.serve can't be replaced (it is
+// read-only), so neither is used. Each request gets its own context object
+// from aiServe(); setAiPerson writes into that object, so it can never reach
+// another request.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
@@ -45,10 +49,13 @@ export function asPerson<T>(email: any, fn: () => T, extra: Partial<AiWho> = {})
   return aiWho.run({ provider: base.provider, model: base.model, ...extra, email: norm(email) }, fn);
 }
 
+// The rest of this request (or of the asPerson block it is in) is this
+// person's. Writes into the request's own context object (from aiServe or
+// asPerson); outside one, it does nothing and calls go to OpenAI.
 export function setAiPerson(email: any): void {
   try {
-    const base = aiWho.getStore() || {};
-    aiWho.enterWith({ provider: base.provider, model: base.model, email: norm(email) });
+    const w = aiWho.getStore();
+    if (w) { w.email = norm(email); delete w.resolve; }
   } catch (_) { /* not knowing whose it is only means OpenAI */ }
 }
 
@@ -57,8 +64,10 @@ export function setAiPerson(email: any): void {
 // nothing else.
 export function setAiTest(t: { provider?: 'claude' | 'openai'; model?: string }): void {
   try {
-    const base = aiWho.getStore() || {};
-    aiWho.enterWith({ ...base, ...t });
+    const w = aiWho.getStore();
+    if (!w) return;
+    if (t.provider) w.provider = t.provider;
+    if (t.model) w.model = t.model;
   } catch (_) { /* test settings are only for tests */ }
 }
 
@@ -113,41 +122,13 @@ function whoFromRequest(req: Request): AiWho {
   }
 }
 
-// Wrap Deno.serve once, for every function that imports this file (directly
-// or through shared/aiCost.ts): each request runs inside its own context,
-// holding who it is for. If the wrap can't be made, nothing changes (every
-// call goes to OpenAI as before).
-let servePatched = false;
-let serveNote = '';
-try {
-  const D: any = (globalThis as any).Deno;
-  if (!D) serveNote = 'no Deno';
-  else if (typeof D.serve !== 'function') serveNote = `Deno.serve is ${typeof D.serve}`;
-  else if (D.serve.__aiWho) serveNote = 'already wrapped';
-  if (D && typeof D.serve === 'function' && !D.serve.__aiWho) {
-    const original = D.serve;
-    const wrapHandler = (h: any) => (req: Request, info: any) => aiWho.run(whoFromRequest(req), () => h(req, info));
-    const wrapped: any = function (...args: any[]) {
-      const i = args.findIndex((a) => typeof a === 'function');
-      if (i >= 0) args[i] = wrapHandler(args[i]);
-      else if (args[0] && typeof args[0] === 'object' && typeof args[0].handler === 'function') {
-        args[0] = { ...args[0], handler: wrapHandler(args[0].handler) };
-      }
-      return original.apply(D, args);
-    };
-    wrapped.__aiWho = true;
-    D.serve = wrapped;
-    servePatched = D.serve === wrapped;
-    if (!servePatched) {
-      const d = Object.getOwnPropertyDescriptor(D, 'serve');
-      serveNote = `assignment did not take (frozen: ${Object.isFrozen(D)}, writable: ${d?.writable}, configurable: ${d?.configurable}, getter: ${!!d?.get})`;
-    }
-  }
-} catch (e) {
-  servePatched = false;
-  serveNote = `threw: ${String((e as any)?.message || e).slice(0, 160)}`;
+// Wraps a function's Deno.serve handler: each request runs in its own fresh
+// context, holding who it is for (from its sign-in token, if it has one).
+//   Deno.serve(aiServe(async (req) => { ... }));
+export function aiServe<H extends (req: Request, info?: any) => any>(handler: H): H {
+  return ((req: Request, info?: any) => aiWho.run(whoFromRequest(req), () => handler(req, info))) as H;
 }
 
 export function aiRouteStatus() {
-  return { servePatched, serveNote, inRequestContext: !!aiWho.getStore() };
+  return { inRequestContext: !!aiWho.getStore() };
 }
