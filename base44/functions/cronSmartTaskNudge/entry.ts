@@ -87,6 +87,7 @@ import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
+import { setAiPerson } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
@@ -609,6 +610,9 @@ Deno.serve(async (req) => {
     for (const email of Object.keys(tasksByUser)) {
       const user = userMap[email];
       if (!user) continue;
+      // Every AI call from here to the next person is this person's: Claude
+      // or OpenAI by shared/claudeAi.ts (Nov 24 2026). Each turn sets its own.
+      setAiPerson(email);
 
       // The shared fallback when no timezone is saved (it was UTC here, which
       // put a US user's "quiet hours" in the middle of their afternoon).
