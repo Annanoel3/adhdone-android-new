@@ -21,7 +21,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
-import { aiRouteStatus, currentPerson, asPerson } from '../../shared/aiPerson.ts';
+import { aiRouteStatus, currentPerson, asPerson, setAiPerson } from '../../shared/aiPerson.ts';
 import { claudeKey, claudeFor, CLAUDE_FOR, CLAUDE_EVERYONE, CLAUDE_MODELS } from '../../shared/claudeAi.ts';
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
@@ -52,6 +52,28 @@ Deno.serve(async (req) => {
     claude_everyone: CLAUDE_EVERYONE,
     models: CLAUDE_MODELS,
   };
+
+  // { "probe": true }: does "whose call is this" carry across awaits here, and
+  // stay apart between two at once? (Checked on Deno 2.9 locally; this checks
+  // the platform's own runtime.)
+  if (body?.probe === true) {
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    const viaRun = await Promise.all(['a@probe.test', 'b@probe.test'].map((e, i) => asPerson(e, async () => {
+      await sleep(20 - i * 10);
+      await fetch('data:text/plain,x').then((r) => r.text()).catch(() => '');
+      return (await currentPerson()) === e;
+    })));
+    const viaEnter = await Promise.all(['c@probe.test', 'd@probe.test'].map((e, i) => asPerson('', async () => {
+      setAiPerson(e);
+      await sleep(20 - i * 10);
+      return (await currentPerson()) === e;
+    })));
+    const leaksBackOut = await asPerson('outer@probe.test', async () => {
+      await (async () => { setAiPerson('inner@probe.test'); await sleep(5); })();
+      return await currentPerson();
+    });
+    out.probe = { run_keeps_each_apart: viaRun.every(Boolean), enterWith_keeps_each_apart: viaEnter.every(Boolean), after_inner_setAiPerson: leaksBackOut, deno: (globalThis as any).Deno?.version?.deno || null };
+  }
 
   if (body?.ping === true) {
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'aiSwitchCheck' });
