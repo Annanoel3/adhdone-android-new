@@ -127,6 +127,8 @@ export async function judgeBreakMinutes(task: any, owner: any, o: BreakAsk, time
     if (!task || !Number.isFinite(o.limitMinutes) || o.limitMinutes <= BREAK_MIN_MINUTES) return null;
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'notNowBreak' });
     const ask = openai.chat.completions.create({
+      // Whose call this is (Claude or OpenAI, shared/claudeAi.ts).
+      ai_person: owner?.email || task?.notification_recipient_email || task?.created_by || '',
       model: 'gpt-6-astra',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
