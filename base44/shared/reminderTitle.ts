@@ -65,6 +65,8 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'reminderTitle' });
     // gpt-6-astra (was gpt-6-luna, the cheaper one, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
+      // Whose call this is (Claude or OpenAI, shared/claudeAi.ts).
+      ai_person: task?.notification_recipient_email || task?.created_by || '',
       model: 'gpt-6-astra',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
