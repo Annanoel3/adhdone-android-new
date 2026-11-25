@@ -118,8 +118,12 @@ function whoFromRequest(req: Request): AiWho {
 // holding who it is for. If the wrap can't be made, nothing changes (every
 // call goes to OpenAI as before).
 let servePatched = false;
+let serveNote = '';
 try {
   const D: any = (globalThis as any).Deno;
+  if (!D) serveNote = 'no Deno';
+  else if (typeof D.serve !== 'function') serveNote = `Deno.serve is ${typeof D.serve}`;
+  else if (D.serve.__aiWho) serveNote = 'already wrapped';
   if (D && typeof D.serve === 'function' && !D.serve.__aiWho) {
     const original = D.serve;
     const wrapHandler = (h: any) => (req: Request, info: any) => aiWho.run(whoFromRequest(req), () => h(req, info));
@@ -133,12 +137,17 @@ try {
     };
     wrapped.__aiWho = true;
     D.serve = wrapped;
-    servePatched = true;
+    servePatched = D.serve === wrapped;
+    if (!servePatched) {
+      const d = Object.getOwnPropertyDescriptor(D, 'serve');
+      serveNote = `assignment did not take (frozen: ${Object.isFrozen(D)}, writable: ${d?.writable}, configurable: ${d?.configurable}, getter: ${!!d?.get})`;
+    }
   }
-} catch (_) {
+} catch (e) {
   servePatched = false;
+  serveNote = `threw: ${String((e as any)?.message || e).slice(0, 160)}`;
 }
 
 export function aiRouteStatus() {
-  return { servePatched, inRequestContext: !!aiWho.getStore() };
+  return { servePatched, serveNote, inRequestContext: !!aiWho.getStore() };
 }
