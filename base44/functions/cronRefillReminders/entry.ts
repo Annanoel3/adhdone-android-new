@@ -39,6 +39,7 @@ import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSl
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { easeNow } from '../../shared/easeOff.ts';
+import { asPerson } from '../../shared/aiPerson.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { businessHoursLine } from '../../shared/mapsDistance.ts';
@@ -2060,7 +2061,8 @@ async function buildPlanFor(base44: any, task: any, owner: any): Promise<any[]> 
   // only. Anything they typed into the app, or gave a reminder instruction
   // for, is planned as before.
   const allDayImport = task.classification === 'event' && !task.event_time && !!task.google_event_id && !task.reminder_wish;
-  const dayKind = allDayImport ? await dayEntryKind(String(task.title || ''), String(task.notes || ''), 'cronRefillReminders') : 'attend';
+  // (asPerson: this owner's AI call, Claude or OpenAI by shared/claudeAi.ts.)
+  const dayKind = allDayImport ? await asPerson(owner?.email || task.created_by, () => dayEntryKind(String(task.title || ''), String(task.notes || ''), 'cronRefillReminders')) : 'attend';
   // Kept on the entry: a day label (work hours, a day off, a holiday) leaves
   // Today on its own once its day is over (todayTasks.isOverDayLabel in the app).
   if (allDayImport && task.day_entry_kind !== dayKind) {
