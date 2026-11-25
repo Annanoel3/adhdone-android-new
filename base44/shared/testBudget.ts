@@ -30,9 +30,20 @@
 // with an ordinary payload (one picture read, one task parse) looks like the
 // app using it. Those are single calls; the modes that run many are all
 // behind this gate.
+//
+// CLAUDE TESTS (Nov 24 2026, the switch to Claude; Anna: "run tests, and then
+// make it live for everyone"). A test run that an owner sends to Claude on
+// purpose (shared/aiPerson.ts setAiTest, provider "claude") is paid from the
+// $200 a month of Claude API credits that come with Anna's plan, not from
+// money: it is booked on its own count (props.provider "claude") against its
+// own day's limit, CLAUDE_TEST_DAILY_CAP_CENTS, and does not use up the $1
+// OpenAI cap. Priced at the same OpenAI list cents (Claude Fable 5.2 costs
+// less per token than gpt-6-astra, so this over-counts).
 import { filterAll } from './listAll.ts';
+import { currentAiWho } from './aiPerson.ts';
 
 export const TEST_DAILY_CAP_CENTS = 100;
+export const CLAUDE_TEST_DAILY_CAP_CENTS = 500;
 
 // Cents per model call at list price (gpt-6-astra: $10 input, $12.50 cache
 // write, $1 cached input, $50 output, per million tokens; OpenAI's pricing
@@ -64,7 +75,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 // What test runs have booked so far today (Central time). null = the count
 // could not be read.
-export async function testRunsToday(base44: any, nowMs = Date.now()): Promise<{ cents: number; runs: number } | null> {
+export async function testRunsToday(base44: any, nowMs = Date.now(), provider: 'openai' | 'claude' = 'openai'): Promise<{ cents: number; runs: number } | null> {
   try {
     const since = new Date(nowMs - 30 * 60 * 60 * 1000).toISOString();
     const rows = await filterAll(base44.asServiceRole.entities.AppEvent, { event: 'ai_test_run', created_date: { $gte: since } });
@@ -74,6 +85,7 @@ export async function testRunsToday(base44: any, nowMs = Date.now()): Promise<{ 
     for (const r of rows || []) {
       const ms = msOf(r?.created_date);
       if (!Number.isFinite(ms) || dayOf(ms) !== today) continue;
+      if ((r?.props?.provider === 'claude' ? 'claude' : 'openai') !== provider) continue;
       cents += Number(r?.props?.cents) || 0;
       runs++;
     }
@@ -96,8 +108,9 @@ export async function testGate(base44: any, tool: string, calls: number, body: a
   const n = Math.max(1, Math.floor(Number(calls) || 1));
   const cost = round1(each * n);
   const approved = Math.max(0, Math.floor(Number(body?.anna_approved_cents) || 0));
-  const cap = Math.max(TEST_DAILY_CAP_CENTS, approved);
-  const sofar = await testRunsToday(base44);
+  const onCredits = currentAiWho().provider === 'claude';
+  const cap = Math.max(onCredits ? CLAUDE_TEST_DAILY_CAP_CENTS : TEST_DAILY_CAP_CENTS, approved);
+  const sofar = await testRunsToday(base44, Date.now(), onCredits ? 'claude' : 'openai');
   if (!sofar) {
     return { ok: false, refusal: { error: 'TEST CAP', message: "Today's test runs could not be read, so nothing was run. Try again." } };
   }
@@ -116,7 +129,7 @@ export async function testGate(base44: any, tool: string, calls: number, body: a
   try {
     await base44.asServiceRole.entities.AppEvent.create({
       event: 'ai_test_run',
-      props: { tool, calls: n, cents: cost, day: dayOf(Date.now()), ...(approved ? { approved_cents: approved } : {}) },
+      props: { tool, calls: n, cents: cost, day: dayOf(Date.now()), ...(onCredits ? { provider: 'claude' } : {}), ...(approved ? { approved_cents: approved } : {}) },
     });
   } catch (_) {
     return { ok: false, refusal: { error: 'TEST CAP', message: 'This run could not be written down, so nothing was run. Try again.' } };
