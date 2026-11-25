@@ -29,6 +29,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
+import { setAiPerson } from '../../shared/aiPerson.ts';
 import { wallClockToUtc, nextLocalOccurrence, localReminderUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -792,6 +793,9 @@ async function acquireSyncLock(base44, user) {
 const IMPORT_BUDGET_MS = 150 * 1000;
 
 async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}, device = null) {
+  // Every AI call in this person's sync is theirs (shared/aiPerson.ts); each
+  // person's sync sets its own.
+  setAiPerson(user?.email);
   const runId = crypto.randomUUID().slice(0, 8);
   const runStartedMs = Date.now();
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
