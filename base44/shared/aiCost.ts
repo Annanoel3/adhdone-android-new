@@ -33,7 +33,7 @@
 // as before. A call can name its person with `ai_person` on the request; it
 // is taken off before anything is sent.
 import { currentPerson } from './aiPerson.ts';
-import { claudeFor, claudeChat, claudeResponses, ClaudeError } from './claudeAi.ts';
+import { claudeMaybe, claudeFor, claudeChat, claudeResponses, ClaudeError } from './claudeAi.ts';
 
 // OpenAI only caches a prefix of 1,024 tokens or more (about 4 characters each).
 const CACHE_MIN_CHARS = 3500;
@@ -124,6 +124,9 @@ function splitPerson(params: any): { person: any; clean: any } {
 
 async function onClaude(person: any): Promise<boolean> {
   try {
+    if (!claudeMaybe()) return false;
+    // Everyone on Claude (or a test that asks for it): no need to know who.
+    if (claudeFor('')) return true;
     const who = person !== undefined && person !== null && person !== '' ? String(person).toLowerCase() : await currentPerson();
     return claudeFor(who);
   } catch (_) {
