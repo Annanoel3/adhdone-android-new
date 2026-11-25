@@ -24,6 +24,17 @@
 // Fail-safe: if OpenAI ever rejects these settings, the call is re-sent exactly
 // as the caller wrote it, so nothing can break because of this file.
 
+//
+// CLAUDE (Nov 24 2026; Anna: "Can we change everything over to claude only on
+// mt account, run tests, and then make it live for everyone"): every call
+// through lean() first asks whose it is (shared/aiPerson.ts) and, for someone
+// on Claude (shared/claudeAi.ts: CLAUDE_FOR, CLAUDE_EVERYONE), is answered by
+// Claude in OpenAI's shape. If Claude can't answer, the call goes to OpenAI
+// as before. A call can name its person with `ai_person` on the request; it
+// is taken off before anything is sent.
+import { currentPerson } from './aiPerson.ts';
+import { claudeFor, claudeChat, claudeResponses, ClaudeError } from './claudeAi.ts';
+
 // OpenAI only caches a prefix of 1,024 tokens or more (about 4 characters each).
 const CACHE_MIN_CHARS = 3500;
 
@@ -88,7 +99,7 @@ function recordUsage(fn: string, project: string, kind: 'chat' | 'responses', re
     const chat = kind === 'chat';
     const d = (chat ? u.prompt_tokens_details : u.input_tokens_details) || {};
     const props = {
-      fn, kind, project,
+      fn, kind, project: res?.provider === 'claude' ? 'claude' : project,
       model: String(res?.model || ''),
       input: Number(chat ? u.prompt_tokens : u.input_tokens) || 0,
       cached: Number(d.cached_tokens) || 0,
@@ -104,13 +115,54 @@ function recordUsage(fn: string, project: string, kind: 'chat' | 'responses', re
   } catch (_) { /* counting never matters more than the answer */ }
 }
 
+// Whose call this is, and the request without our own field on it.
+function splitPerson(params: any): { person: any; clean: any } {
+  if (!params || typeof params !== 'object' || !('ai_person' in params)) return { person: undefined, clean: params };
+  const { ai_person, ...clean } = params;
+  return { person: ai_person, clean };
+}
+
+async function onClaude(person: any): Promise<boolean> {
+  try {
+    const who = person !== undefined && person !== null && person !== '' ? String(person).toLowerCase() : await currentPerson();
+    return claudeFor(who);
+  } catch (_) {
+    return false;
+  }
+}
+
+// A Claude call that failed goes to OpenAI instead, unless it ran out of the
+// caller's time (then it fails, as an OpenAI call that ran out would have).
+function claudeGaveUp(fn: string, e: any) {
+  const timedOut = e instanceof ClaudeError && e.timedOut;
+  console.error(`[ai] ${fn}: Claude ${timedOut ? 'ran out of time' : 'could not answer, sent to OpenAI'}:`, (e as any)?.message || e);
+  try {
+    fetch(EVENTS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Id': APP_ID },
+      body: JSON.stringify({ event: 'ai_claude_failed', props: { fn, status: Number((e as any)?.status) || 0, timed_out: timedOut, why: String((e as any)?.message || e).slice(0, 160) } }),
+    }).catch(() => {});
+  } catch (_) { /* never matters */ }
+  if (timedOut) throw e;
+}
+
 // Counting only: the calls go out exactly as written (no caching changes).
 function countResponses(openai: any, fn: string, project: string) {
   const responses = openai?.responses;
   if (!responses || typeof responses.create !== 'function' || responses.__counted) return;
   const original = responses.create.bind(responses);
   responses.create = async (params: any, options?: any) => {
-    const res = await original(params, options);
+    const { person, clean } = splitPerson(params);
+    if (await onClaude(person)) {
+      try {
+        const res = await claudeResponses(clean, options);
+        recordUsage(fn, project, 'responses', res);
+        return res;
+      } catch (e) {
+        claudeGaveUp(fn, e);
+      }
+    }
+    const res = await original(clean, options);
     recordUsage(fn, project, 'responses', res);
     return res;
   };
@@ -126,7 +178,17 @@ export function countUsage(openai: any, opts: { name?: string } = {}) {
     if (completions && typeof completions.create === 'function' && !completions.__counted && !completions.__lean) {
       const original = completions.create.bind(completions);
       completions.create = async (params: any, options?: any) => {
-        const res = await original(params, options);
+        const { person, clean } = splitPerson(params);
+        if (await onClaude(person)) {
+          try {
+            const res = await claudeChat(clean, options);
+            recordUsage(fn, project, 'chat', res);
+            return res;
+          } catch (e) {
+            claudeGaveUp(fn, e);
+          }
+        }
+        const res = await original(clean, options);
         recordUsage(fn, project, 'chat', res);
         return res;
       };
@@ -143,7 +205,18 @@ export function lean(openai: any, opts: { name?: string } = {}) {
   const fn = opts.name || 'ai';
   const project = projectOf(openai);
   try { countResponses(openai, fn, project); } catch (_) { /* never matters */ }
-  completions.create = async (params: any, options?: any) => {
+  completions.create = async (rawParams: any, options?: any) => {
+    const { person, clean: params } = splitPerson(rawParams);
+    if (await onClaude(person)) {
+      try {
+        const res = await claudeChat(params, options);
+        logUsage(fn, res);
+        recordUsage(fn, project, 'chat', res);
+        return res;
+      } catch (e) {
+        claudeGaveUp(fn, e);
+      }
+    }
     const cached = withCaching(params);
     const sendAt = async (p: any, o?: any) => {
       try {
