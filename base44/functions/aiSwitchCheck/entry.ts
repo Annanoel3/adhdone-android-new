@@ -51,7 +51,6 @@ Deno.serve(aiServe(async (req) => {
     claude_for: [...CLAUDE_FOR],
     claude_everyone: CLAUDE_EVERYONE,
     models: CLAUDE_MODELS,
-    saved_by: 'run_command test',
   };
 
   // { "probe": true }: does "whose call is this" carry across awaits here, and
@@ -73,7 +72,7 @@ Deno.serve(aiServe(async (req) => {
       await (async () => { setAiPerson('inner@probe.test'); await sleep(5); })();
       return await currentPerson();
     });
-    out.probe = { run_keeps_each_apart: viaRun.every(Boolean), enterWith_keeps_each_apart: viaEnter.every(Boolean), after_inner_setAiPerson: leaksBackOut, deno: (globalThis as any).Deno?.version?.deno || null };
+    out.probe = { asPerson_keeps_each_apart: viaRun.every(Boolean), setAiPerson_keeps_each_apart: viaEnter.every(Boolean), after_inner_setAiPerson: leaksBackOut, deno: (globalThis as any).Deno?.version?.deno || null };
   }
 
   if (body?.ping === true) {
