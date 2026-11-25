@@ -52,6 +52,16 @@ export function setAiPerson(email: any): void {
   } catch (_) { /* not knowing whose it is only means OpenAI */ }
 }
 
+// Owner tests only: send the rest of this request's AI calls to one side
+// (provider), and on Claude to one model. Who each call is for still decides
+// nothing else.
+export function setAiTest(t: { provider?: 'claude' | 'openai'; model?: string }): void {
+  try {
+    const base = aiWho.getStore() || {};
+    aiWho.enterWith({ ...base, ...t });
+  } catch (_) { /* test settings are only for tests */ }
+}
+
 export async function currentPerson(): Promise<string> {
   try {
     const w = aiWho.getStore();
