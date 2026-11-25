@@ -87,7 +87,7 @@ import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 import { easeNow, easeStep, easeTooSoon } from '../../shared/easeOff.ts';
 import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
-import { setAiPerson } from '../../shared/aiPerson.ts';
+import { setAiPerson, setAiTest } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
@@ -370,6 +370,16 @@ Deno.serve(async (req) => {
     if (previewOnly && !replay) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+    // WHICH AI ANSWERS AN OWNER'S LOOK (Nov 24 2026, the switch to Claude):
+    // { ai_provider: "claude" | "openai", ai_model?: "<Claude model id>" } on
+    // a preview or replay, to compare the two on the same moment. Owner only;
+    // a look sent to Claude is booked on the Claude credits' own test count
+    // (shared/testBudget.ts).
+    if (previewOnly && (body?.ai_provider === 'claude' || body?.ai_provider === 'openai' || typeof body?.ai_model === 'string')) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+      setAiTest({ provider: body?.ai_provider === 'openai' ? 'openai' : 'claude', model: typeof body?.ai_model === 'string' ? body.ai_model : undefined });
     }
     // THE DAILY CAP ON TEST SPENDING (shared/testBudget.ts): an owner-run look
     // that asks the model is one call at full price. A dry replay asks
