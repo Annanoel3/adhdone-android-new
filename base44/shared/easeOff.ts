@@ -183,6 +183,8 @@ export async function judgeEasePlan(task: any, owner: any, dayCount: number, tim
     // One-time tasks never go to 'digest' (see the top of this file).
     const allowDigest = isRepeatingTask(task);
     const ask = openai.chat.completions.create({
+      // Whose call this is (Claude or OpenAI, shared/claudeAi.ts).
+      ai_person: owner?.email || task?.notification_recipient_email || task?.created_by || '',
       model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: easePrompt(allowDigest) },
