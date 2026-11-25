@@ -2438,6 +2438,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   const ownerRec = userByEmail[OWNER_ALERT_EMAIL];
   const marks: Record<string, string> = { ...((ownerRec?.owner_alert_marks && typeof ownerRec.owner_alert_marks === 'object') ? ownerRec.owner_alert_marks : {}) };
   const ALARM_ALERT_REST_MS = 7 * H_DAY;
+  // Check 8's "come back to it tonight" waits (due8wait:<email>:<taskId> =
+  // "<their date>|<promised time>"), saved with the other marks.
+  let marksDirty = false;
 
   // 1. Can the app reach OpenAI? One tiny completion. A 429 here is the "no
   //    credits" that silently broke every AI feature on Oct 8 2026.
@@ -2781,27 +2784,47 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     (User.smart_nudge_passed) is printed with it, so the note says why
   //     and not only that. No AI call.
   const pressingQuiet: string[] = [];
+  // Check 8's tasks that Smart Reminders promised to come back to tonight and
+  // didn't (see SMART REMINDERS' OWN PROMISE FOR TONIGHT below).
+  const promiseBroken: string[] = [];
   try {
     for (const u of allUsers) {
       if (!u?.email || !realUser(u.email) || !activeLately(u)) continue;
       if (u.alarm_permissions?.notifications === false || (!u.app_platform && !u.app_build)) continue;
       const tz = userTimeZone(u);
-      if (localHourIn(tz, now) !== 19) continue;
+      const hourNow = localHourIn(tz, now);
       const today = localDateKey(now, tz);
+      // Tasks left at 7 PM for Smart Reminders' own promised time tonight
+      // (see below): looked at again later in the evening.
+      const waitPrefix = `due8wait:${u.email}:`;
+      const waiting = Object.keys(marks).filter((k) => k.startsWith(waitPrefix));
+      if (hourNow !== 19 && !waiting.length) continue;
+      // Minutes left in their waking day: to their quiet hours or to
+      // midnight, whichever comes first (0 inside quiet hours).
+      const nowMin = localMinutesOfDay(now, tz);
+      const qh = resolveQuietHours(u);
+      const quietOn = qh.enabled && qh.startMin !== qh.endMin;
+      const leftMin = quietOn && isInQuietHours(now, qh.startMin, qh.endMin, tz)
+        ? 0
+        : Math.min(quietOn ? ((qh.startMin - nowMin + 1440) % 1440 || 1440) : 1440, 1440 - nowMin);
       const dueToday = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
         && (t.notification_recipient_email || t.created_by) === u.email && !dayLabel(t)
         && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
-      const pressing = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
+      const pressing = hourNow !== 19 ? [] : allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
         && (t.notification_recipient_email || t.created_by) === u.email && !dayLabel(t)
         && (t.urgency === 'high' || t.urgency === 'urgent')
         && t.classification !== 'event' && t.classification !== 'birthday' && !t.birthday_person
         && (!t.due_date || localDateKey(new Date(t.due_date), tz) < today)
         && !(msOf(t.created_date) > nowMs - 3 * H_HOUR)
         && !(msOf(t.later_until) > nowMs && localDateKey(new Date(msOf(t.later_until)), tz) > today));
-      if (!dueToday.length && !pressing.length) continue;
+      if (!dueToday.length && !pressing.length) {
+        for (const k of waiting) { delete marks[k]; marksDirty = true; }
+        continue;
+      }
       // Since local midnight for "today"; the 24 hours before that too, for
-      // the every-other-day plan below.
-      const sinceToday = nowMs - 19 * H_HOUR;
+      // the every-other-day plan below. (Was "19 hours ago", which is
+      // midnight only in the 7 PM hour; the evening look below runs later.)
+      const sinceToday = nowMs - nowMin * 60 * 1000 - (nowMs % 60000);
       const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
         user_email: u.email, send_at: { $gte: new Date(sinceToday - 24 * H_HOUR).toISOString() },
       });
@@ -2819,9 +2842,53 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // "Sounds good on the owner alert"). So the day after a mention is its
       // planned day off, not a miss. Two days running with nothing is a miss.
       const dayOff = (t: any) => easeNow(t)?.gapDays === 2 && mentionedYesterday.has(t.id);
-      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t) && !dayOff(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
-      // 8b: nothing today and nothing yesterday.
+      // SMART REMINDERS' OWN PROMISE FOR TONIGHT (Nov 24 2026; Anna, on this
+      // alert naming a daily "Take a shower": "How many times do we have to
+      // fix this ...."). Smart Reminders books nothing ahead: it decides at
+      // each 10-minute look and writes down when it will come back to a task
+      // (User.smart_nudge_passed, `back_at`). This check only counted what
+      // was already in the send queue, so a task it had set aside for the
+      // evening (that shower, for 9:15 PM after an 11-to-8:30 shift, as on
+      // the six nights before) read at 7 PM as "no reminder from anything".
+      // Now: when its latest note on the task, written today, promises a
+      // come-back time still ahead and before their day ends (quiet hours or
+      // midnight), and over an hour of the day is left, the task is not
+      // reported at 7 PM. It is looked at again in their last hour: still
+      // nothing by then (and at least 10 minutes past the promised time)
+      // is a broken promise and gets its own alert. A task with no such
+      // promise is reported at 7 PM exactly as before.
       const passes = Array.isArray(u.smart_nudge_passed) ? u.smart_nudge_passed : [];
+      const promisedAt = (t: any): number => {
+        if (leftMin <= 60) return NaN;
+        const last = passes.filter((p: any) => p?.task_id === t.id).sort((a: any, b: any) => msOf(b.at) - msOf(a.at))[0];
+        const back = msOf(last?.back_at);
+        return last && msOf(last.at) >= sinceToday && back > nowMs && back < nowMs + leftMin * 60 * 1000 ? back : NaN;
+      };
+      const clockIn = (ms: number) => {
+        try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(ms)); } catch (_) { return new Date(ms).toISOString(); }
+      };
+      for (const t of dueToday) {
+        if (hourNow !== 19 || mentioned.has(t.id) || stillAhead(t) || dayOff(t)) continue;
+        const back = promisedAt(t);
+        if (Number.isFinite(back)) {
+          marks[`${waitPrefix}${t.id}`] = `${today}|${new Date(back).toISOString()}`;
+          marksDirty = true;
+          continue;
+        }
+        unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      }
+      // The same evening, later: each task left for that promise.
+      for (const k of waiting) {
+        const [day, backIso] = String(marks[k] || '').split('|');
+        const t = dueToday.find((x: any) => x.id === k.slice(waitPrefix.length));
+        if (day !== today || !t || mentioned.has(t.id) || stillAhead(t)) { delete marks[k]; marksDirty = true; continue; }
+        const back = msOf(backIso);
+        if (leftMin > 60 || (Number.isFinite(back) && nowMs < back + 10 * 60 * 1000)) continue;
+        promiseBroken.push(`${u.email}: "${String(t.title || '').slice(0, 30)}" (Smart Reminders said it would come back at ${Number.isFinite(back) ? clockIn(back) : 'a time tonight'})`);
+        delete marks[k];
+        marksDirty = true;
+      }
+      // 8b: nothing today and nothing yesterday.
       for (const t of pressing) {
         if (mentioned.has(t.id) || mentionedYesterday.has(t.id) || stillAhead(t)) continue;
         const last = passes.filter((p: any) => p?.task_id === t.id && p?.why).sort((a: any, b: any) => msOf(b.at) - msOf(a.at))[0];
@@ -2833,6 +2900,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   }
   if (unreminded.length) {
     problems.push({ title: '⚠️ ADHDone: due today, never reminded', body: `${unreminded.length} task(s) due today got no reminder from anything by 7 PM: ${unreminded.slice(0, 3).join('; ')}.` });
+  }
+  if (promiseBroken.length) {
+    problems.push({ title: '⚠️ ADHDone: promised tonight, never sent', body: `${promiseBroken.length} task(s) due today that Smart Reminders set aside for this evening still got nothing, with under an hour of their day left: ${promiseBroken.slice(0, 3).join('; ')}.`, sinceMs: nowMs - 50 * 60 * 1000 });
+  }
+  // Waits from days ago (an account that went quiet before its evening look).
+  {
+    const staleBefore = new Date(nowMs - 2 * H_DAY).toISOString().slice(0, 10);
+    for (const k of Object.keys(marks)) {
+      if (k.startsWith('due8wait:') && String(marks[k]).slice(0, 10) < staleBefore) { delete marks[k]; marksDirty = true; }
+    }
   }
   if (pressingQuiet.length) {
     problems.push({ title: '⚠️ ADHDone: high priority, nothing in two days', body: `${pressingQuiet.length} high-priority task(s) with no date got nothing today or yesterday: ${pressingQuiet.slice(0, 3).join('; ')}.` });
@@ -3417,7 +3494,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       console.error('[HEALTH] alert failed:', e);
     }
   }
-  if (marksChanged && ownerRec?.id) {
+  if ((marksChanged || marksDirty) && ownerRec?.id) {
     try { await base44.asServiceRole.entities.User.update(ownerRec.id, { owner_alert_marks: marks }); } catch (e) { console.error('[HEALTH] could not save alert marks:', e); }
   }
   if (!problems.length) console.log('[HEALTH] all clear');
