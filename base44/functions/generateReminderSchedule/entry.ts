@@ -19,6 +19,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
+import { setAiPerson } from '../../shared/aiPerson.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { leaveOriginFor, fromWords } from '../../shared/leaveOrigin.ts';
@@ -182,6 +183,12 @@ export default async function(req) {
 
     const bodyText = await req.text();
     const parsedBody = JSON.parse(bodyText);
+    // Whose AI calls these are (shared/aiPerson.ts), when another function
+    // asks for someone (no sign-in on the request): the owner it names.
+    if (!user?.email) {
+      const named = parsedBody?.ownerEmail || parsedBody?.notesCheck?.ownerEmail;
+      if (typeof named === 'string' && named.trim()) setAiPerson(named);
+    }
     // { atTimeWords: { task, atISO, timezone } }: a look at the words the one
     // reminder at a task's own time would get (shared/reminderTitle.ts, atTimeWords), without
     // booking anything. The real rewording happens in schedulePush. Only the
