@@ -14,6 +14,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { userTimeZone, localDateKey } from '../../shared/quietHours.ts';
 import { assignTaskFamilies, judgeCompletionHabit, judgeDailyThing } from '../../shared/runTaskParse.ts';
+import { setAiPerson } from '../../shared/aiPerson.ts';
 
 // Records ONE analytics row when a task is completed, with the reminder history
 // that led up to it. Driven by the Task-update workflow rather than the UI,
@@ -36,6 +37,9 @@ export default async function (req: Request): Promise<Response> {
     if (!task) return Response.json({ skipped: 'no task' });
 
     const email = task.notification_recipient_email || task.created_by || '';
+    // This request is about one task: its AI calls are the owner's (Claude or
+    // OpenAI by shared/claudeAi.ts, Nov 24 2026).
+    setAiPerson(email);
     const completedAt = task.completed_at ? new Date(task.completed_at) : new Date();
     const createdAt = new Date(task.created_date);
 
