@@ -63,6 +63,12 @@ export function claudeModelFor(openaiModel: any): string {
   return small ? CLAUDE_MODELS.small : CLAUDE_MODELS.big;
 }
 
+// Could any call go to Claude right now? (No key, or a test that forces
+// OpenAI: no. Checked first, so nobody is looked up for nothing.)
+export function claudeMaybe(): boolean {
+  return currentAiWho().provider !== 'openai' && !!claudeKey();
+}
+
 // Should this call go to Claude?
 export function claudeFor(person: string): boolean {
   const w = currentAiWho();
