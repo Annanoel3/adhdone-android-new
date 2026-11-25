@@ -21,6 +21,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
+import { asPerson } from '../../shared/aiPerson.ts';
 import { isInQuietHours, resolveQuietHours, userTimeZone, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
@@ -192,7 +193,7 @@ Deno.serve(async (req) => {
         ? tasks.filter((t) => t.id !== user.last_backburner_task_id)
         : tasks;
 
-      const pick = await choosePick(openai, pool, tasks.length, user.about_me || '', now);
+      const pick = await asPerson(email, () => choosePick(openai, pool, tasks.length, user.about_me || '', now));
       if (!pick) continue;
 
       const gate = await ledgerCheck(base44, { email, taskId: pick.task.id, kind: 'smart_nudge' });
