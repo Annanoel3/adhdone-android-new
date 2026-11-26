@@ -89,7 +89,7 @@ import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
 import { setAiPerson, setAiTest, aiServe } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
-import { AWAY_DAILY_CEILING, awayCeilingFor, awayDays, smartSentOn } from '../../shared/awayCeiling.ts';
+import { awayCeilingFor, awayDays, smartSentOn } from '../../shared/awayCeiling.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
 // the part of the request OpenAI keeps and reuses (Anna, Nov 22 2026:
@@ -1768,10 +1768,9 @@ Deno.serve(aiServe(async (req) => {
           console.log(`[SMART NUDGE] Last look: "${entry.title}" for ${email} not sent (${lastLookSkip} since the run started)`);
           continue;
         }
-        // ONE A DAY: another run may have sent today's one since this run read
-        // the log (the ledger has every Smart Reminder the moment it goes).
-        // A DAILY CEILING AFTER THREE DAYS AWAY (above), the same way: other
-        // runs may have sent since this run read the log.
+        // A DAILY CEILING AFTER THREE DAYS AWAY (above): other runs may have
+        // sent since this run read the log (the ledger has every Smart
+        // Reminder the moment it goes).
         if (awayCeiling !== null && await smartSentTodayInLedger(base44, email, dayOf, todayStr, nowMs) >= awayCeiling) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
@@ -1780,6 +1779,8 @@ Deno.serve(aiServe(async (req) => {
           console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: ${awayCeiling} Smart Reminders went out today, the most while they've been away 3 days`);
           break;
         }
+        // ONE A DAY: another run may have sent today's one since this run read
+        // the log (the ledger has every Smart Reminder the moment it goes).
         if (oneADay && await sentTodayInLedger(base44, email, dayOf, todayStr, nowMs)) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
@@ -3124,6 +3125,15 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (ctx.spokenAlarm) out.push('THEIR ALARMS ARE READ OUT LOUD: they chose the alarm sound that speaks, so the phone\'s voice reads the words of your message aloud, start to finish, every time it rings. A long message is tiresome to sit through. For anything that rings as an alarm, write the message as ONE short sentence, about a dozen words at most, that says the one thing that matters; leave out whatever they can do without hearing.');
     if (ctx.dayStart) out.push(ctx.dayStart);
     if (ctx.oneADay) out.push("ONE A DAY: the app asked whether your reminders were helping and they said no, so they get ONE from you a day now, in all, and today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it. Nothing more from you reaches them today after it.");
+    // A DAILY CEILING AFTER THREE DAYS AWAY (shared/awayCeiling.ts; Anna, Nov
+    // 25 2026): said as what it is, with how many are left today. The send
+    // loop stops at the ceiling whatever the plan says, so the planner is
+    // told it comes before "each piled-up task gets ONE reminder today".
+    if (ctx.awayCeiling) {
+      const { days, cap, sent } = ctx.awayCeiling;
+      const left = Math.max(0, cap - sent);
+      out.push(`AWAY ${days} DAYS: no sign of them in ${days} days (no app open, nothing finished, no reminder answered). Until there is one, at most ${cap} reminders from you reach them in a day, in all. ${sent} went out today, so ${left === 0 ? 'nothing more from you reaches them today.' : `${left} more at most. Spend them on what matters most today, each at the moment it is most likely to get done; whatever doesn't fit waits for a later day. This comes before giving every piled-up task its own reminder today.`}`);
+    }
     // EARLY DAYS takes over once their first day is over: NEW HERE goes by
     // "joined in the last 24 hours", so on a second morning it also said
     // "they joined ADHDone today" (Connie, Nov 2 2026, preview).
