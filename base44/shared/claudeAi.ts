@@ -47,8 +47,14 @@ export const CLAUDE_EVERYONE = false;
 // are lean() names: the task parser (shared/runTaskParse.ts) and the words of
 // the reminder at a time someone set (shared/reminderTitle.ts). Everything
 // else stays on OpenAI for everyone but Anna's two accounts. If the credits
-// run out, Claude refuses and each call goes to OpenAI as before.
+// run out, Claude refuses and each call goes to OpenAI as before (auto-reload
+// is off on her Claude account: requests stop when the balance runs out).
 export const CLAUDE_JOBS_FOR_EVERYONE = new Set<string>(['runTaskParse', 'reminderTitle']);
+// OFF until the app's disclosures name Anthropic: the iPhone AI permission
+// (AiConsentDialog names OpenAI; Apple 5.1.2(i) wants the third party named
+// and agreed to), the privacy policy and Play's data safety form. Those are
+// Anna's to approve and submit. Then this goes true.
+export const CLAUDE_JOBS_LIVE = false;
 
 // Which Claude model answers. gpt-6-astra (everything that judges or writes
 // for people) -> Claude Fable 5.2, Anthropic's most capable model on general
@@ -87,7 +93,7 @@ export function claudeFor(person: string, job = ''): boolean {
   if (w.provider === 'openai') return false;
   if (!claudeKey()) return false;
   if (w.provider === 'claude') return true;
-  if (job && CLAUDE_JOBS_FOR_EVERYONE.has(job)) return true;
+  if (CLAUDE_JOBS_LIVE && job && CLAUDE_JOBS_FOR_EVERYONE.has(job)) return true;
   return CLAUDE_EVERYONE || (!!person && CLAUDE_FOR.has(String(person).toLowerCase()));
 }
 
