@@ -1,3 +1,4 @@
+// Nov 25 2026 (night): Smart Reminders' new daily ceiling for someone with no sign of them in 3 days (shared/awayCeiling.ts; Anna: "Fix") is known to the owner checks. Once they've had today's 6 (or, on one a day, today's one), Smart Reminders plans and sends nothing more for them that day by design, so check 2 ("not re-planning") and checks 8 and 8b (due today / promised tonight / pressing, got nothing) don't count that as Smart Reminders failing. Signs are read erring toward "around", so a real miss for someone who is around is still reported.
 // Nov 18 2026 (night): an event's heads-up (night before, morning of, prep ask) that another push has since been booked onto is moved to a free minute in the hourly run (stackedHeadsUps, freeMinuteFor): new one booked first, then the old one cancelled, never lost. It only stepped aside when it was the one booked second; booked first, it went out in the same minute as a weekly task's 8 PM reminder and Anna got "two pushes in the same minute". previewRepeats lists what it would move as `headsUps`. No AI call.
 // Nov 18 2026: a repeating event whose reminders stayed behind when its date moved on is set right in the hourly run. The calendar sync moves a repeating event from a phone's calendar on to its next date and leaves its reminders on the day already gone; when that lands before the repeat pass, the pass finds a date still ahead and does nothing (a weekly appointment: happened Nov 17, put on Dec 8 by the phone's sync that evening, no reminders for Dec 8). Such an event's reminders are moved to the same times on the event's day (eventPlanMoves, eventPlanMove), planned, and booked by the promotion pass in the same run. previewRepeats lists them as `plans`. The same for a birthday: one already on next year's date with only last year's reminders (the same sync, the evening of the day, ahead of the yearly rollover) is planned again exactly as the rollover plans it (birthday pass, 1b).
 // Re-saved Nov 16 2026 (late, again) so the bundled shared/reminderTitle.ts and alarmScreen.ts are picked up: an alarm about a task that IS sending someone a text carries the words for its open button ("Send the text" / "Write the text"), which the phone's new alarm screen (build 49) needs to show that button. Nothing else changes here.
@@ -35,7 +36,8 @@
 // Nov 12 2026: a calendar series saved weekly or daily that really repeats every 2 weeks / 6 weeks / 30 days is set right before the repeating-task pass; an all-day calendar entry is planned by what it is (a day off, holiday or payday: no reminder; work hours: the night before only); { planEvent } takes all-day events too. Re-saved the same day so the bundled shared/calendarEntry.ts is picked up (an occasion that belongs to a person keeps its reminders). Later the same day: a person's own birthday greeting uses the name they gave the app (ownGreetingName). The owner alert for notifications off says so when the person left before being asked. A young child's birthday (birthday_no_text) gets no text reminders, and an all-day calendar entry's kind is kept on it (day_entry_kind).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs, theirDayKeyFor } from '../../shared/quietHours.ts';
+import { AWAY_CEILING_AFTER_MS, AWAY_DAILY_CEILING, awayCeilingFor, smartSentOn } from '../../shared/awayCeiling.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { easeNow } from '../../shared/easeOff.ts';
@@ -236,7 +238,7 @@ Deno.serve(aiServe(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-24 eve: due-today check waits for Smart Reminders promised time tonight', ...look });
+      return Response.json({ success: true, copy: '2026-11-25 night: owner checks know Smart Reminders daily ceiling after 3 days away', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -2427,6 +2429,58 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     return ps?.server_enabled === false && Number.isFinite(lookMs) && (!Number.isFinite(lastMs) || lookMs > lastMs);
   };
   const activeLately = (u: any) => !gone(u) && nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
+  // SMART REMINDERS DONE FOR TODAY BY RULE: someone with no sign of them in
+  // 3 days who has had today's AWAY_DAILY_CEILING Smart Reminders (A DAILY
+  // CEILING AFTER THREE DAYS AWAY, shared/awayCeiling.ts; Anna, Nov 25 2026:
+  // "Fix"), or someone on one a day whose one has gone out. cronSmartTaskNudge
+  // plans and sends nothing more for them until their next day, by design. So
+  // a task it held back is not reported as missed (checks 8 and 8b), and a
+  // plan left out of date meanwhile is not "the planner failing" (check 2).
+  // Signs of them are read the way the week-away pause reads them, erring
+  // toward "around" (any non-active task of theirs changed in the last 3 days
+  // counts as one), so a real miss for someone who is around is still
+  // reported. A failed read reports as before.
+  const smartDoneCache = new Map<string, boolean>();
+  const smartDoneForToday = async (u: any): Promise<boolean> => {
+    const email = u?.email;
+    if (!email) return false;
+    if (smartDoneCache.has(email)) return smartDoneCache.get(email) === true;
+    let done = false;
+    try {
+      const tz = userTimeZone(u);
+      const dayOf = (ms: number) => theirDayKeyFor(u, new Date(ms), tz);
+      const sent = smartSentOn(u.smart_nudge_sent_log, dayOf, dayOf(nowMs));
+      if (u.smart_nudge_one_a_day === true) {
+        done = sent >= 1;
+      } else if (sent >= AWAY_DAILY_CEILING) {
+        let fromMs = msOf(u.last_active_at || u.signed_up_at || u.created_date);
+        const sign = (ms: number) => {
+          if (Number.isFinite(ms) && ms <= nowMs + H_HOUR && !(fromMs >= ms)) fromMs = ms;
+        };
+        for (const t of ctx.allTasks || []) {
+          if (t?.created_by !== email) continue;
+          const c = t.last_alarm_choice;
+          if (c && c.choice !== 'ignored') sign(msOf(c.at));
+          if (t.capture_id) sign(msOf(t.created_date));
+        }
+        if (awayCeilingFor(fromMs, nowMs) !== null) {
+          const since = new Date(nowMs - AWAY_CEILING_AFTER_MS).toISOString();
+          const [changed, ideas] = await Promise.all([
+            base44.asServiceRole.entities.Task.filter({ created_by: email, status: { $ne: 'active' }, updated_date: { $gte: since } }, '-updated_date', 1),
+            base44.asServiceRole.entities.ParkingLotIdea.filter({ created_by: email, created_date: { $gte: since } }, '-created_date', 20),
+          ]);
+          for (const t of changed || []) sign(msOf(t?.updated_date));
+          for (const i of ideas || []) if (i?.capture_id) sign(msOf(i.created_date));
+          done = awayCeilingFor(fromMs, nowMs) !== null;
+        }
+      }
+    } catch (e) {
+      console.error(`[HEALTH] Could not tell whether Smart Reminders is done for today for ${email}:`, e);
+      done = false;
+    }
+    smartDoneCache.set(email, done);
+    return done;
+  };
   const userByEmail: Record<string, any> = {};
   for (const u of allUsers) if (u?.email) userByEmail[u.email] = u;
   // What Anna has already been told about one person, kept on her own owner
@@ -2550,7 +2604,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const h = localHourIn(u.timezone || OWNER_TZ, now);
     if (h < 9 || h >= 22) continue;
     const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
-    if (u.smart_nudge_schedule_dirty === true && dirtyAt && nowMs - dirtyAt > 90 * 60 * 1000) stuckPlans.push(u.email);
+    if (u.smart_nudge_schedule_dirty === true && dirtyAt && nowMs - dirtyAt > 90 * 60 * 1000 && !(await smartDoneForToday(u))) stuckPlans.push(u.email);
   }
   // When the whole run has stopped (1b), that is the reason; no second alert.
   if (stuckPlans.length && !nudgeStopped) {
@@ -2823,6 +2877,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         for (const k of waiting) { delete marks[k]; marksDirty = true; }
         continue;
       }
+      // Smart Reminders is done for today by rule (SMART REMINDERS DONE FOR
+      // TODAY BY RULE, above): nothing it held back is a miss.
+      const doneByRule = await smartDoneForToday(u);
       // Since local midnight for "today"; the 24 hours before that too, for
       // the every-other-day plan below. (Was "19 hours ago", which is
       // midnight only in the 7 PM hour; the evening look below runs later.)
@@ -2870,7 +2927,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         try { return new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(new Date(ms)); } catch (_) { return new Date(ms).toISOString(); }
       };
       for (const t of dueToday) {
-        if (hourNow !== 19 || mentioned.has(t.id) || stillAhead(t) || dayOff(t)) continue;
+        if (hourNow !== 19 || mentioned.has(t.id) || stillAhead(t) || dayOff(t) || doneByRule) continue;
         const back = promisedAt(t);
         if (Number.isFinite(back)) {
           marks[`${waitPrefix}${t.id}`] = `${today}|${new Date(back).toISOString()}`;
@@ -2883,7 +2940,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       for (const k of waiting) {
         const [day, backIso] = String(marks[k] || '').split('|');
         const t = dueToday.find((x: any) => x.id === k.slice(waitPrefix.length));
-        if (day !== today || !t || mentioned.has(t.id) || stillAhead(t)) { delete marks[k]; marksDirty = true; continue; }
+        if (day !== today || !t || mentioned.has(t.id) || stillAhead(t) || doneByRule) { delete marks[k]; marksDirty = true; continue; }
         const back = msOf(backIso);
         if (leftMin > 60 || (Number.isFinite(back) && nowMs < back + 10 * 60 * 1000)) continue;
         promiseBroken.push(`${u.email}: "${String(t.title || '').slice(0, 30)}" (Smart Reminders said it would come back at ${Number.isFinite(back) ? clockIn(back) : 'a time tonight'})`);
@@ -2892,7 +2949,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       }
       // 8b: nothing today and nothing yesterday.
       for (const t of pressing) {
-        if (mentioned.has(t.id) || mentionedYesterday.has(t.id) || stillAhead(t)) continue;
+        if (mentioned.has(t.id) || mentionedYesterday.has(t.id) || stillAhead(t) || doneByRule) continue;
         const last = passes.filter((p: any) => p?.task_id === t.id && p?.why).sort((a: any, b: any) => msOf(b.at) - msOf(a.at))[0];
         pressingQuiet.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"${last ? ` (Smart Reminders: ${String(last.why).slice(0, 90)})` : ''}`);
       }
