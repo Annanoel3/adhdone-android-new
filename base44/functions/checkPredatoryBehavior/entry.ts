@@ -1,4 +1,4 @@
-// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: the task parser and the words of the reminder at a time someone set are ready to be answered by Claude for everyone (CLAUDE_JOBS_FOR_EVERYONE), held off (CLAUDE_JOBS_LIVE false) until the app's disclosures name Anthropic. Nothing else in this file changes.
+// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: Claude for everyone is ready and held off until the app's disclosures name Anthropic (CLAUDE_JOBS_LIVE, CLAUDE_EVERYONE), and when the Claude credit runs out calls go straight to OpenAI (CREDITS GONE). Nothing else in this file changes.
 // Re-saved Nov 6 2026 (night) so the bundled shared/aiCost.ts is picked up: AI token counts per feature (counting only, nothing else changes).
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import OpenAI from "npm:openai";

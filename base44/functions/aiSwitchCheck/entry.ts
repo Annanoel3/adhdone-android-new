@@ -1,4 +1,4 @@
-// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: the task parser and the words of the reminder at a time someone set are ready to be answered by Claude for everyone (CLAUDE_JOBS_FOR_EVERYONE), held off (CLAUDE_JOBS_LIVE false) until the app's disclosures name Anthropic. Nothing else in this file changes.
+// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: Claude for everyone is ready and held off until the app's disclosures name Anthropic (CLAUDE_JOBS_LIVE, CLAUDE_EVERYONE), and when the Claude credit runs out calls go straight to OpenAI (CREDITS GONE). Nothing else in this file changes.
 // OWNER CHECK FOR THE SWITCH TO CLAUDE (Nov 24 2026; Anna: "Can we change
 // everything over to claude only on mt account, run tests, and then make it
 // live for everyone"). Run from the editor's Test Function as the owner.
