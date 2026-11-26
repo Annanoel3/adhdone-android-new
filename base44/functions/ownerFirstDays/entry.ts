@@ -321,7 +321,7 @@ Deno.serve(async (req) => {
           last_opened: iso(lastActiveMs),
           days_around_last_7: daysIn(cut7, nowMs + H),
           days_around_prior_7: daysIn(cut14, cut7),
-          days_around_8_to_28_ago: daysIn(cut28, cut7 - 7 * D + 7 * D - 7 * D + 7 * D - 7 * D),
+          days_around_15_to_28_ago: daysIn(cut28, cut14),
           days_opened_last_7: openDays(cut7, nowMs + H),
           days_opened_prior_7: openDays(cut14, cut7),
           made_last_14: mine.filter((a) => a.name === 'task_created' && a.ts >= cut14).length,
