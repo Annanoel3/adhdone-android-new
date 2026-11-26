@@ -122,11 +122,12 @@ function splitPerson(params: any): { person: any; clean: any } {
   return { person: ai_person, clean };
 }
 
-async function onClaude(person: any): Promise<boolean> {
+async function onClaude(person: any, fn = ''): Promise<boolean> {
   try {
     if (!claudeMaybe()) return false;
-    // Everyone on Claude (or a test that asks for it): no need to know who.
-    if (claudeFor('')) return true;
+    // Everyone on Claude, a job that is on Claude for everyone
+    // (CLAUDE_JOBS_FOR_EVERYONE), or a test that asks for it: no need to know who.
+    if (claudeFor('', fn)) return true;
     const who = person !== undefined && person !== null && person !== '' ? String(person).toLowerCase() : await currentPerson();
     return claudeFor(who);
   } catch (_) {
@@ -156,7 +157,7 @@ function countResponses(openai: any, fn: string, project: string) {
   const original = responses.create.bind(responses);
   responses.create = async (params: any, options?: any) => {
     const { person, clean } = splitPerson(params);
-    if (await onClaude(person)) {
+    if (await onClaude(person, fn)) {
       try {
         const res = await claudeResponses(clean, options);
         recordUsage(fn, project, 'responses', res);
@@ -182,7 +183,7 @@ export function countUsage(openai: any, opts: { name?: string } = {}) {
       const original = completions.create.bind(completions);
       completions.create = async (params: any, options?: any) => {
         const { person, clean } = splitPerson(params);
-        if (await onClaude(person)) {
+        if (await onClaude(person, fn)) {
           try {
             const res = await claudeChat(clean, options);
             recordUsage(fn, project, 'chat', res);
@@ -210,7 +211,7 @@ export function lean(openai: any, opts: { name?: string } = {}) {
   try { countResponses(openai, fn, project); } catch (_) { /* never matters */ }
   completions.create = async (rawParams: any, options?: any) => {
     const { person, clean: params } = splitPerson(rawParams);
-    if (await onClaude(person)) {
+    if (await onClaude(person, fn)) {
       try {
         const res = await claudeChat(params, options);
         logUsage(fn, res);
