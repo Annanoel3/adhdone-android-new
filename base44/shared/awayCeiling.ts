@@ -10,8 +10,9 @@
 // pause counts (cronSmartTaskNudge, PAUSED AFTER A WEEK AWAY): opening the
 // app, finishing a task (a notification's or an alarm's Done, the widget),
 // answering an alarm or reminder (snooze, Later, closing it; not one that
-// just rang out), or adding something from outside the app. From day 6 that
-// pause's heads-up and then the pause take over, as before.
+// just rang out), or adding something from outside the app. That pause is
+// unchanged: its heads-up still goes out on day 6, and from day 7 nothing
+// from Smart Reminders goes out at all.
 //
 // Only Smart Reminders' own count and are held back (a roundup is one).
 // Reminders at times they set, rhythms they chose, events, birthdays and the
