@@ -90,7 +90,7 @@ import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
 import { setAiPerson, setAiTest, aiServe } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
-import { awayCeilingFor, awayDays, smartSentOn } from '../../shared/awayCeiling.ts';
+import { awayCeiling as awayCeilingOf, awayDays, smartSentOn } from '../../shared/awayCeiling.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
 // the part of the request OpenAI keeps and reuses (Anna, Nov 22 2026:
@@ -1004,7 +1004,12 @@ Deno.serve(aiServe(async (req) => {
       // or sent until their next day. Not on one a day (that is fewer
       // already). Times they set, events and birthdays aren't Smart Reminders
       // and aren't touched.
-      const awayCeiling = oneADay ? null : awayCeilingFor(awayFromMs, nowMs);
+      // ONE A DAY FOR SOMEONE NOT BACK SINCE THEIR FIRST DAY (same file; Anna,
+      // Nov 25 2026: "uh well fix that"): no sign of them since the day they
+      // joined = at most one Smart Reminder a day from their second day on.
+      const joinedMs = utcMs(user.signed_up_at || user.created_date);
+      const ceiling = oneADay ? null : awayCeilingOf(awayFromMs, nowMs, joinedMs, dayOf);
+      const awayCeiling = ceiling ? ceiling.cap : null;
       const smartSentToday = smartSentOn(sentLog, dayOf, todayStr);
       if (awayCeiling !== null && !previewOnly && smartSentToday >= awayCeiling) continue;
 
@@ -1392,7 +1397,9 @@ Deno.serve(aiServe(async (req) => {
           // (THEIR ALARMS ARE READ OUT LOUD, in briefData).
           spokenAlarm: !onPlainNotifications(user) && String(user.alarm_sound_url || '').trim() === 'speak:',
           oneADay,
-          awayCeiling: awayCeiling === null ? null : { days: awayDays(awayFromMs, nowMs), cap: awayCeiling, sent: smartSentToday },
+          awayCeiling: ceiling === null ? null : { days: awayDays(awayFromMs, nowMs), cap: ceiling.cap, sent: smartSentToday, why: ceiling.why, joinedMs },
+          weekLines,
+          weekSince,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
           // When the parked-list roundup last went out (the sent log keeps a week).
@@ -2241,9 +2248,13 @@ interface PlanContext {
   earlyDays?: boolean;
   // They answered No to "Are your reminders helping?": one a day (ONE A DAY).
   oneADay?: boolean;
-  // No sign of them for 3 days: the day's ceiling and how many went out
-  // today (AWAY N DAYS; shared/awayCeiling.ts).
-  awayCeiling?: { days: number; cap: number; sent: number } | null;
+  // No sign of them for 3 days, or none since the day they joined: the day's
+  // ceiling, why, and how many went out today (AWAY N DAYS / NOT BACK SINCE
+  // THEIR FIRST DAY; shared/awayCeiling.ts).
+  awayCeiling?: { days: number; cap: number; sent: number; why?: string; joinedMs?: number } | null;
+  // THE LAST 7 DAYS: one line per day, and the count since the last sign of them.
+  weekLines?: string[] | null;
+  weekSince?: string;
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
@@ -3117,6 +3128,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
+    // THE LAST 7 DAYS (WEEK_LINE_LIVE, top of file): facts, no instruction.
+    if (ctx.weekLines && ctx.weekLines.length) out.push(`THE LAST 7 DAYS, by their day (every notification the app sent them, from every part of the app, and every sign of them: an app open, a task finished, a reminder answered):\n${ctx.weekLines.join('\n')}${ctx.weekSince ? `\n${ctx.weekSince}` : ''}`);
     if (plain) out.push('HOW REMINDERS REACH THEM: as regular notifications on their phone, not alarms. A regular notification sends nothing back to the app. It can be read on the lock screen, acted on or swiped away, and no answer is recorded either way. So no answer is what every reminder to this person looks like. Read each one the way you read Later on an alarm: they saw it and put it off for now. The thing is still undone, and it comes back at its next good moment until it is checked off. Reading one never takes opening the app, so "they have not opened the app since" says nothing about whether it was seen. What you can see is a task being checked off and the app being opened.');
     // The alarm that speaks (Settings, "Read it to me": the phone's own voice
     // reads the push's body, AlarmSpeech.java). Anna, Nov 22 2026: "the most
@@ -3130,7 +3143,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // 25 2026): said as what it is, with how many are left today. The send
     // loop stops at the ceiling whatever the plan says, so the planner is
     // told it comes before "each piled-up task gets ONE reminder today".
-    if (ctx.awayCeiling) {
+    if (ctx.awayCeiling && ctx.awayCeiling.why === 'first_day_only') {
+      // ONE A DAY FOR SOMEONE NOT BACK SINCE THEIR FIRST DAY
+      // (shared/awayCeiling.ts): said the way ONE A DAY is.
+      const { sent, joinedMs } = ctx.awayCeiling;
+      out.push(`NOT BACK SINCE THEIR FIRST DAY: they joined ADHDone ${Number.isFinite(Number(joinedMs)) ? daysAgoLabel(Number(joinedMs)) : 'recently'}, and there has been no sign of them since that day (no app open, nothing finished, no reminder answered). Until there is, ONE reminder from you reaches them a day, in all. ${sent > 0 ? "Today's has gone out, so nothing more from you reaches them today." : "Today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it."}`);
+    } else if (ctx.awayCeiling) {
       const { days, cap, sent } = ctx.awayCeiling;
       const left = Math.max(0, cap - sent);
       out.push(`AWAY ${days} DAYS: no sign of them in ${days} days (no app open, nothing finished, no reminder answered). Until there is one, at most ${cap} reminders from you reach them in a day, in all. ${sent} went out today, so ${left === 0 ? 'nothing more from you reaches them today.' : `${left} more at most. Spend them on what matters most today, each at the moment it is most likely to get done; whatever doesn't fit waits for a later day. This comes before giving every piled-up task its own reminder today.`}`);
