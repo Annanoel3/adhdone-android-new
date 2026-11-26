@@ -37,7 +37,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs, theirDayKeyFor } from '../../shared/quietHours.ts';
-import { AWAY_CEILING_AFTER_MS, AWAY_DAILY_CEILING, awayCeilingFor, smartSentOn } from '../../shared/awayCeiling.ts';
+import { AWAY_CEILING_AFTER_MS, awayCeilingFor, smartSentOn } from '../../shared/awayCeiling.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { easeNow } from '../../shared/easeOff.ts';
@@ -2430,9 +2430,11 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   };
   const activeLately = (u: any) => !gone(u) && nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   // SMART REMINDERS DONE FOR TODAY BY RULE: someone with no sign of them in
-  // 3 days who has had today's AWAY_DAILY_CEILING Smart Reminders (A DAILY
-  // CEILING AFTER THREE DAYS AWAY, shared/awayCeiling.ts; Anna, Nov 25 2026:
-  // "Fix"), or someone on one a day whose one has gone out. cronSmartTaskNudge
+  // 3 days who has had today's 6 Smart Reminders (A DAILY CEILING AFTER THREE
+  // DAYS AWAY, shared/awayCeiling.ts; Anna, Nov 25 2026: "Fix"), someone not
+  // seen since the day they joined who has had today's one (ONE A DAY FOR
+  // SOMEONE NOT BACK SINCE THEIR FIRST DAY, same file and day: "uh well fix
+  // that"), or someone on one a day whose one has gone out. cronSmartTaskNudge
   // plans and sends nothing more for them until their next day, by design. So
   // a task it held back is not reported as missed (checks 8 and 8b), and a
   // plan left out of date meanwhile is not "the planner failing" (check 2).
@@ -2450,9 +2452,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const tz = userTimeZone(u);
       const dayOf = (ms: number) => theirDayKeyFor(u, new Date(ms), tz);
       const sent = smartSentOn(u.smart_nudge_sent_log, dayOf, dayOf(nowMs));
+      const joinedMs = msOf(u.signed_up_at || u.created_date);
       if (u.smart_nudge_one_a_day === true) {
         done = sent >= 1;
-      } else if (sent >= AWAY_DAILY_CEILING) {
+      } else if (sent >= 1) {
         let fromMs = msOf(u.last_active_at || u.signed_up_at || u.created_date);
         const sign = (ms: number) => {
           if (Number.isFinite(ms) && ms <= nowMs + H_HOUR && !(fromMs >= ms)) fromMs = ms;
@@ -2463,15 +2466,17 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
           if (c && c.choice !== 'ignored') sign(msOf(c.at));
           if (t.capture_id) sign(msOf(t.created_date));
         }
-        if (awayCeilingFor(fromMs, nowMs) !== null) {
-          const since = new Date(nowMs - AWAY_CEILING_AFTER_MS).toISOString();
+        const capNow = awayCeilingFor(fromMs, nowMs, joinedMs, dayOf);
+        if (capNow !== null && sent >= capNow) {
+          const since = new Date(Math.min(nowMs - AWAY_CEILING_AFTER_MS, Number.isFinite(joinedMs) ? joinedMs : Infinity)).toISOString();
           const [changed, ideas] = await Promise.all([
             base44.asServiceRole.entities.Task.filter({ created_by: email, status: { $ne: 'active' }, updated_date: { $gte: since } }, '-updated_date', 1),
             base44.asServiceRole.entities.ParkingLotIdea.filter({ created_by: email, created_date: { $gte: since } }, '-created_date', 20),
           ]);
           for (const t of changed || []) sign(msOf(t?.updated_date));
           for (const i of ideas || []) if (i?.capture_id) sign(msOf(i.created_date));
-          done = awayCeilingFor(fromMs, nowMs) !== null;
+          const cap = awayCeilingFor(fromMs, nowMs, joinedMs, dayOf);
+          done = cap !== null && sent >= cap;
         }
       }
     } catch (e) {
