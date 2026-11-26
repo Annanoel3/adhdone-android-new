@@ -12,6 +12,14 @@
 //   {}                          -> totals, cross-tabs and one line per account
 //   { "since": "2026-10-15" }   -> only accounts first seen on or after that day
 //   { "email": "..." }          -> that account's first-week timeline, event by event
+//   { "trends": true }          -> week by week (Mondays, Central): people around, people
+//                                  in the app, new accounts, uninstalls, tasks made and
+//                                  finished, pushes sent and how alarms were answered;
+//                                  how many of one week's people were back the next; and
+//                                  one line per person seen in the last 28 days (Anna,
+//                                  Nov 25 2026: "usage is actually look pretty bad. like
+//                                  it's in decline... there are things that are not
+//                                  working for people and we don't pay enough attention").
 //   { "ai": true }              -> what the app's AI calls added up to, day by day and
 //                                  feature by feature (AppEvent ai_usage, kept since
 //                                  Nov 6 2026), and every burst of calls close together:
@@ -33,6 +41,9 @@ const NOT_REAL = new Set([
   'mediocreatbestdev@outlook.com', 'annanoelwenballew@outlook.com', 'antonio.baird1996@gmail.com',
   'aleck.baird@gmail.com', 'adhdone.space@gmail.com', 'adhdone.space+test@gmail.com',
   'p2rrt2ycwd@privaterelay.appleid.com',
+  // Google's AdMob reviewers (signed up Nov 25 2026, through the welcome in 4
+  // seconds, gone 2 hours later) and a test account with no sign-up.
+  'admob.blr@gmail.com', 'adhdtestuser99@gmail.com',
 ]);
 // Counted in the totals, never listed by name (Anna, Nov 1 2026).
 const NEVER_NAMED = new Set(['wickeddevildriver666@gmail.com']);
@@ -208,6 +219,138 @@ Deno.serve(async (req) => {
     }
 
     const emails = new Set<string>([...Object.keys(acts), ...Object.keys(userBy).filter((e) => !NOT_REAL.has(e))]);
+
+    // TRENDS: week by week, and everyone seen in the last 28 days.
+    if (body?.trends === true) {
+      const TZ = 'America/Chicago';
+      // The Monday (Central) that starts the week a moment falls in.
+      const weekOf = (ms: number) => {
+        const day = localDay(ms, TZ);
+        return new Date((day - ((day + 3) % 7)) * D).toISOString().slice(0, 10);
+      };
+      const thisWeek = weekOf(nowMs);
+      type Wk = { around: Set<string>; inApp: Set<string>; newAcc: number; gone: number; made: number; done: number; pushes: number; reachedNobody: number; alarms: Record<string, number>; errors: number };
+      const weeks: Record<string, Wk> = {};
+      const wk = (k: string): Wk => (weeks[k] ||= { around: new Set(), inApp: new Set(), newAcc: 0, gone: 0, made: 0, done: 0, pushes: 0, reachedNobody: 0, alarms: {}, errors: 0 });
+      const choiceKey = (p: any) => {
+        const c = String(p?.choice || '?');
+        return c === 'closed' ? `closed_${String(p?.how || '?')}` : c;
+      };
+      for (const [e, list] of Object.entries(acts)) {
+        for (const a of list) {
+          if (a.ts < EVENTS_START_MS || a.ts > nowMs + H) continue;
+          const w = wk(weekOf(a.ts));
+          if (a.present) w.around.add(e);
+          if (a.inApp) w.inApp.add(e);
+          if (a.name === 'task_created') w.made++;
+          if (a.name === 'task_completed') w.done++;
+          if (a.name === 'app_error') w.errors++;
+          if (a.name === 'alarm_choice') { const k = choiceKey(a.p); w.alarms[k] = (w.alarms[k] || 0) + 1; }
+        }
+      }
+      for (const list of Object.values(pushes)) {
+        for (const x of list) {
+          if (x.ts < EVENTS_START_MS || x.ts > nowMs) continue;
+          const w = wk(weekOf(x.ts));
+          w.pushes++;
+          if (x.out === 'nobody') w.reachedNobody++;
+        }
+      }
+      for (const e of emails) {
+        const u = userBy[e];
+        const present = (acts[e] || []).filter((a) => a.present).map((a) => a.ts);
+        const createdMs = utcMs(u?.created_date);
+        const firstMs = Math.min(present.length ? Math.min(...present) : Infinity, Number.isFinite(createdMs) ? createdMs : Infinity);
+        if (Number.isFinite(firstMs) && firstMs >= EVENTS_START_MS) wk(weekOf(firstMs)).newAcc++;
+        const goneMs = utcMs(u?.push_unreachable_at);
+        const lastActiveMs = utcMs(u?.last_active_at);
+        const isGone = u?.suspected_uninstall === true || (Number.isFinite(goneMs) && (!Number.isFinite(lastActiveMs) || goneMs > lastActiveMs));
+        if (isGone && Number.isFinite(goneMs) && goneMs >= EVENTS_START_MS) wk(weekOf(goneMs)).gone++;
+      }
+      const keys = Object.keys(weeks).sort();
+      const table = keys.map((k, i) => {
+        const w = weeks[k];
+        const next = keys[i + 1] ? weeks[keys[i + 1]] : null;
+        return {
+          week_of: k,
+          partial: k === thisWeek,
+          new_accounts: w.newAcc,
+          people_around: w.around.size,
+          people_in_app: w.inApp.size,
+          back_next_week: next && keys[i + 1] !== undefined ? [...w.around].filter((e) => next.around.has(e)).length : null,
+          uninstalls: w.gone,
+          tasks_made: w.made,
+          tasks_done: w.done,
+          pushes: w.pushes,
+          pushes_reached_nobody: w.reachedNobody,
+          alarm_answers: w.alarms,
+          app_errors: w.errors,
+        };
+      });
+
+      // Everyone seen (around) in the last 28 days, one line each.
+      const people: any[] = [];
+      const cut28 = nowMs - 28 * D;
+      const cut14 = nowMs - 14 * D;
+      const cut7 = nowMs - 7 * D;
+      for (const e of emails) {
+        const u = userBy[e];
+        const mine = (acts[e] || []).filter((a) => a.ts <= nowMs + H);
+        const present = mine.filter((a) => a.present).map((a) => a.ts);
+        const lastActiveMs = utcMs(u?.last_active_at);
+        if (Number.isFinite(lastActiveMs)) present.push(lastActiveMs);
+        const lastMs = present.length ? Math.max(...present) : NaN;
+        if (!(lastMs >= cut28)) continue;
+        const createdMs = utcMs(u?.created_date);
+        const firstMs = Math.min(present.length ? Math.min(...present) : Infinity, Number.isFinite(createdMs) ? createdMs : Infinity);
+        const tz = String(u?.timezone || TZ);
+        const daysIn = (from: number, to: number) => new Set(present.filter((ts) => ts >= from && ts < to).map((ts) => localDay(ts, tz))).size;
+        const openDays = (from: number, to: number) => new Set(mine.filter((a) => a.inApp && a.ts >= from && a.ts < to).map((a) => localDay(a.ts, tz))).size;
+        const sent = (pushes[e] || []).filter((x) => x.ts <= nowMs);
+        const sent7 = sent.filter((x) => x.ts >= cut7);
+        const kinds7: Record<string, number> = {};
+        for (const x of sent7) kinds7[x.kind] = (kinds7[x.kind] || 0) + 1;
+        const answers14: Record<string, number> = {};
+        for (const a of mine) if (a.name === 'alarm_choice' && a.ts >= cut14) { const k = choiceKey(a.p); answers14[k] = (answers14[k] || 0) + 1; }
+        const goneMs = utcMs(u?.push_unreachable_at);
+        const isGone = u?.suspected_uninstall === true || (Number.isFinite(goneMs) && (!Number.isFinite(lastActiveMs) || goneMs > lastActiveMs));
+        people.push({
+          e: NEVER_NAMED.has(e) ? '(not named)' : e,
+          joined: iso(firstMs),
+          last_seen: iso(lastMs),
+          last_opened: iso(lastActiveMs),
+          days_around_last_7: daysIn(cut7, nowMs + H),
+          days_around_prior_7: daysIn(cut14, cut7),
+          days_around_8_to_28_ago: daysIn(cut28, cut7 - 7 * D + 7 * D - 7 * D + 7 * D - 7 * D),
+          days_opened_last_7: openDays(cut7, nowMs + H),
+          days_opened_prior_7: openDays(cut14, cut7),
+          made_last_14: mine.filter((a) => a.name === 'task_created' && a.ts >= cut14).length,
+          done_last_14: mine.filter((a) => a.name === 'task_completed' && a.ts >= cut14).length,
+          pushes_last_7: sent7.length,
+          pushes_last_7_by_kind: kinds7,
+          pushes_since_last_seen: sent.filter((x) => x.ts > lastMs).length,
+          alarm_answers_last_14: answers14,
+          errors_last_14: mine.filter((a) => a.name === 'app_error' && a.ts >= cut14).length,
+          mode: u?.alarm_mode || null,
+          notifications_allowed: u?.alarm_permissions?.notifications ?? null,
+          build: u?.app_build || null,
+          plat: u?.app_platform || null,
+          gone: isGone,
+          paused: u?.smart_nudge_paused_reason || null,
+          helping: u?.smart_nudge_help_answer || null,
+        });
+      }
+      people.sort((a, b) => String(b.last_seen).localeCompare(String(a.last_seen)));
+
+      // What the app records, by name, over the last 30 days (so nothing is
+      // read into an event that isn't kept).
+      const names: Record<string, number> = {};
+      for (const ev of events) {
+        const ms = utcMs(ev?.created_date);
+        if (Number.isFinite(ms) && ms >= nowMs - 30 * D) names[String(ev?.event || '?')] = (names[String(ev?.event || '?')] || 0) + 1;
+      }
+      return Response.json({ success: true, as_of: iso(nowMs), weeks: table, people, event_names_last_30_days: names });
+    }
 
     // One account's first week, event by event.
     if (oneEmail) {
