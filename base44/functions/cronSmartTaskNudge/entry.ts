@@ -181,6 +181,20 @@ const WAITED_LINE_LIVE = true;
 // "Must get a mention today after three days held back" and "Must get a
 // fresh mention today after two days held back", each with a time that day.
 const WAITED_RULE_LIVE = true;
+// THE LAST 7 DAYS (Anna, Nov 25 2026, on one person's 95 notifications in 7
+// days, 60 of them Smart Reminders, with no app open and nothing finished
+// since Nov 19: "if someone's getting 95 in 7 days, they are definitely
+// annoyed... The AI should be way smarter than to let that happen"). The
+// planner only ever saw TODAY's notifications and when they last opened the
+// app; for someone on regular notifications it is also told that not opening
+// the app says nothing (HOW REMINDERS REACH THEM). So 9 to 11 a day with
+// nothing back never showed to it as a week of it. It now sees each of their
+// last 7 days: how many notifications the whole app sent, how many were its
+// own, and every sign of them that day (an app open, a task finished, a
+// reminder answered), and how many have gone out since the last sign of them.
+// Facts only, no instruction; the brief is unchanged, no version bump. An
+// owner replay can leave it out with { "week_line": false } to compare.
+const WEEK_LINE_LIVE = true;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
@@ -1190,6 +1204,82 @@ Deno.serve(aiServe(async (req) => {
           }
         } catch (e) {
           console.error(`[SMART NUDGE] ${email}: today's notifications unavailable:`, e);
+        }
+
+        // THE LAST 7 DAYS (WEEK_LINE_LIVE, top of file): what the whole app
+        // sent them on each of their last 7 days, how much of it was Smart
+        // Reminders' own, and every sign of them on each day; and the count
+        // since the last sign of them (awayFromMs, the week-away pause's own
+        // measure). The send ledger keeps 3 days; older pushes are its
+        // AppEvent 'reminder_sent' rows (shared/sendLedger.ts, ledgerPrune).
+        // A replay sees only what came before its moment.
+        let weekLines: string[] | null = null;
+        let weekSince = '';
+        if (WEEK_LINE_LIVE && plannerV2 && useBrief && !(replay && body?.week_line === false)) {
+          try {
+            const weekFrom = nowMs - 7 * DAY_MS;
+            const sends = new Map<string, { at: number; mine: boolean }>();
+            let unnamed = 0;
+            const addSend = (id: string, at: number, kind: string) => {
+              if (!Number.isFinite(at) || at < weekFrom || at > nowMs || kind.startsWith('owner_')) return;
+              sends.set(id || `n${unnamed++}`, { at, mine: kind === 'smart_nudge' });
+            };
+            const ledgerWeek = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+              user_email: email,
+              send_at: { $gte: new Date(weekFrom).toISOString() },
+            });
+            for (const r of ledgerWeek) addSend(String(r?.notification_id || ''), utcMs(r?.send_at), String(r?.kind || ''));
+            const evWeek = await filterAll(base44.asServiceRole.entities.AppEvent, {
+              user_email: email,
+              event: { $in: ['reminder_sent', 'session_start'] },
+              created_date: { $gte: new Date(weekFrom - DAY_MS).toISOString() },
+            });
+            const opens: number[] = [];
+            for (const ev of evWeek) {
+              const p = ev?.props && typeof ev.props === 'object' ? ev.props : {};
+              if (ev?.event === 'reminder_sent') {
+                const id = String(p.id || '');
+                if (id && sends.has(id)) continue;
+                addSend(id, utcMs(p.send_at) || utcMs(ev?.created_date), String(p.kind || ''));
+              } else {
+                const at = utcMs(ev?.created_date);
+                if (Number.isFinite(at) && at >= weekFrom && at <= nowMs) opens.push(at);
+              }
+            }
+            if (Number.isFinite(seenMs) && seenMs >= weekFrom && seenMs <= nowMs) opens.push(seenMs);
+            const done = (completionsByUser[email] || []).map((c) => c.at).filter((at) => at >= weekFrom && at <= nowMs);
+            const answered = (await choicesFor(email))
+              .filter((r: any) => String(r?.props?.choice || '') && String(r?.props?.choice) !== 'ignored')
+              .map((r: any) => utcMs(r?.props?.at || r?.created_date))
+              .filter((at: number) => Number.isFinite(at) && at >= weekFrom && at <= nowMs);
+            const days: string[] = [];
+            for (let i = 6; i >= 0; i--) { const k = dayOf(nowMs - i * DAY_MS); if (!days.includes(k)) days.push(k); }
+            const label = (k: string) => {
+              try { return new Date(`${k}T12:00:00Z`).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); } catch { return k; }
+            };
+            const sendList = [...sends.values()];
+            weekLines = days.map((k) => {
+              const onDay = sendList.filter((s) => dayOf(s.at) === k);
+              const mine = onDay.filter((s) => s.mine).length;
+              const opened = opens.some((at) => dayOf(at) === k);
+              const fin = done.filter((at) => dayOf(at) === k).length;
+              const ans = answered.filter((at: number) => dayOf(at) === k).length;
+              const signs = [opened ? 'they opened the app' : '', fin ? `finished ${fin}` : '', ans ? `answered ${ans}` : ''].filter(Boolean);
+              return `- ${k === todayStr ? 'Today so far' : label(k)}: ${onDay.length} notification${onDay.length === 1 ? '' : 's'} (${mine} from you); ${signs.length ? signs.join(', ') : 'no sign of them'}`;
+            });
+            if (Number.isFinite(awayFromMs) && awayFromMs <= nowMs) {
+              const since = sendList.filter((s) => s.at > awayFromMs);
+              let when = '';
+              try { when = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(awayFromMs)); } catch { when = new Date(awayFromMs).toISOString(); }
+              weekSince = awayFromMs < weekFrom
+                ? `No sign of them in more than 7 days (the last was ${when}): all of the above went out since.`
+                : `Since the last sign of them (${when}): ${since.length} notification${since.length === 1 ? '' : 's'}, ${since.filter((s) => s.mine).length} of them from you.`;
+            }
+          } catch (e) {
+            weekLines = null;
+            weekSince = '';
+            console.error(`[SMART NUDGE] ${email}: the last 7 days unavailable:`, e);
+          }
         }
 
         // Nudges from today already queued to go out within the next half
