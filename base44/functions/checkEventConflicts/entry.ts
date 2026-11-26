@@ -1,3 +1,4 @@
+// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: the task parser and the words of the reminder at a time someone set are answered by Claude for everyone (CLAUDE_JOBS_FOR_EVERYONE). Nothing else in this file changes.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts (through shared/eventConflicts.ts) is picked up: reminder history is filed by what OneSignal says happened.
 // Re-saved Nov 7 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r43, store runs wait for daytime or early evening (after about 7 PM, the next day).

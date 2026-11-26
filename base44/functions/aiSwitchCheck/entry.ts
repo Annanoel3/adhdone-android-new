@@ -1,3 +1,4 @@
+// Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: the task parser and the words of the reminder at a time someone set are answered by Claude for everyone (CLAUDE_JOBS_FOR_EVERYONE). Nothing else in this file changes.
 // OWNER CHECK FOR THE SWITCH TO CLAUDE (Nov 24 2026; Anna: "Can we change
 // everything over to claude only on mt account, run tests, and then make it
 // live for everyone"). Run from the editor's Test Function as the owner.
