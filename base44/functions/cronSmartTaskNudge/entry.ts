@@ -89,6 +89,7 @@ import { textTaskOpenLabel } from '../../shared/alarmScreen.ts';
 import { lean } from '../../shared/aiCost.ts';
 import { setAiPerson, setAiTest, aiServe } from '../../shared/aiPerson.ts';
 import { testGate } from '../../shared/testBudget.ts';
+import { AWAY_DAILY_CEILING, awayCeilingFor, awayDays, smartSentOn } from '../../shared/awayCeiling.ts';
 
 // lean (shared/aiCost.ts) counts tokens per feature and marks the brief as
 // the part of the request OpenAI keeps and reuses (Anna, Nov 22 2026:
@@ -993,6 +994,18 @@ Deno.serve(aiServe(async (req) => {
       // next day. Times they set, events and birthdays aren't Smart Reminders
       // and aren't touched.
       if (oneADay && !previewOnly && sentLog.some((l: any) => l && !l.skip && dayOf(utcMs(l.at)) === todayStr)) continue;
+      // A DAILY CEILING AFTER THREE DAYS AWAY (shared/awayCeiling.ts; Anna,
+      // Nov 25 2026: "Fix"): no sign of them for 3 days (the same signs as the
+      // week-away pause above: awayFromMs) = at most AWAY_DAILY_CEILING Smart
+      // Reminders in their day, enforced here and again right before a send,
+      // and told to the planner (AWAY N DAYS in briefData), which spends them
+      // on what matters most. Once today's are out, nothing more is planned
+      // or sent until their next day. Not on one a day (that is fewer
+      // already). Times they set, events and birthdays aren't Smart Reminders
+      // and aren't touched.
+      const awayCeiling = oneADay ? null : awayCeilingFor(awayFromMs, nowMs);
+      const smartSentToday = smartSentOn(sentLog, dayOf, todayStr);
+      if (awayCeiling !== null && !previewOnly && smartSentToday >= awayCeiling) continue;
 
       // Is the plan out of date? Something the planner reads changed after it
       // was made: onTaskUpdate marked it (the flag, or a newer mark time), a
@@ -1378,6 +1391,7 @@ Deno.serve(aiServe(async (req) => {
           // (THEIR ALARMS ARE READ OUT LOUD, in briefData).
           spokenAlarm: !onPlainNotifications(user) && String(user.alarm_sound_url || '').trim() === 'speak:',
           oneADay,
+          awayCeiling: awayCeiling === null ? null : { days: awayDays(awayFromMs, nowMs), cap: awayCeiling, sent: smartSentToday },
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
           // When the parked-list roundup last went out (the sent log keeps a week).
@@ -1756,6 +1770,16 @@ Deno.serve(aiServe(async (req) => {
         }
         // ONE A DAY: another run may have sent today's one since this run read
         // the log (the ledger has every Smart Reminder the moment it goes).
+        // A DAILY CEILING AFTER THREE DAYS AWAY (above), the same way: other
+        // runs may have sent since this run read the log.
+        if (awayCeiling !== null && await smartSentTodayInLedger(base44, email, dayOf, todayStr, nowMs) >= awayCeiling) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'daily_ceiling';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'daily_ceiling' });
+          console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: ${awayCeiling} Smart Reminders went out today, the most while they've been away 3 days`);
+          break;
+        }
         if (oneADay && await sentTodayInLedger(base44, email, dayOf, todayStr, nowMs)) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
@@ -2215,6 +2239,9 @@ interface PlanContext {
   earlyDays?: boolean;
   // They answered No to "Are your reminders helping?": one a day (ONE A DAY).
   oneADay?: boolean;
+  // No sign of them for 3 days: the day's ceiling and how many went out
+  // today (AWAY N DAYS; shared/awayCeiling.ts).
+  awayCeiling?: { days: number; cap: number; sent: number } | null;
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
@@ -3821,18 +3848,24 @@ function helpingLook(p: {
 // Reminder already went out today (their day). A failed lookup doesn't hold
 // the nudge (the week's log was already checked).
 async function sentTodayInLedger(base44: any, email: string, dayOf: (ms: number) => string, todayStr: string, nowMs: number): Promise<boolean> {
+  return (await smartSentTodayInLedger(base44, email, dayOf, todayStr, nowMs)) > 0;
+}
+
+// How many Smart Reminders the send ledger has for them today (their day).
+// A failed read is 0: a lost read is not a reason to skip a reminder.
+async function smartSentTodayInLedger(base44: any, email: string, dayOf: (ms: number) => string, todayStr: string, nowMs: number): Promise<number> {
   try {
     const rows = await base44.asServiceRole.entities.NotificationLedger.filter({
       user_email: email,
       kind: 'smart_nudge',
       send_at: { $gte: new Date(nowMs - 30 * 60 * 60 * 1000).toISOString() },
     }, '-send_at', 50);
-    return (rows || []).some((r: any) => {
+    return (rows || []).filter((r: any) => {
       const at = utcMs(r?.send_at);
       return Number.isFinite(at) && at <= nowMs + 60 * 1000 && dayOf(at) === todayStr;
-    });
+    }).length;
   } catch {
-    return false;
+    return 0;
   }
 }
 
