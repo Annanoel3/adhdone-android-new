@@ -54,7 +54,28 @@ export const CLAUDE_JOBS_FOR_EVERYONE = new Set<string>(['runTaskParse', 'remind
 // (AiConsentDialog names OpenAI; Apple 5.1.2(i) wants the third party named
 // and agreed to), the privacy policy and Play's data safety form. Those are
 // Anna's to approve and submit. Then this goes true.
+// Later the same night Anna chose more than this ("your plan is to use all of
+// the $200 claude credits until it runs out and then switch to open ai? If so,
+// that is a good idea"): EVERYTHING on Claude for everyone (CLAUDE_EVERYONE)
+// while the month's credit lasts, then OpenAI (CREDITS GONE, below). Same
+// disclosures first; once they are in, CLAUDE_EVERYONE goes true and this
+// list no longer matters.
 export const CLAUDE_JOBS_LIVE = false;
+
+// CREDITS GONE. Auto-reload is off on Anna's Claude account, so when the
+// balance runs out Claude refuses every request. The first refusal that says
+// so stops this copy of the function from trying Claude for
+// CREDITS_OUT_PAUSE_MS: each call goes straight to OpenAI meanwhile, instead
+// of trying Claude first (and logging a failure) every time. After the pause
+// one call tries Claude again, so a new month's credit is picked up by itself.
+const CREDITS_OUT_PAUSE_MS = 6 * 60 * 60 * 1000;
+let creditsOutUntil = 0;
+export function claudeCreditsOut(): boolean {
+  return Date.now() < creditsOutUntil;
+}
+function creditsRefusal(status: number, text: string): boolean {
+  return status === 402 || /credit balance|purchase credits|plans\s*&\s*billing|billing/i.test(text);
+}
 
 // Which Claude model answers. gpt-6-astra (everything that judges or writes
 // for people) -> Claude Fable 5.2, Anthropic's most capable model on general
@@ -83,7 +104,7 @@ export function claudeModelFor(openaiModel: any): string {
 // Could any call go to Claude right now? (No key, or a test that forces
 // OpenAI: no. Checked first, so nobody is looked up for nothing.)
 export function claudeMaybe(): boolean {
-  return currentAiWho().provider !== 'openai' && !!claudeKey();
+  return currentAiWho().provider !== 'openai' && !!claudeKey() && !claudeCreditsOut();
 }
 
 // Should this call go to Claude? `job` is the lean() name of the feature
@@ -91,7 +112,7 @@ export function claudeMaybe(): boolean {
 export function claudeFor(person: string, job = ''): boolean {
   const w = currentAiWho();
   if (w.provider === 'openai') return false;
-  if (!claudeKey()) return false;
+  if (!claudeKey() || claudeCreditsOut()) return false;
   if (w.provider === 'claude') return true;
   if (CLAUDE_JOBS_LIVE && job && CLAUDE_JOBS_FOR_EVERYONE.has(job)) return true;
   return CLAUDE_EVERYONE || (!!person && CLAUDE_FOR.has(String(person).toLowerCase()));
@@ -208,6 +229,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function post(body: any, timeoutMs: number): Promise<any> {
   const key = claudeKey();
   if (!key) throw new ClaudeError('no ANTHROPIC_API_KEY');
+  if (claudeCreditsOut()) throw new ClaudeError('Claude credits used up (paused)', 402);
   const started = Date.now();
   for (let attempt = 0; attempt < 2; attempt++) {
     const left = timeoutMs - (Date.now() - started);
@@ -237,6 +259,7 @@ async function post(body: any, timeoutMs: number): Promise<any> {
       await sleep(Math.min(Number.isFinite(after) && after > 0 ? after * 1000 : 1500, 4000));
       continue;
     }
+    if (creditsRefusal(res.status, text)) creditsOutUntil = Date.now() + CREDITS_OUT_PAUSE_MS;
     throw new ClaudeError(`HTTP ${res.status}: ${text.slice(0, 300)}`, res.status);
   }
   throw new ClaudeError('no answer');
