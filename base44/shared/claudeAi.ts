@@ -39,6 +39,17 @@ import { currentAiWho } from './aiPerson.ts';
 export const CLAUDE_FOR = new Set<string>(['s2kap2chick@gmail.com', 'annanoelwenballew@gmail.com']);
 export const CLAUDE_EVERYONE = false;
 
+// The small jobs on Claude for EVERYONE (Anna, Nov 25 2026, "yeah second
+// option. move small jobs to claude", after the tests: Claude read the task
+// parser's test sentences the same way OpenAI did and was faster there, but
+// a Smart Reminders look cost about 14 cents on Claude, so moving everything
+// would have run about $450-550 a month against the $200 of credits). These
+// are lean() names: the task parser (shared/runTaskParse.ts) and the words of
+// the reminder at a time someone set (shared/reminderTitle.ts). Everything
+// else stays on OpenAI for everyone but Anna's two accounts. If the credits
+// run out, Claude refuses and each call goes to OpenAI as before.
+export const CLAUDE_JOBS_FOR_EVERYONE = new Set<string>(['runTaskParse', 'reminderTitle']);
+
 // Which Claude model answers. gpt-6-astra (everything that judges or writes
 // for people) -> Claude Fable 5.2, Anthropic's most capable model on general
 // release. gpt-6-luna (the few small jobs Anna moved to the cheaper model on
@@ -69,12 +80,14 @@ export function claudeMaybe(): boolean {
   return currentAiWho().provider !== 'openai' && !!claudeKey();
 }
 
-// Should this call go to Claude?
-export function claudeFor(person: string): boolean {
+// Should this call go to Claude? `job` is the lean() name of the feature
+// making it (CLAUDE_JOBS_FOR_EVERYONE).
+export function claudeFor(person: string, job = ''): boolean {
   const w = currentAiWho();
   if (w.provider === 'openai') return false;
   if (!claudeKey()) return false;
   if (w.provider === 'claude') return true;
+  if (job && CLAUDE_JOBS_FOR_EVERYONE.has(job)) return true;
   return CLAUDE_EVERYONE || (!!person && CLAUDE_FOR.has(String(person).toLowerCase()));
 }
 
