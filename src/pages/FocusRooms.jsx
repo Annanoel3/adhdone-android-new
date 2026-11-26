@@ -6,6 +6,8 @@ import CreateFocusRoom from "../components/focus/CreateFocusRoom";
 import JoinFocusRoom from "../components/focus/JoinFocusRoom";
 import ActiveFocusRoom from "../components/focus/ActiveFocusRoom";
 import BrowsePublicRooms from "../components/focus/BrowsePublicRooms";
+import { joinRoom } from "../components/focus/joinRoom";
+import { base44 } from "@/api/base44Client";
 import { Loader2, ArrowLeft, Info, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
@@ -39,26 +41,20 @@ export default function FocusRooms() {
     return () => clearInterval(interval);
   }, []);
 
-  const timeoutEmptyRooms = async () => {
+  const timeoutEmptyRooms = async (currentUser) => {
     try {
-      // Get all active rooms
-      const allActiveRooms = await FocusRoom.filter({ is_active: true });
-      
-      const now = new Date();
-      const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-      
-      for (const room of allActiveRooms) {
-        // Get participants for this room
-        const participants = await FocusRoomParticipant.filter({ room_id: room.id });
-        
-        // Check if any participants are still active
-        const activeParticipants = participants.filter(p => {
-          const lastSeen = new Date(p.last_seen);
-          return lastSeen > thirtyMinutesAgo;
-        });
-        
-        // If no active participants, deactivate the room
-        if (activeParticipants.length === 0) {
+      // A room can only be closed by its host, so only this person's own
+      // rooms are checked. How many people are in each comes from the server
+      // as numbers only: nobody can read who is in a room they aren't in.
+      const myRooms = await FocusRoom.filter({ is_active: true, host_email: currentUser.email });
+      if (myRooms.length === 0) return;
+
+      const { data } = await base44.functions.invoke('focusRoomData', { action: 'counts' });
+      const counts = data?.counts || {};
+
+      for (const room of myRooms) {
+        // Nobody there in the last 30 minutes: deactivate the room
+        if ((counts[room.id]?.active || 0) === 0) {
           await FocusRoom.update(room.id, { is_active: false });
           console.log(`Timed out empty room: ${room.room_name}`);
         }
@@ -74,7 +70,7 @@ export default function FocusRooms() {
       setUser(currentUser);
       
       // Clean up empty rooms first
-      await timeoutEmptyRooms();
+      await timeoutEmptyRooms(currentUser);
       
       // Skip auto-redirect if coming back from an active room
       if (fromRoomParam) {
@@ -136,6 +132,9 @@ export default function FocusRooms() {
     if (user) {
       const room = await FocusRoom.filter({ room_code: roomCode });
       if (room.length > 0) {
+        // Opening a room from the list joins it: only people in a room can
+        // see who else is there.
+        await joinRoom(room[0], user);
         setActiveRoom(room[0]);
       }
     }

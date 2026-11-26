@@ -49,6 +49,7 @@ import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
 import { FocusRoomEmoji } from "@/entities/FocusRoomEmoji";
 import { User } from "@/entities/User";
 import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
+import { base44 } from "@/api/base44Client";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { validateContent } from "../utils/contentModeration";
@@ -242,7 +243,10 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
   const loadData = async () => {
     try {
-      const allParticipants = await FocusRoomParticipant.filter({ room_id: currentRoom.id });
+      // Who is in the room comes from the server, which only answers people
+      // who are in it themselves (nobody else may read a room's people).
+      const { data } = await base44.functions.invoke('focusRoomData', { action: 'participants', roomId: currentRoom.id });
+      const allParticipants = data?.participants || [];
       // Get all active participants (include current user regardless of last_seen)
       const activeParticipants = allParticipants.filter(p => {
         if (user && p.user_email === user.email) return true; // Always include current user
@@ -464,20 +468,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     if (!isHost) return;
     
     try {
-      // Delete all participants
-      const allParticipants = await FocusRoomParticipant.filter({ room_id: currentRoom.id });
-      for (const participant of allParticipants) {
-        await FocusRoomParticipant.delete(participant.id);
-      }
-      
-      // Delete all messages
-      const allMessages = await FocusRoomEmoji.filter({ room_id: currentRoom.id });
-      for (const message of allMessages) {
-        await FocusRoomEmoji.delete(message.id);
-      }
-      
-      // Delete the room
-      await FocusRoom.delete(currentRoom.id);
+      // The server removes the room together with everyone's place in it and
+      // its messages: a host can't delete other people's records directly.
+      await base44.functions.invoke('focusRoomData', { action: 'deleteRoom', roomId: currentRoom.id });
       
       // Navigate back
       window.location.href = '/focusrooms';

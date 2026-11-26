@@ -70,7 +70,20 @@
     "host_email"
   ],
   "rls": {
-    "read": true,
+    "read": {
+      "$or": [
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "write": {
       "data.host_email": "{{user.email}}"
     }

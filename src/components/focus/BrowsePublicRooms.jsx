@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { FocusRoom } from "@/entities/FocusRoom";
-import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
+import { base44 } from "@/api/base44Client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Users, ChevronRight } from "lucide-react";
@@ -26,11 +26,12 @@ export default function BrowsePublicRooms({ theme, onJoinRoom }) {
       
       setPublicRooms(rooms);
 
-      // Get participant counts
+      // Head counts come from the server as numbers only: nobody can read
+      // who is in a room they aren't in themselves.
+      const { data } = await base44.functions.invoke('focusRoomData', { action: 'counts' });
       const counts = {};
       for (const room of rooms) {
-        const participants = await FocusRoomParticipant.filter({ room_id: room.id });
-        counts[room.id] = participants.length;
+        counts[room.id] = data?.counts?.[room.id]?.total || 0;
       }
       setParticipantCounts(counts);
     } catch (error) {

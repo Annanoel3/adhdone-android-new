@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Users, Clock, Search, Lock, Music } from "lucide-react";
 import { FocusRoom } from "@/entities/FocusRoom";
-import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
+import { base44 } from "@/api/base44Client";
+import { joinRoom } from "./joinRoom";
 
 export default function JoinFocusRoom({ user, theme, onRoomJoined }) {
   const [roomCode, setRoomCode] = useState("");
@@ -28,26 +28,27 @@ export default function JoinFocusRoom({ user, theme, onRoomJoined }) {
       // Get all active rooms, filter out private ones
       const allRooms = await FocusRoom.filter({ is_active: true }, '-created_date', 20);
       
-      const now = new Date();
-      const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-      
+      // How many people are in each room comes from the server as numbers
+      // only: nobody can read who is in a room they aren't in themselves.
+      const { data } = await base44.functions.invoke('focusRoomData', { action: 'counts' });
+      const counts = data?.counts || {};
+
       const roomsWithCounts = await Promise.all(
         allRooms.map(async (room) => {
-          const participants = await FocusRoomParticipant.filter({ room_id: room.id });
-          const activeParticipants = participants.filter(p => {
-            const lastSeen = new Date(p.last_seen);
-            return lastSeen > thirtyMinutesAgo;
-          });
-          
-          // If no active participants, mark room as inactive
-          if (activeParticipants.length === 0) {
-            await FocusRoom.update(room.id, { is_active: false });
+          const activeCount = counts[room.id]?.active || 0;
+
+          // Nobody there in the last 30 minutes: off the list. A room can only
+          // be closed by its host, so only the host's own app marks it inactive.
+          if (activeCount === 0) {
+            if (room.host_email === user?.email) {
+              await FocusRoom.update(room.id, { is_active: false });
+            }
             return null; // Filter this out
           }
-          
+
           return {
             ...room,
-            participant_count: activeParticipants.length
+            participant_count: activeCount
           };
         })
       );
@@ -68,28 +69,7 @@ export default function JoinFocusRoom({ user, theme, onRoomJoined }) {
     setIsJoining(true);
     
     try {
-      const existing = await FocusRoomParticipant.filter({ 
-        room_id: room.id,
-        user_email: user.email
-      });
-
-      if (existing.length > 0) {
-        await FocusRoomParticipant.update(existing[0].id, {
-          current_task: currentTask,
-          last_seen: new Date().toISOString(),
-          emoji_status: "💪"
-        });
-      } else {
-        await FocusRoomParticipant.create({
-          room_id: room.id,
-          user_email: user.email,
-          display_name: user.display_name || user.full_name,
-          profile_picture_url: user.profile_picture_url,
-          current_task: currentTask,
-          last_seen: new Date().toISOString(),
-          emoji_status: "💪"
-        });
-      }
+      await joinRoom(room, user, currentTask);
 
       onRoomJoined(room);
     } catch (error) {
