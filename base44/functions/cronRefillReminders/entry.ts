@@ -4008,14 +4008,16 @@ const HEADS_UP_LABEL = /night before|morning of/i;
 // A BIRTHDAY'S HEADS-UPS too (Nov 27 2026: a birthday's "is tomorrow" and a
 // payday reminder at a time the person set both went out at 9:00 AM, and Anna
 // got "two pushes in the same minute"; the birthday's was booked first, so
-// nothing moved it). Its "1 week before" and "1 day before" go at the
-// birthday's own time of day, which is the app's 9:00 AM unless the person
+// nothing moved it). Its "1 week before", "1 day before" and "Day of" go at
+// the birthday's own time of day, which is the app's 9:00 AM unless the person
 // changed it on the birthday's card. Only at 9:00 AM (where they are) is it
 // taken as the app's pick and moved; any other time is theirs and never moves.
 // (A person who picked 9:00 AM themselves can't be told apart from the default;
-// theirs would move 25 minutes on a day it shares a minute with another push.)
-// The day itself ("Day of", the text reminders) is never moved.
-const BIRTHDAY_HEADS_UP_LABEL = /^1 (week|day) before$/i;
+// theirs would move on a day it shares a minute with another push.) The
+// "Write a text" reminders on the day keep their every-3-hours times.
+// The next morning's case: two birthdays the same day, one's "Day of" and the
+// other's first "Write a text" both at 9:00 AM.
+const BIRTHDAY_HEADS_UP_LABEL = /^(1 (week|day) before|day of)$/i;
 function isBirthdayTask(task: any): boolean {
   return task?.classification === 'birthday' || !!task?.birthday_person;
 }
@@ -4075,7 +4077,8 @@ async function stackedHeadsUps(base44: any, tasks: any[], nowMs: number, tzOf?: 
 async function freeMinuteFor(base44: any, row: any, task: any, owner: any, nowMs: number): Promise<string | null> {
   const tz = userTimeZone(owner);
   const quiet = resolveQuietHours(owner);
-  const startMs = trackerMs(task.event_time || task.next_reminder);
+  // A birthday has no start to keep clear of: its reminders ARE the day's.
+  const startMs = isBirthdayTask(task) ? NaN : trackerMs(task.event_time || task.next_reminder);
   const wantMs = Date.parse(row.send_at);
   for (const shiftMin of [25, 50, 75, -25, -50]) {
     const t = wantMs + shiftMin * 60 * 1000;
