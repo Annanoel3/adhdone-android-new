@@ -16,11 +16,16 @@ import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.FirebaseMessaging;
 import com.onesignal.OneSignal;
 import com.onesignal.user.subscriptions.IPushSubscription;
 
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,12 +50,33 @@ import java.util.concurrent.TimeUnit;
  *
  * When: right after the app is updated by the Play Store or the phone restarts
  * (BootReceiver: MY_PACKAGE_REPLACED, BOOT_COMPLETED), and every 12 hours.
+ *
+ * FRESH PUSH ADDRESS (Nov 27 2026, the build after 49). Signing up again hands OneSignal
+ * the push address (FCM token) the phone already holds. Bri's phone: Google's push service
+ * refused a notification at 1:09 PM on Nov 26, this check signed up again at 11:30 PM and
+ * OneSignal said subscribed, and the next notification, at 9:39 AM, was refused the same way.
+ * A refused address stays refused. So when the server's answer says a notification was
+ * refused since this phone's last check (fresh_push_address), the address is thrown away
+ * at Google (deleteToken) and a new one made. OneSignal 5.11 reads the address once per
+ * start of the app's process (DeviceRegistrationListener, on its config hydration) and
+ * sends it to its server when it changed, so the new one reaches OneSignal at the next
+ * start: a follow-up check is booked two hours on, and the 12-hour one follows. Nothing is
+ * shown to the person. The report also carries an 8-character one-way tag of the address
+ * before and after (never the address itself), so a phone that keeps handing over a
+ * refused address can be seen from the server.
  */
 public class PushHealthWorker extends Worker {
 
     private static final String TAG = "ADHDone";
     static final String NOW_WORK = "adhdone_push_health_now";
     static final String PERIODIC_WORK = "adhdone_push_health";
+    static final String FRESH_WORK = "adhdone_push_health_fresh";
+    /** OneSignal 5.11's own Firebase app, made only when the app's own can't be used. */
+    private static final String ONESIGNAL_FIREBASE_APP = "ONESIGNAL_SDK_FCM_APP_NAME";
+    private static final long FRESH_FOLLOW_UP_HOURS = 2;
+    /** Follow-ups after a fresh address, at most, while OneSignal still holds the old one. */
+    private static final int FRESH_FOLLOW_UPS_MAX = 3;
+    private static final long FIREBASE_WAIT_S = 20;
     private static final long PERIOD_HOURS = 12;
     /** OneSignal sends its queued updates every 5 s; give them time to leave. */
     private static final long FLUSH_WAIT_MS = 20000;
@@ -75,6 +101,81 @@ public class PushHealthWorker extends Worker {
         } catch (Exception e) {
             Log.w(TAG, "PushHealthWorker.runSoon failed: " + e.getMessage());
         }
+    }
+
+    /** Once, a while after a fresh push address was made, once the process has likely restarted. */
+    static void runLater(Context context, String why, long delayHours, int attempt) {
+        try {
+            OneTimeWorkRequest request = new OneTimeWorkRequest.Builder(PushHealthWorker.class)
+                    .setConstraints(new Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build())
+                    .setInitialDelay(delayHours, TimeUnit.HOURS)
+                    .setInputData(new Data.Builder().putString("why", why).putInt("attempt", attempt).build())
+                    .addTag(FRESH_WORK)
+                    .build();
+            // Appended when one is running (a follow-up booking the next never cancels
+            // itself mid-report); a finished one is replaced.
+            WorkManager.getInstance(context.getApplicationContext())
+                    .enqueueUniqueWork(FRESH_WORK, ExistingWorkPolicy.APPEND_OR_REPLACE, request);
+        } catch (Exception e) {
+            Log.w(TAG, "PushHealthWorker.runLater failed: " + e.getMessage());
+        }
+    }
+
+    /** 8 hex characters of a SHA-256 of the push address: tells two apart, never shows one. */
+    static String tagOf(String token) {
+        if (token == null || token.isEmpty()) return "";
+        try {
+            byte[] d = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 4; i++) sb.append(String.format("%02x", d[i] & 0xff));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Throws away the push address at Google and makes a new one (FRESH PUSH ADDRESS,
+     * above). The app's own Firebase (google-services.json) is the one OneSignal 5.11 takes
+     * the address from when its sender id matches (PushRegistratorFCM.hostLegacyToken);
+     * OneSignal's own Firebase app is cleared too when it exists in this process. Returns
+     * the new address's tag, or "" when it could not be done.
+     */
+    static String freshPushAddress(Context context) {
+        try {
+            for (FirebaseApp app : FirebaseApp.getApps(context)) {
+                if (ONESIGNAL_FIREBASE_APP.equals(app.getName())) {
+                    try {
+                        Tasks.await(app.get(FirebaseMessaging.class).deleteToken(), FIREBASE_WAIT_S, TimeUnit.SECONDS);
+                    } catch (Exception e) {
+                        Log.w(TAG, "PushHealthWorker: OneSignal's Firebase address not cleared: " + e.getMessage());
+                    }
+                }
+            }
+            FirebaseMessaging fm = FirebaseMessaging.getInstance();
+            Tasks.await(fm.deleteToken(), FIREBASE_WAIT_S, TimeUnit.SECONDS);
+            String fresh = Tasks.await(fm.getToken(), FIREBASE_WAIT_S, TimeUnit.SECONDS);
+            return tagOf(fresh);
+        } catch (Exception e) {
+            Log.w(TAG, "PushHealthWorker: fresh push address failed: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Whether OneSignal made its own Firebase app in this process: then the push address it
+     * holds comes from that one, not the app's own, and the two never match.
+     */
+    static boolean oneSignalOwnFirebase(Context context) {
+        try {
+            for (FirebaseApp app : FirebaseApp.getApps(context)) {
+                if (ONESIGNAL_FIREBASE_APP.equals(app.getName())) return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /** Every 12 hours. KEEP: calling it again changes nothing. */
@@ -111,6 +212,8 @@ public class PushHealthWorker extends Worker {
 
         boolean optedInBefore = false;
         boolean hadTokenBefore = false;
+        String tagBefore = "";
+        String tagAfter = "";
         String subscriptionId = "";
         boolean nudged = false;
         String error = null;
@@ -121,6 +224,7 @@ public class PushHealthWorker extends Worker {
                 optedInBefore = sub.getOptedIn();
                 String token = sub.getToken();
                 hadTokenBefore = token != null && !token.isEmpty();
+                tagBefore = tagOf(token);
                 String id = sub.getId();
                 subscriptionId = id != null ? id : "";
                 if (allowed) {
@@ -149,11 +253,27 @@ public class PushHealthWorker extends Worker {
                 optedInAfter = sub.getOptedIn();
                 String token = sub.getToken();
                 hasTokenAfter = token != null && !token.isEmpty();
+                tagAfter = tagOf(token);
                 String id = sub.getId();
                 if (id != null && !id.isEmpty()) subscriptionId = id;
             }
         } catch (Exception e) {
             if (error == null) error = String.valueOf(e.getMessage());
+        }
+
+        // A follow-up after a fresh address: if OneSignal still holds another address than
+        // the one Google now has (the process had not restarted yet), look again later.
+        if ("fresh_address".equals(why) && allowed && !oneSignalOwnFirebase(context)) {
+            int attempt = getInputData().getInt("attempt", 1);
+            String fcmTag = "";
+            try {
+                fcmTag = tagOf(Tasks.await(FirebaseMessaging.getInstance().getToken(), FIREBASE_WAIT_S, TimeUnit.SECONDS));
+            } catch (Exception e) {
+                Log.w(TAG, "PushHealthWorker: could not read Google's push address: " + e.getMessage());
+            }
+            if (!fcmTag.isEmpty() && !fcmTag.equals(tagAfter) && attempt < FRESH_FOLLOW_UPS_MAX) {
+                runLater(context, "fresh_address", FRESH_FOLLOW_UP_HOURS, attempt + 1);
+            }
         }
 
         Log.d(TAG, "PushHealthWorker (" + why + "): allowed=" + allowed + " optedIn " + optedInBefore
@@ -173,9 +293,34 @@ public class PushHealthWorker extends Worker {
             payload.put("nudged", nudged);
             payload.put("subscription_id", subscriptionId);
             payload.put("build", BuildConfig.VERSION_CODE);
+            payload.put("token_tag_before", tagBefore);
+            payload.put("token_tag_after", tagAfter);
             if (error != null) payload.put("error", error.length() > 200 ? error.substring(0, 200) : error);
-            // The answer also says which alarm screen this phone shows (AlarmLook).
-            AlarmLook.adopt(context, Base44Api.phoneReport(context, payload, REPORT_TIMEOUT_MS));
+            // The answer also says which alarm screen this phone shows (AlarmLook), and
+            // whether to get a fresh push address (FRESH PUSH ADDRESS, above).
+            Base44Api.Result answer = Base44Api.phoneReport(context, payload, REPORT_TIMEOUT_MS);
+            AlarmLook.adopt(context, answer);
+            if (allowed && answer != null && answer.isSuccess() && answer.body != null
+                    && answer.body.optBoolean("fresh_push_address", false)) {
+                // Already made one that OneSignal hasn't taken yet (the process hasn't
+                // restarted since)? Then throwing that one away too helps nothing: wait for
+                // the restart instead.
+                String waitingTag = "";
+                try {
+                    waitingTag = tagOf(Tasks.await(FirebaseMessaging.getInstance().getToken(), FIREBASE_WAIT_S, TimeUnit.SECONDS));
+                } catch (Exception e) {
+                    Log.w(TAG, "PushHealthWorker: could not read Google's push address: " + e.getMessage());
+                }
+                if (!waitingTag.isEmpty() && !tagAfter.isEmpty() && !waitingTag.equals(tagAfter)
+                        && !oneSignalOwnFirebase(context)) {
+                    Log.d(TAG, "PushHealthWorker: a fresh push address is already waiting for OneSignal");
+                    runLater(context, "fresh_address", FRESH_FOLLOW_UP_HOURS, 1);
+                } else {
+                    String freshTag = freshPushAddress(context);
+                    Log.d(TAG, "PushHealthWorker: fresh push address " + (freshTag.isEmpty() ? "failed" : "made"));
+                    if (!freshTag.isEmpty()) runLater(context, "fresh_address", FRESH_FOLLOW_UP_HOURS, 1);
+                }
+            }
         } catch (Exception e) {
             Log.w(TAG, "PushHealthWorker: report failed: " + e.getMessage());
         }
