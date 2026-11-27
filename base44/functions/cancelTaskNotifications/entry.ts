@@ -447,6 +447,15 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
       // subscribed). Read, never changed, from here. null = could not ask.
       server_enabled: null as boolean | null,
       server_code: null as number | null,
+      // A short tag of the push address the phone holds, before and after its
+      // check (8 characters of a one-way hash, from the build after 49; never
+      // the address itself): whether a phone hands OneSignal the same address
+      // again after Google's push service refused it (Nov 27 2026).
+      token_tag_before: /^[0-9a-f]{8}$/.test(String(body?.token_tag_before || '')) ? String(body.token_tag_before) : null,
+      token_tag_after: /^[0-9a-f]{8}$/.test(String(body?.token_tag_after || '')) ? String(body.token_tag_after) : null,
+      // Set below: whether this answer asked the phone for a brand-new push
+      // address (FRESH PUSH ADDRESS).
+      asked_fresh: false,
     };
     try {
       const appId = String(Deno.env.get('ONESIGNAL_APP_ID') || '').trim();
@@ -464,6 +473,21 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
       }
     } catch (e) {
       console.warn('[phoneReport] push_state OneSignal lookup failed:', (e as any)?.message || e);
+    }
+    // FRESH PUSH ADDRESS (Nov 27 2026). Bri's phone: Google's push service
+    // refused a notification to it at 1:09 PM on Nov 26; at 11:30 PM its
+    // 12-hour check signed up again and OneSignal said subscribed; the next
+    // notification, at 9:39 AM on Nov 27, was refused the same way (and it had
+    // happened on Nov 19). Signing up again hands OneSignal the address the
+    // phone already holds, and a refused address stays refused. So when a
+    // notification has been refused since this phone's last check, the answer
+    // asks it to throw that address away and get a new one from Google (the
+    // build after 49 does: PushHealthWorker). Builds before ignore the word.
+    {
+      const msOfField = (v: any) => Date.parse(String(v || '')) || 0;
+      const prevAt = msOfField(owner?.phone_push_state?.at);
+      const refusedMs = msOfField(owner?.push_unreachable_at);
+      state.asked_fresh = !!owner && state.platform === 'android' && state.allowed && refusedMs > 0 && refusedMs > prevAt;
     }
     // An update: how it happened (Anna, Nov 6 2026: "Keep track of when
     // anyone's phone automatically updates"). 'tapped_update' = the Update
@@ -501,8 +525,9 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
         console.warn('[phoneReport] push_state next-copy repair failed:', (e as any)?.message || e);
       }
     }
-    // The answer also names the alarm screen this phone shows (build 49 on).
-    return Response.json({ success: true, alarm_screen: alarmScreenFor(owner) });
+    // The answer also names the alarm screen this phone shows (build 49 on),
+    // and asks for a fresh push address when one was refused (above).
+    return Response.json({ success: true, alarm_screen: alarmScreenFor(owner), ...(state.asked_fresh ? { fresh_push_address: true } : {}) });
   }
 
   // Every change to the phone's push sign-up, the moment it happens
