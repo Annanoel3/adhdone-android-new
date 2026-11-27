@@ -1,3 +1,4 @@
+// Nov 27 2026: PUSHES BACK. A phone that signed itself up for pushes again after OneSignal's "not subscribed" is reachable again, app opened or not.
 // Re-saved Nov 11 2026 so the bundled shared/sendLedger.ts is picked up: reminder history is filed by what OneSignal says happened (sent, reached no phone, or cancelled and not kept).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { resolveQuietHours } from '../../shared/quietHours.ts';
@@ -87,7 +88,9 @@ async function sendAboutMeNudges(base44: any, preview = false) {
     if (!(age >= ABOUT_MIN_AGE_MS && age <= ABOUT_MAX_AGE_MS)) continue;
     const lastSeen = msOf(u.last_active_at);
     const unreachable = msOf(u.push_unreachable_at);
-    if (Number.isFinite(unreachable) && !(Number.isFinite(lastSeen) && lastSeen > unreachable)) continue;
+    // PUSHES BACK (Nov 27 2026): the phone signed itself up again since.
+    const pushesBack = u.phone_push_state?.server_enabled === true && msOf(u.phone_push_state?.at) > unreachable;
+    if (Number.isFinite(unreachable) && !(Number.isFinite(lastSeen) && lastSeen > unreachable) && !pushesBack) continue;
     const shown = flags.includes('onboarding_catchup_done');
     const cameBack = Number.isFinite(lastSeen) && lastSeen - signedUp > FIRST_SITTING_MS;
     const why = shown ? 'skipped the question' : !cameBack ? 'never opened the app again' : '';
