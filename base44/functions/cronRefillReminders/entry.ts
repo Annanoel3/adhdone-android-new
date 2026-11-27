@@ -2411,6 +2411,34 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const ps = u?.phone_push_state;
     return ps?.server_enabled === true && msOf(ps?.at) > msOf(u?.push_unreachable_at);
   };
+  // When the first notification sent to this person after sinceMs (their
+  // last refused one) actually went through, or NaN while none has: OneSignal
+  // counted it successful and none failed. One sent before the phone signed
+  // up again is never sent at all (no one subscribed), so it is passed over;
+  // one that failed ends the look ("pushes are back", check 11, Nov 27 2026).
+  // Read-only: a lookup at OneSignal per notification, at most 6.
+  const wentThroughSince = async (u: any, sinceMs: number): Promise<number> => {
+    try {
+      const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+      const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+      if (!appId || !key || !Number.isFinite(sinceMs)) return NaN;
+      const rows = (await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+        user_email: String(u.email),
+        send_at: { $gt: new Date(sinceMs).toISOString(), $lte: new Date(nowMs - 10 * 60 * 1000).toISOString() },
+      })).filter((r: any) => r.notification_id && !String(r.kind || '').startsWith('owner_'))
+        .sort((a: any, b: any) => msOf(a.send_at) - msOf(b.send_at)).slice(0, 6);
+      for (const r of rows) {
+        const res = await fetch(`https://onesignal.com/api/v1/notifications/${r.notification_id}?app_id=${appId}`, { headers: { Authorization: `Basic ${key}` } });
+        const n: any = await res.json().catch(() => ({}));
+        if (!res.ok || n.canceled) continue;
+        if ((n.failed || 0) > 0 || (n.errored || 0) > 0) return NaN;
+        if ((n.successful || 0) > 0) return msOf(r.send_at);
+      }
+    } catch (e) {
+      console.error('[HEALTH] could not check whether a push went through:', e);
+    }
+    return NaN;
+  };
   const gone = (u: any) => {
     const lastMs = msOf(u?.last_active_at);
     const goneMs = msOf(u?.push_unreachable_at);
@@ -3239,6 +3267,18 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     // the app still unopened: the pushes are back, and it was never an
     // uninstall. Said once, so the last thing Anna heard about this person
     // isn't a departure that didn't happen (Nov 12 2026).
+    // ONLY ONCE A NOTIFICATION HAS GONE THROUGH (Nov 27 2026). Bri: Google's
+    // push service turned away a notification to her phone at 1:09 PM on
+    // Nov 26; at 11:30 PM the phone's 12-hour check signed up again and
+    // OneSignal said subscribed, so Anna was told her pushes were back; the
+    // next one, at 9:39 AM on Nov 27, was turned away the same way. A
+    // sign-up again is the phone saying so, not proof: it can hand OneSignal
+    // the same push address that was just refused. Anna: "the notification
+    // made it seem like Bri's onesignal thing broke and then was fixed. But
+    // that was not the issue". So "back" is said only once a notification
+    // sent after the last refusal has actually gone through (OneSignal:
+    // successful, none failed); while none has, nothing is said, and the
+    // last thing she heard stands.
     {
       const e = String(u.email).toLowerCase();
       const lastIso = new Date(lastMs).toISOString();
@@ -3246,9 +3286,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const backTold = marks[`back:${e}`] && msOf(marks[`back:${e}`]) === lastMs;
       const ps = u.phone_push_state || {};
       if (wasTold && !backTold && Number.isFinite(goneMs) && goneMs > lastMs && pushFixed(u) && nowMs - msOf(ps.at) < 2 * H_DAY) {
-        problems.push({
+        const throughMs = await wentThroughSince(u, goneMs);
+        if (Number.isFinite(throughMs) && nowMs - throughMs < 2 * H_DAY) problems.push({
           title: `✅ ADHDone: ${nameOf(u)}'s pushes are back`,
-          body: `The app is still on their phone: it checked in from the background ${theirClock(u, msOf(ps.at))} (their time), signed up for pushes again, and OneSignal says subscribed. They had been off since ${theirClock(u, goneMs)}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+          body: `The app is still on their phone and a notification has gone through again: it checked in from the background ${theirClock(u, msOf(ps.at))} (their time) and signed up for pushes again, and the next notification, ${theirClock(u, throughMs)}, went through. They had been off since ${theirClock(u, goneMs)}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
           sinceMs: lastMs,
           mark: { key: `back:${e}`, value: lastIso },
         });
