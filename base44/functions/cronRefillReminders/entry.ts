@@ -1360,7 +1360,7 @@ Deno.serve(aiServe(async (req) => {
   // added at a time they picked (their_time), and not one about to go out.
   let headsUpsMoved = 0;
   try {
-    for (const { row, task, index } of await stackedHeadsUps(base44, allTasks, now.getTime())) {
+    for (const { row, task, index } of await stackedHeadsUps(base44, allTasks, now.getTime(), (email: string) => userTimeZone(userMap[email]))) {
       try {
         const owner = userMap[row.user_email];
         if (!owner || isBeingScheduledElsewhere(task, now.getTime())) continue;
@@ -1381,7 +1381,8 @@ Deno.serve(aiServe(async (req) => {
           title: entry.notification_title || fresh.title,
           body: entry.notification_body || fresh.title,
           sendAtISO: to,
-          data: { screen: '/TaskNotification', taskId: fresh.id, type: 'task_checkin' },
+          // A birthday's heads-up keeps its own kind (A BIRTHDAY'S HEADS-UPS).
+          data: { screen: '/TaskNotification', taskId: fresh.id, type: isBirthdayTask(fresh) ? 'birthday_reminder' : 'task_checkin' },
         });
         const result = res?.data || res;
         if (!result?.notificationId) {
@@ -2788,7 +2789,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // not the server colliding with itself, and Anna was alerted about it.
       const eventsOwnRow = (r: any) => r.kind === 'event_reminder' && (r.task_id ? taskById[r.task_id] : null)?.classification === 'event';
       if (allDifferent && list.every((r: any) => theirTimeRow(r, Date.parse(r.send_at || '')) || eventsOwnRow(r))) continue;
-      sameMinute.push(`${k.split('|')[0]}: ${list.map((r: any) => String(r.title || r.kind).slice(0, 24)).join(' + ')}`);
+      // Whole titles, cut only past 40 characters and then marked (Nov 27
+      // 2026: cut at 24, "🎂 X's birthday is tomorrow" read "birthday is .").
+      const titleOf = (r: any) => { const t = String(r.title || r.kind || '').trim(); return t.length > 40 ? `${t.slice(0, 39)}…` : t; };
+      sameMinute.push(`${k.split('|')[0]}: ${list.map(titleOf).join(' + ')}`);
     }
   } catch (e) {
     console.error('[HEALTH] collision / closed-business check failed:', e);
@@ -4000,7 +4004,28 @@ const HEADS_UP_LABEL = /night before|morning of/i;
 // they picked) that shares its minute with another push to the same person.
 // When every push in the minute is a heads-up, the one for the soonest event
 // keeps the minute and the rest move.
-function stackedHeadsUpsIn(rows: any[], tasks: any[]): { row: any; task: any; index: number }[] {
+// A BIRTHDAY'S HEADS-UPS too (Nov 27 2026: a birthday's "is tomorrow" and a
+// payday reminder at a time the person set both went out at 9:00 AM, and Anna
+// got "two pushes in the same minute"; the birthday's was booked first, so
+// nothing moved it). Its "1 week before" and "1 day before" go at the
+// birthday's own time of day, which is the app's 9:00 AM unless the person
+// changed it on the birthday's card. Only at 9:00 AM (where they are) is it
+// taken as the app's pick and moved; any other time is theirs and never moves.
+// (A person who picked 9:00 AM themselves can't be told apart from the default;
+// theirs would move 25 minutes on a day it shares a minute with another push.)
+// The day itself ("Day of", the text reminders) is never moved.
+const BIRTHDAY_HEADS_UP_LABEL = /^1 (week|day) before$/i;
+function isBirthdayTask(task: any): boolean {
+  return task?.classification === 'birthday' || !!task?.birthday_person;
+}
+function localHHMM(ms: number, tz: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
+  } catch (_) {
+    return '';
+  }
+}
+function stackedHeadsUpsIn(rows: any[], tasks: any[], tzOf: (email: string) => string = () => 'America/Chicago'): { row: any; task: any; index: number }[] {
   const taskById: Record<string, any> = {};
   for (const t of tasks) if (t?.id) taskById[t.id] = t;
   const byMinute: Record<string, any[]> = {};
@@ -4014,11 +4039,17 @@ function stackedHeadsUpsIn(rows: any[], tasks: any[]): { row: any; task: any; in
     if (list.length < 2) continue;
     const movable = list.map((row: any) => {
       const task = row.task_id ? taskById[row.task_id] : null;
-      if (!task || task.status !== 'active' || task.silenced || task.classification !== 'event') return null;
+      if (!task || task.status !== 'active' || task.silenced) return null;
+      const birthday = isBirthdayTask(task);
+      if (task.classification !== 'event' && !birthday) return null;
       const plan = Array.isArray(task.reminder_schedule) ? task.reminder_schedule : [];
       const index = plan.findIndex((e: any) => String(e?.notification_id || '') === String(row.notification_id));
       const entry = index >= 0 ? plan[index] : null;
-      if (!entry || entry.their_time === true || !HEADS_UP_LABEL.test(String(entry.label || ''))) return null;
+      if (!entry || entry.their_time === true) return null;
+      if (birthday) {
+        if (!BIRTHDAY_HEADS_UP_LABEL.test(String(entry.label || ''))) return null;
+        if (localHHMM(Date.parse(row.send_at), tzOf(String(row.user_email))) !== '09:00') return null;
+      } else if (!HEADS_UP_LABEL.test(String(entry.label || ''))) return null;
       return { row, task, index };
     }).filter(Boolean) as { row: any; task: any; index: number }[];
     if (!movable.length) continue;
@@ -4029,11 +4060,11 @@ function stackedHeadsUpsIn(rows: any[], tasks: any[]): { row: any; task: any; in
   return out;
 }
 
-async function stackedHeadsUps(base44: any, tasks: any[], nowMs: number): Promise<{ row: any; task: any; index: number }[]> {
+async function stackedHeadsUps(base44: any, tasks: any[], nowMs: number, tzOf?: (email: string) => string): Promise<{ row: any; task: any; index: number }[]> {
   const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
     send_at: { $gte: new Date(nowMs + HEADS_UP_MIN_LEAD_MS).toISOString(), $lte: new Date(nowMs + HEADS_UP_LOOK_AHEAD_MS).toISOString() },
   });
-  return stackedHeadsUpsIn(rows, tasks);
+  return stackedHeadsUpsIn(rows, tasks, tzOf);
 }
 
 // The first free minute near a heads-up for it to move to: later first,
