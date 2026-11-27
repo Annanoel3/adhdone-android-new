@@ -3277,8 +3277,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
     // ANNA'S RULE ON COMBINING (MEDS_APART_LIVE, top of file): said once,
-    // as her rule, whenever there are tasks to plan.
-    if (ctx.medsApart && tasks.length > 1) out.push("ANNA'S RULE ON COMBINING (she owns ADHDone): medication, pills and vitamins included, never goes in the same reminder as a chore. Only things that truly go together are ever combined; very different things never are, and three in one reminder should be rare.");
+    // whenever there are two or more tasks to plan, as the app's rule (the
+    // planner is talking about someone else's day, so not by her name), and
+    // ahead of the brief's "two quick chores at home".
+    if (ctx.medsApart && tasks.length > 1) out.push("COMBINING, A RULE OF THE APP'S THAT COMES FIRST: medication, pills and vitamins included, never goes in the same reminder as a chore. Only things that truly go together are ever combined; very different things never are, and three in one reminder should be rare.");
     // The same fact as on those tasks' own lines, in one place (the lines are
     // long, and on a full day this was the part that went unread).
     // ANNA'S RULE ON WAITING, the part before a day is lost (Nov 22 2026,
