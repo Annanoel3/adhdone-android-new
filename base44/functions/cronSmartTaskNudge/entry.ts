@@ -1,3 +1,4 @@
+// Nov 27 2026 (midday): ANNA'S RULE ON COMBINING (MEDS_APART_LIVE). Anna: "You already know meds shouldnt be bundled with chores. We have had this conversation in the past" (on Claude, her own planner had put vitamins and the litter box in one reminder, and three tasks in one before bed). Her rule, said as her rule in the planner's facts like her rule on waiting: medication, pills and vitamins included, never goes in the same reminder as a chore; only things that truly go together are combined, very different things never, three in one should be rare. The brief is unchanged, no version bump. An owner replay can leave it out with { "meds_rule": false } to compare.
 // Nov 27 2026: PUSHES BACK. A phone that signed itself up for pushes again (its background check, OneSignal "subscribed") ends the day's rest that followed a "not subscribed" answer, without waiting for an app open.
 // Nov 25 2026 (night): A DAILY CEILING AFTER THREE DAYS AWAY (shared/awayCeiling.ts). Anna: "Fix", to "I can add a daily ceiling for people who haven't opened the app in a few days. That would cut reminders" (one person, away since Nov 19, had 11 Smart Reminders and 5 other notifications that day). No sign of them for 3 days (the week-away pause's signs) = at most 6 Smart Reminders in their day, checked before planning and right before each send, and the planner is told how many are left (AWAY N DAYS, a fact line; the brief is unchanged, no version bump). Times they set, events, birthdays, the week-away heads-up and pause, and how anything rings are untouched. Later that night: ONE A DAY FOR SOMEONE NOT BACK SINCE THEIR FIRST DAY (same file) and THE LAST 7 DAYS (WEEK_LINE_LIVE); the bundled shared/claudeAi.ts holds Claude for everyone off (CLAUDE_JOBS_LIVE, CLAUDE_EVERYONE) and goes straight to OpenAI once the Claude credit runs out (CREDITS GONE).
 // Nov 22 2026 (3 PM), three things Anna asked for. (1) WAITING, as she then worked it through on a real pile-up: "For anyone who has tasks that piled up, give them one of each reminder today. UNLESS its something that can be saved for tomorrow", and of a gift-planning task for a holiday still weeks away, "could have waited quite a while". So "not more than a day" is no longer flat: what a thing's own nature gives room may wait for a moment that suits it, and on a pile-up each task gets ONE reminder that day, the ones that matter most first, unless it can honestly be saved for tomorrow (TASKS WITH NO DATE and the list under it). (2) SPOKEN ALARMS: "the most recent alarm I got was wayyy to many words. For those that have the speaking alarm noise, long ass sentences are really annoying" (hers had run to 38 words, read aloud). Someone whose alarm sound is the one that speaks (User.alarm_sound_url 'speak:') now has that said to the planner, with her rule: one short sentence (THEIR ALARMS ARE READ OUT LOUD). (3) COST: "Cheaper smart reminders is fine so long as it doesnt get dumber". The call goes out through lean() (shared/aiCost.ts) like every other feature's: the brief is marked as the part to reuse, so the rest of each look is no longer billed as a cache write (a quarter more than plain). The words sent are the same, so are the answers; if OpenAI ever refuses the marking, the call is sent exactly as before. The brief is unchanged, no version bump.
@@ -196,6 +197,18 @@ const WAITED_RULE_LIVE = true;
 // Facts only, no instruction; the brief is unchanged, no version bump. An
 // owner replay can leave it out with { "week_line": false } to compare.
 const WEEK_LINE_LIVE = true;
+// ANNA'S RULE ON COMBINING (Nov 27 2026): "You already know meds shouldnt
+// be bundled with chores. We have had this conversation in the past." The
+// brief's "Combining tasks" lets two quick chores at home share one ping,
+// and once Smart Reminders ran on Claude for her own account (Nov 25) it
+// read vitamins as one of those: "Vitamins and litter box" (Nov 26, 9:37
+// PM), then three tasks in one before bed. Her rule from before (only
+// things that go together, very different things never, three in one
+// rare) was never written where the planner sees it. Now it is, once, as
+// her rule, next to OPEN TASKS. No keyword list: telling a medication
+// from a chore is the planner's reading. Off: the facts read as before,
+// character for character.
+const MEDS_APART_LIVE = true;
 // "passed" rows kept under V2: one per task per day.
 const PASSED_MAX_V2 = 150;
 // A planned nudge held (by the spacing rules or the morning summary) this
@@ -1508,6 +1521,8 @@ Deno.serve(aiServe(async (req) => {
           // HELD BACK DAY AFTER DAY (WAITED_LINE_LIVE, top of file).
           waitedLine: (WAITED_LINE_LIVE || useCandidate) && plannerV2 && useBrief,
           waitedRule: (WAITED_RULE_LIVE || useCandidate) && plannerV2 && useBrief,
+          // ANNA'S RULE ON COMBINING (MEDS_APART_LIVE, top of file).
+          medsApart: MEDS_APART_LIVE && useBrief && !(replay && body?.meds_rule === false),
           // What it held back at its earlier looks (PLANNER V2, 3).
           passedBefore: plannerV2 && Array.isArray(user.smart_nudge_passed) ? user.smart_nudge_passed : [],
           dryRun,
@@ -2379,6 +2394,7 @@ interface PlanContext {
   // on it (WAITED_RULE_LIVE).
   waitedLine?: boolean;
   waitedRule?: boolean;
+  medsApart?: boolean;
   fixed: any[];
   habits?: Record<string, any>;
   // Filled in by generateDailySchedule for THIS call (see PlanOut).
@@ -3260,6 +3276,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
+    // ANNA'S RULE ON COMBINING (MEDS_APART_LIVE, top of file): said once,
+    // as her rule, whenever there are tasks to plan.
+    if (ctx.medsApart && tasks.length > 1) out.push("ANNA'S RULE ON COMBINING (she owns ADHDone): medication, pills and vitamins included, never goes in the same reminder as a chore. Only things that truly go together are ever combined; very different things never are, and three in one reminder should be rare.");
     // The same fact as on those tasks' own lines, in one place (the lines are
     // long, and on a full day this was the part that went unread).
     // ANNA'S RULE ON WAITING, the part before a day is lost (Nov 22 2026,
