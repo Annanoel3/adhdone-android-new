@@ -1,3 +1,4 @@
+// Nov 27 2026: PUSHES BACK. A phone that signed itself up for pushes again after OneSignal's "not subscribed" is reachable for the come-back too, app opened or not.
 // Re-saved Nov 25 2026 (night) so the bundled shared/claudeAi.ts and shared/aiCost.ts are picked up: Claude for everyone is ready and held off until the app's disclosures name Anthropic (CLAUDE_JOBS_LIVE, CLAUDE_EVERYONE), and when the Claude credit runs out calls go straight to OpenAI (CREDITS GONE). Nothing else in this file changes.
 // Nov 18 2026 (night): come-backs cut to ONE per time away (Anna: "our come back stuff is annoying. Come backs should be much more limited", then "Cut to 2": one evening message the first night they skip, one come-back). Day 7 and day 14 ("Last one from us, promise") are gone, for an empty list and for a list paused after a week away alike. A new one only once they have actually used the app since the last (shared/usedApp.ts), not just opened it. For someone with things still on their list the come-back names their most important open task. What the numbers said, Oct 30 to Nov 18, real users: 22 come-backs to 10 people, 2 opens, 0 tasks added; one open was 6 seconds, then the app was removed.
 // Re-saved Nov 12 2026 (night) so the bundled shared/reminderBrief.ts is picked up: r44, a chore is only brought up when there is time to finish it before their bedtime (laundry at 10:29 PM, an hour before quiet hours; Anna: "Too late to be suggesting this").
@@ -270,7 +271,10 @@ Deno.serve(aiServe(async (req) => {
         // OneSignal said nothing reaches this phone (cronSmartTaskNudge), and
         // they haven't been back since.
         const unreachable = ms(user.push_unreachable_at);
-        if (Number.isFinite(unreachable) && unreachable > seen) continue;
+        // ...unless the phone signed itself up for pushes again since
+        // (PUSHES BACK, Nov 27 2026; cronRefillReminders' pushFixed).
+        const pushesBack = user.phone_push_state?.server_enabled === true && ms(user.phone_push_state?.at) > unreachable;
+        if (Number.isFinite(unreachable) && unreachable > seen && !pushesBack) continue;
         const sameAbsence = String(user.comeback_from || '') === String(seenIso);
         const step = sameAbsence ? Math.max(0, Number(user.comeback_step) || 0) : 0;
         const next = COMEBACK_STEPS[step];
