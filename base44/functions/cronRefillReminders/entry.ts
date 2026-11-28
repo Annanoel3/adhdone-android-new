@@ -2650,11 +2650,27 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // 3. Bookings the app never got to and the rescue pass above couldn't make
   //    either: the task still carries its booking marker, has no push, and
   //    its time is still ahead.
+  //    NOT YET BOOKABLE (Nov 27 2026): OneSignal takes nothing more than ~30
+  //    days ahead, so a task dated further out has nothing booked BY DESIGN:
+  //    its reminders wait as planned entries (or for the far-out pass to
+  //    write them), and the promotion loop books each one once it comes
+  //    inside the window. A new user's Feb 14 2027 event, added at 8:57 PM
+  //    with its three reminders planned, was reported at 9:32 PM as "never
+  //    booked" (the app had also tried one lone booking for it, which
+  //    OneSignal refused, so its booking marker stayed). Such a task is left
+  //    out here; it is "never booked" only once it could have been.
+  const notYetBookable = (t: any) => {
+    const atMs = Date.parse(t.next_reminder || '');
+    if (Number.isFinite(atMs) && atMs - nowMs > BOOKABLE_WINDOW_MS) return true;
+    const plan = Array.isArray(t.reminder_schedule) ? t.reminder_schedule : [];
+    return plan.length > 0 && plan.every((e: any) => !isBookedId(e?.notification_id) && !isBookableNow(e?.send_at, nowMs));
+  };
   const stuckBookings = allTasks.filter((t: any) =>
     t.status === 'active' && !t.parent_task_id && t.reminder_scheduling_since &&
     nowMs - (Date.parse(t.reminder_scheduling_since) || nowMs) > 20 * 60 * 1000 &&
     !(t.onesignal_notification_ids || []).length &&
     t.next_reminder && Date.parse(t.next_reminder) > nowMs &&
+    !notYetBookable(t) &&
     realUser(t.notification_recipient_email || t.created_by));
   if (stuckBookings.length) {
     const names = stuckBookings.slice(0, 3).map((t: any) => `"${String(t.title || '').slice(0, 30)}" (${t.notification_recipient_email || t.created_by})`).join(', ');
