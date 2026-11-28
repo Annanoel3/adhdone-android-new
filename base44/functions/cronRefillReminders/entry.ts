@@ -1,3 +1,4 @@
+// Nov 27 2026 (night): owner check 3 ("reminders never booked") leaves out a task dated beyond OneSignal's ~30-day window, or whose plan holds only planned entries not bookable yet: nothing can be booked for those yet, by design (the promotion loop books each entry once it comes inside the window). A new user's Feb 14 2027 event with its three reminders planned was reported at 9:32 PM as never booked.
 // Nov 27 2026 (midday): "pushes are back" (check 11) is said only once a notification sent after the last refused one has actually gone through (OneSignal: successful, none failed). A phone signing up again is not proof: Bri's did at 11:30 PM Nov 26, Anna was told her pushes were back, and the next one at 9:39 AM was refused the same way (Anna: "the notification made it seem like Bri's onesignal thing broke and then was fixed. But that was not the issue").
 // Nov 27 2026: a birthday's "1 week before" / "1 day before" at the app's 9:00 AM steps aside to a free minute when another push to the same person shares its minute (A BIRTHDAY'S HEADS-UPS, with stackedHeadsUpsIn), the same way an event's heads-up does; a birthday time the person changed never moves. The "two pushes in the same minute" alert shows whole titles (it cut them at 24 characters).
 // Nov 25 2026 (night): Smart Reminders' new daily ceiling for someone with no sign of them in 3 days (shared/awayCeiling.ts; Anna: "Fix") is known to the owner checks. Once they've had today's 6 (or, on one a day, today's one), Smart Reminders plans and sends nothing more for them that day by design, so check 2 ("not re-planning") and checks 8 and 8b (due today / promised tonight / pressing, got nothing) don't count that as Smart Reminders failing. Signs are read erring toward "around", so a real miss for someone who is around is still reported. Later that night: the same for someone not back since the day they joined (one a day); the bundled shared/claudeAi.ts holds Claude for everyone off (CLAUDE_JOBS_LIVE, CLAUDE_EVERYONE) and goes straight to OpenAI once the Claude credit runs out (CREDITS GONE).
@@ -240,7 +241,7 @@ Deno.serve(aiServe(async (req) => {
       // `copy`: which save of this file answered (the top line's date), so a
       // look right after a change can tell whether the new copy is the one
       // running yet (a save can land in the files while its upload fails).
-      return Response.json({ success: true, copy: '2026-11-27 midday: pushes are back only once a notification goes through', ...look });
+      return Response.json({ success: true, copy: '2026-11-27 night: never-booked check skips far-off dates', ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
